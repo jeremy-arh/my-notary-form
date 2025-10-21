@@ -236,12 +236,10 @@ const NotaryForm = () => {
       </aside>
 
       {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen">
-        <div className="w-full p-6 md:p-12">
-          {/* Form Content */}
-          <div className="bg-[#F3F4F6] rounded-3xl p-6 md:p-10 shadow-sm animate-fade-in-up">
-            {renderStep()}
-          </div>
+      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center p-4 md:p-6">
+        {/* Form Content - 95vh centered */}
+        <div className="w-full max-w-5xl h-[95vh] bg-[#F3F4F6] rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden">
+          {renderStep()}
         </div>
       </main>
 
