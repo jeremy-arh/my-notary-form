@@ -137,7 +137,7 @@ const Documents = ({ formData, updateFormData, nextStep }) => {
         <button
           type="button"
           onClick={nextStep}
-          className="px-8 py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+          className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
         >
           Continue
         </button>

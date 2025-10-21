@@ -156,10 +156,21 @@ const NotaryForm = () => {
       {/* Left Sidebar - Fixed and 100vh */}
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen overflow-y-auto">
         <div className="p-8">
-          {/* Logo/Title */}
-          <div className="mb-8 animate-fade-in">
-            <h2 className="text-2xl font-bold text-gray-900">Notary</h2>
-            <p className="text-sm text-gray-600 mt-1">Service Request</p>
+          {/* Logo */}
+          <div className="mb-10 animate-fade-in flex items-center justify-center">
+            <div className="relative">
+              <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="60" cy="60" r="58" stroke="url(#gradient)" strokeWidth="3"/>
+                <path d="M60 25 L60 95 M40 45 L60 25 L80 45" stroke="url(#gradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="60" cy="85" r="8" fill="url(#gradient)"/>
+                <defs>
+                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#000000" />
+                    <stop offset="100%" stopColor="#4B5563" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
           </div>
 
           {/* Steps Navigation */}
@@ -227,18 +238,8 @@ const NotaryForm = () => {
       {/* Main Content - Full width with left margin for sidebar */}
       <main className="flex-1 lg:ml-80 min-h-screen">
         <div className="w-full p-6 md:p-12">
-          {/* Header */}
-          <div className="mb-8 animate-fade-in">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3">
-              Notary Service Request
-            </h1>
-            <p className="text-lg text-gray-600">
-              Complete the form to book your appointment
-            </p>
-          </div>
-
           {/* Form Content */}
-          <div className="bg-[#F3F4F6] rounded-3xl p-6 md:p-10 shadow-sm animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+          <div className="bg-[#F3F4F6] rounded-3xl p-6 md:p-10 shadow-sm animate-fade-in-up">
             {renderStep()}
           </div>
         </div>

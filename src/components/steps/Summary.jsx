@@ -196,7 +196,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           type="button"
           onClick={prevStep}
           disabled={isSubmitting}
-          className="px-8 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-full hover:bg-gray-50 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-glassy-secondary px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Back
         </button>
@@ -204,7 +204,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           type="button"
           onClick={onSubmit}
           disabled={isSubmitting}
-          className="px-8 py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
         >
           {isSubmitting ? (
             <>

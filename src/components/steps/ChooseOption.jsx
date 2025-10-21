@@ -181,14 +181,14 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
         <button
           type="button"
           onClick={prevStep}
-          className="px-8 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-full hover:bg-gray-50 transition-all hover:scale-105 active:scale-95"
+          className="btn-glassy-secondary px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
         >
           Back
         </button>
         <button
           type="button"
           onClick={nextStep}
-          className="px-8 py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+          className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
         >
           Continue
         </button>

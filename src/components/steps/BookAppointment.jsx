@@ -162,40 +162,40 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Calendar */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">
+      <div className="bg-white rounded-2xl p-4 border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-gray-900">
             {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
           </h3>
-          <div className="flex space-x-2">
+          <div className="flex space-x-1">
             <button
               type="button"
               onClick={goToPreviousMonth}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <Icon icon="heroicons:chevron-left" className="w-5 h-5 text-gray-600" />
+              <Icon icon="heroicons:chevron-left" className="w-4 h-4 text-gray-600" />
             </button>
             <button
               type="button"
               onClick={goToNextMonth}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <Icon icon="heroicons:chevron-right" className="w-5 h-5 text-gray-600" />
+              <Icon icon="heroicons:chevron-right" className="w-4 h-4 text-gray-600" />
             </button>
           </div>
         </div>
 
         {/* Day names */}
-        <div className="grid grid-cols-7 gap-2 mb-2">
+        <div className="grid grid-cols-7 gap-1 mb-1">
           {dayNames.map((day) => (
-            <div key={day} className="text-center text-xs font-semibold text-gray-500 py-2">
-              {day}
+            <div key={day} className="text-center text-xs font-semibold text-gray-500 py-1">
+              {day.substring(0, 1)}
             </div>
           ))}
         </div>
 
         {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1">
           {calendarDays.map((day, index) => {
             const disabled = !day.isCurrentMonth || isPast(day.date);
             const selected = isSelected(day.date);
@@ -207,11 +207,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
                 type="button"
                 onClick={() => !disabled && handleDateClick(day.date)}
                 disabled={disabled}
-                className={`aspect-square p-2 rounded-lg text-sm font-medium transition-all ${
+                className={`aspect-square p-1 rounded-md text-xs font-medium transition-all ${
                   disabled
                     ? 'text-gray-300 cursor-not-allowed'
                     : selected
-                    ? 'bg-black text-white shadow-lg scale-110'
+                    ? 'bg-black text-white shadow-lg scale-105'
                     : today
                     ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                     : 'text-gray-700 hover:bg-gray-100 hover:scale-105'
@@ -255,7 +255,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         <button
           type="button"
           onClick={prevStep}
-          className="px-8 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-full hover:bg-gray-50 transition-all hover:scale-105 active:scale-95"
+          className="btn-glassy-secondary px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
         >
           Back
         </button>
@@ -263,7 +263,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           type="button"
           onClick={nextStep}
           disabled={!selectedDate || !selectedTime}
-          className="px-8 py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+          className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
           Continue
         </button>

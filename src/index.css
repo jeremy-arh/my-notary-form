@@ -177,6 +177,84 @@ select {
   background: #555;
 }
 
+/* Glassy Button Styles */
+.btn-glassy {
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #000000 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1),
+              inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+              0 4px 15px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-glassy::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.btn-glassy:hover::before {
+  left: 100%;
+}
+
+.btn-glassy:hover {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15),
+              inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+              0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.btn-glassy:active {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5),
+              0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(1px);
+}
+
+/* Secondary Glassy Button for Back buttons */
+.btn-glassy-secondary {
+  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 50%, #f9fafb 100%);
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5),
+              inset 0 -1px 0 rgba(0, 0, 0, 0.05),
+              0 2px 8px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-glassy-secondary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.02), transparent);
+  transition: left 0.5s;
+}
+
+.btn-glassy-secondary:hover::before {
+  left: 100%;
+}
+
+.btn-glassy-secondary:hover {
+  background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 50%, #f3f4f6 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6),
+              inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+              0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.btn-glassy-secondary:active {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1),
+              0 1px 4px rgba(0, 0, 0, 0.05);
+  transform: translateY(1px);
+}
+
 /* Responsive Typography */
 @media (max-width: 768px) {
   html {
