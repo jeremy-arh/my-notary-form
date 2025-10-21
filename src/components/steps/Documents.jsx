@@ -41,10 +41,10 @@ const Documents = ({ formData, updateFormData, nextStep }) => {
   };
 
   const getFileIcon = (type) => {
-    if (type.includes('pdf')) return 'vscode-icons:file-type-pdf2';
-    if (type.includes('word')) return 'vscode-icons:file-type-word';
-    if (type.includes('image')) return 'vscode-icons:file-type-image';
-    return 'vscode-icons:default-file';
+    if (type.includes('pdf')) return 'heroicons:document-text';
+    if (type.includes('word')) return 'heroicons:document';
+    if (type.includes('image')) return 'heroicons:photo';
+    return 'heroicons:document';
   };
 
   return (

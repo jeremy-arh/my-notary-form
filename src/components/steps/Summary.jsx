@@ -71,7 +71,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           <div className="space-y-2">
             {formData.documents.map((doc, index) => (
               <div key={index} className="flex items-center p-3 bg-gray-50 rounded-xl">
-                <Icon icon="vscode-icons:file-type-pdf2" className="w-8 h-8 mr-3" />
+                <Icon icon="heroicons:document" className="w-8 h-8 mr-3 text-gray-600" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">{doc.name}</p>
                   <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
