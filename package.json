@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
+    "@supabase/supabase-js": "^2.76.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-dropzone": "^14.3.8"
