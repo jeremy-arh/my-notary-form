@@ -2,15 +2,27 @@ import { createClient } from '@supabase/supabase-js';
 
 // Replace with your Supabase project credentials
 // You can find these in your Supabase project settings
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MDAsImV4cCI6MTk2MDc2ODgwMH0.placeholder';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Check if we have valid Supabase credentials
+const hasValidCredentials = supabaseUrl !== 'https://placeholder.supabase.co';
+
+let supabase = null;
+
+if (hasValidCredentials) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+}
 
 /**
  * Fetch all active services from the database
  */
 export const getServices = async () => {
+  if (!supabase) {
+    console.warn('Supabase not configured. Please set up your .env file.');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('services')
     .select('*')
@@ -29,6 +41,11 @@ export const getServices = async () => {
  * Fetch all active options from the database
  */
 export const getOptions = async () => {
+  if (!supabase) {
+    console.warn('Supabase not configured. Please set up your .env file.');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('options')
     .select('*')
@@ -49,6 +66,16 @@ export const getOptions = async () => {
  * @returns {Object} - Result with submission ID or error
  */
 export const submitNotaryRequest = async (formData) => {
+  if (!supabase) {
+    console.warn('Supabase not configured. Form data:', formData);
+    // Return mock success for development
+    return {
+      success: true,
+      submissionId: 'mock-' + Date.now(),
+      message: 'Mock submission (Supabase not configured)'
+    };
+  }
+
   try {
     // 1. Create the main submission
     const { data: submission, error: submissionError } = await supabase
@@ -183,6 +210,11 @@ export const submitNotaryRequest = async (formData) => {
  * @param {string} submissionId - The submission UUID
  */
 export const getSubmissionById = async (submissionId) => {
+  if (!supabase) {
+    console.warn('Supabase not configured');
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('submission')
     .select(`
@@ -205,3 +237,5 @@ export const getSubmissionById = async (submissionId) => {
 
   return data;
 };
+
+export { supabase };
