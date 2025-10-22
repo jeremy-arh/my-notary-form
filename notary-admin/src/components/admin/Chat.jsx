@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { Icon } from '@iconify/react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 /**
  * Reusable Chat component for messaging between clients, notaries, and admins
