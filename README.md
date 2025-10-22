@@ -1,12 +1,38 @@
-# Notary Service Request Form
+# Notary Service Platform
 
-A modern, responsive multi-step form application for booking notary services, built with React, Tailwind CSS, and Supabase.
+A complete notary service platform with two separate applications:
+- **Customer Form** - Multi-step form for booking notary services (port 5173)
+- **Admin Panel** - Management dashboard for notaries (port 5174)
+
+Both applications are built with React, Tailwind CSS, and Supabase.
 
 ![Form Preview](https://via.placeholder.com/1200x600/F3F4F6/000000?text=Notary+Service+Request+Form)
 
+## Project Structure
+
+This repository contains **two separate applications**:
+
+### 1. Customer Form (Root Directory)
+The main customer-facing form for requesting notary services.
+- **Location**: Root directory (`/`)
+- **Port**: 5173
+- **Purpose**: Allow customers to submit notary service requests
+- **Run**: `npm run dev` (in root directory)
+
+### 2. Admin Panel (`/notary-admin`)
+Separate admin dashboard for notaries to manage submissions.
+- **Location**: `notary-admin/` directory
+- **Port**: 5174
+- **Purpose**: Manage requests, accept/reject submissions, upload documents
+- **Run**: `cd notary-admin && npm run dev`
+
+Both applications can run simultaneously on different ports and are designed to be deployed on separate domains.
+
+**See `notary-admin/README.md` for admin panel documentation.**
+
 ## Features
 
-### Form Steps
+### Customer Form Steps
 
 1. **Documents** - Multi-file uploader with drag & drop
 2. **Choose Option** - Select notary services and additional options
@@ -51,7 +77,7 @@ A modern, responsive multi-step form application for booking notary services, bu
 - Node.js 18+ and npm
 - Supabase account (free tier available)
 
-### Setup
+### Setup - Customer Form
 
 1. **Clone the repository**
    ```bash
@@ -68,6 +94,7 @@ A modern, responsive multi-step form application for booking notary services, bu
    - Follow the detailed guide in `SUPABASE_SETUP.md`
    - Create a Supabase project
    - Run the SQL schema from `supabase-schema.sql`
+   - Run the admin migration `supabase-admin-migration.sql`
    - Create storage bucket for files
    - Get your API credentials
 
@@ -94,6 +121,34 @@ A modern, responsive multi-step form application for booking notary services, bu
    npm run build
    npm run preview
    ```
+
+### Setup - Admin Panel
+
+1. **Navigate to admin directory**
+   ```bash
+   cd notary-admin
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` and add the same Supabase credentials
+
+4. **Run development server (separate terminal)**
+   ```bash
+   npm run dev
+   ```
+
+   Open [http://localhost:5174](http://localhost:5174)
+
+**Note**: Both applications can run simultaneously. Open two terminal windows and run `npm run dev` in each directory.
 
 ## Database Schema
 
