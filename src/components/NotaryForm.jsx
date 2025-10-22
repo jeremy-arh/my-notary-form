@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest } from '../lib/supabase';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -8,8 +10,11 @@ import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
 
 const NotaryForm = () => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Load form data from localStorage
+  const [formData, setFormData] = useLocalStorage('notaryFormData', {
     // Documents
     documents: [],
 
@@ -35,32 +40,93 @@ const NotaryForm = () => {
     notes: ''
   });
 
+  // Load completed steps from localStorage
+  const [completedSteps, setCompletedSteps] = useLocalStorage('notaryCompletedSteps', []);
+
   const steps = [
-    { id: 1, name: 'Documents', icon: 'heroicons:document-text' },
-    { id: 2, name: 'Choose option', icon: 'heroicons:check-badge' },
-    { id: 3, name: 'Book an appointment', icon: 'heroicons:calendar-days' },
-    { id: 4, name: 'Your personal informations', icon: 'heroicons:user' },
-    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check' }
+    { id: 1, name: 'Documents', icon: 'heroicons:document-text', path: '/documents' },
+    { id: 2, name: 'Choose option', icon: 'heroicons:check-badge', path: '/choose-option' },
+    { id: 3, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/book-appointment' },
+    { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/personal-info' },
+    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/summary' }
   ];
+
+  // Get current step from URL
+  const getCurrentStepFromPath = () => {
+    const step = steps.find(s => s.path === location.pathname);
+    return step ? step.id : 1;
+  };
+
+  const currentStep = getCurrentStepFromPath();
+
+  // Validate step access
+  useEffect(() => {
+    // Redirect to /documents if at root
+    if (location.pathname === '/') {
+      navigate('/documents', { replace: true });
+      return;
+    }
+
+    // Check if user is trying to access a step they haven't completed yet
+    const requestedStep = getCurrentStepFromPath();
+
+    // User can access current step or any previously completed step
+    const canAccess = requestedStep === 1 || completedSteps.includes(requestedStep - 1);
+
+    if (!canAccess) {
+      // Find the last completed step and redirect there
+      const lastCompletedStep = completedSteps.length > 0
+        ? Math.max(...completedSteps) + 1
+        : 1;
+      const redirectStep = steps.find(s => s.id === lastCompletedStep);
+      if (redirectStep) {
+        navigate(redirectStep.path, { replace: true });
+      }
+    }
+  }, [location.pathname, completedSteps, navigate]);
 
   const updateFormData = (data) => {
     setFormData(prev => ({ ...prev, ...data }));
   };
 
+  const markStepCompleted = (stepId) => {
+    if (!completedSteps.includes(stepId)) {
+      setCompletedSteps([...completedSteps, stepId]);
+    }
+  };
+
   const nextStep = () => {
+    // Mark current step as completed
+    markStepCompleted(currentStep);
+
+    // Navigate to next step
     if (currentStep < steps.length) {
-      setCurrentStep(prev => prev + 1);
+      const nextStepData = steps.find(s => s.id === currentStep + 1);
+      if (nextStepData) {
+        navigate(nextStepData.path);
+      }
     }
   };
 
   const prevStep = () => {
     if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
+      const prevStepData = steps.find(s => s.id === currentStep - 1);
+      if (prevStepData) {
+        navigate(prevStepData.path);
+      }
     }
   };
 
-  const goToStep = (step) => {
-    setCurrentStep(step);
+  const goToStep = (stepId) => {
+    // Only allow navigation to completed steps or the next step
+    const canNavigate = stepId === 1 || completedSteps.includes(stepId - 1);
+
+    if (canNavigate) {
+      const step = steps.find(s => s.id === stepId);
+      if (step) {
+        navigate(step.path);
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -71,6 +137,10 @@ const NotaryForm = () => {
 
       if (result.success) {
         alert(`Notary service request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\nYou will receive a confirmation email shortly.`);
+
+        // Clear localStorage
+        localStorage.removeItem('notaryFormData');
+        localStorage.removeItem('notaryCompletedSteps');
 
         // Reset form after successful submission
         setFormData({
@@ -90,8 +160,11 @@ const NotaryForm = () => {
           notes: ''
         });
 
+        // Reset completed steps
+        setCompletedSteps([]);
+
         // Go back to step 1
-        setCurrentStep(1);
+        navigate('/documents');
       } else {
         alert(`Error submitting request: ${result.error}\n\nPlease try again or contact support.`);
       }
@@ -101,55 +174,6 @@ const NotaryForm = () => {
     }
   };
 
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <Documents
-            formData={formData}
-            updateFormData={updateFormData}
-            nextStep={nextStep}
-          />
-        );
-      case 2:
-        return (
-          <ChooseOption
-            formData={formData}
-            updateFormData={updateFormData}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 3:
-        return (
-          <BookAppointment
-            formData={formData}
-            updateFormData={updateFormData}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 4:
-        return (
-          <PersonalInfo
-            formData={formData}
-            updateFormData={updateFormData}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 5:
-        return (
-          <Summary
-            formData={formData}
-            prevStep={prevStep}
-            handleSubmit={handleSubmit}
-          />
-        );
-      default:
-        return null;
-    }
-  };
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -175,48 +199,56 @@ const NotaryForm = () => {
 
           {/* Steps Navigation */}
           <div className="space-y-3">
-            {steps.map((step, index) => (
-              <div
-                key={step.id}
-                onClick={() => goToStep(step.id)}
-                className={`flex items-center p-4 rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 ${
-                  currentStep === step.id
-                    ? 'bg-black text-white shadow-lg animate-slide-in'
-                    : currentStep > step.id
-                    ? 'bg-white text-gray-900 hover:bg-gray-50 hover:shadow-md'
-                    : 'bg-white text-gray-400 hover:bg-gray-50'
-                }`}
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className={`flex items-center justify-center w-12 h-12 rounded-lg transition-all duration-300 ${
-                  currentStep === step.id
-                    ? 'bg-white/20'
-                    : currentStep > step.id
-                    ? 'bg-green-100'
-                    : 'bg-gray-100'
-                }`}>
-                  {currentStep > step.id ? (
-                    <Icon icon="heroicons:check" className="w-6 h-6 text-green-600 animate-bounce-in" />
-                  ) : (
-                    <Icon icon={step.icon} className={`w-6 h-6 transition-transform duration-300 ${
-                      currentStep === step.id ? 'text-white scale-110' : 'text-gray-400'
-                    }`} />
-                  )}
-                </div>
-                <div className="ml-4 flex-1">
-                  <div className={`text-xs font-semibold uppercase tracking-wide ${
-                    currentStep === step.id ? 'text-white/80' : 'text-gray-500'
+            {steps.map((step, index) => {
+              const isCompleted = completedSteps.includes(step.id);
+              const isCurrent = currentStep === step.id;
+              const canAccess = step.id === 1 || completedSteps.includes(step.id - 1);
+
+              return (
+                <div
+                  key={step.id}
+                  onClick={() => canAccess && goToStep(step.id)}
+                  className={`flex items-center p-4 rounded-xl transition-all duration-300 ${
+                    canAccess ? 'cursor-pointer transform hover:scale-105' : 'cursor-not-allowed opacity-50'
+                  } ${
+                    isCurrent
+                      ? 'bg-black text-white shadow-lg animate-slide-in'
+                      : isCompleted
+                      ? 'bg-white text-gray-900 hover:bg-gray-50 hover:shadow-md'
+                      : 'bg-white text-gray-400'
+                  }`}
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className={`flex items-center justify-center w-12 h-12 rounded-lg transition-all duration-300 ${
+                    isCurrent
+                      ? 'bg-white/20'
+                      : isCompleted
+                      ? 'bg-green-100'
+                      : 'bg-gray-100'
                   }`}>
-                    Step {step.id}
+                    {isCompleted ? (
+                      <Icon icon="heroicons:check" className="w-6 h-6 text-green-600 animate-bounce-in" />
+                    ) : (
+                      <Icon icon={step.icon} className={`w-6 h-6 transition-transform duration-300 ${
+                        isCurrent ? 'text-white scale-110' : 'text-gray-400'
+                      }`} />
+                    )}
                   </div>
-                  <div className={`text-sm font-medium mt-0.5 ${
-                    currentStep === step.id ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    {step.name}
+                  <div className="ml-4 flex-1">
+                    <div className={`text-xs font-semibold uppercase tracking-wide ${
+                      isCurrent ? 'text-white/80' : 'text-gray-500'
+                    }`}>
+                      Step {step.id}
+                    </div>
+                    <div className={`text-sm font-medium mt-0.5 ${
+                      isCurrent ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {step.name}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Progress Bar */}
@@ -236,10 +268,64 @@ const NotaryForm = () => {
       </aside>
 
       {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center p-4 md:p-6">
-        {/* Form Content - 95vh centered */}
-        <div className="w-full max-w-5xl h-[95vh] bg-[#F3F4F6] rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden">
-          {renderStep()}
+      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center p-5">
+        {/* Form Content - 95vh centered with full width and side margins */}
+        <div className="w-full h-[95vh] bg-[#F3F4F6] rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden">
+          <Routes>
+            <Route
+              path="/documents"
+              element={
+                <Documents
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                />
+              }
+            />
+            <Route
+              path="/choose-option"
+              element={
+                <ChooseOption
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                />
+              }
+            />
+            <Route
+              path="/book-appointment"
+              element={
+                <BookAppointment
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                />
+              }
+            />
+            <Route
+              path="/personal-info"
+              element={
+                <PersonalInfo
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                />
+              }
+            />
+            <Route
+              path="/summary"
+              element={
+                <Summary
+                  formData={formData}
+                  prevStep={prevStep}
+                  handleSubmit={handleSubmit}
+                />
+              }
+            />
+          </Routes>
         </div>
       </main>
 

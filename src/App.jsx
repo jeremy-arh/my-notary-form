@@ -1,7 +1,12 @@
+import { BrowserRouter } from 'react-router-dom'
 import NotaryForm from './components/NotaryForm'
 
 function App() {
-  return <NotaryForm />
+  return (
+    <BrowserRouter>
+      <NotaryForm />
+    </BrowserRouter>
+  )
 }
 
 export default App
