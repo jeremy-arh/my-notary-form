@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
 
 const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [errors, setErrors] = useState({});
@@ -152,15 +154,12 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
               <Icon icon="heroicons:phone" className="w-4 h-4 mr-2 text-gray-400" />
               Phone Number <span className="text-red-500 ml-1">*</span>
             </label>
-            <input
-              type="tel"
-              id="phone"
+            <PhoneInput
+              international
+              defaultCountry="US"
               value={formData.phone || ''}
-              onChange={(e) => handleChange('phone', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-                errors.phone ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder="+1 (555) 123-4567"
+              onChange={(value) => handleChange('phone', value)}
+              className={`phone-input ${errors.phone ? 'phone-input-error' : ''}`}
             />
             {errors.phone && (
               <p className="mt-1 text-sm text-red-600 flex items-center">

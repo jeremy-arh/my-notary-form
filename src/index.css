@@ -255,6 +255,53 @@ select {
   transform: translateY(1px);
 }
 
+/* Phone Input Styles */
+.phone-input .PhoneInputInput {
+  padding: 0.75rem 1rem;
+  background-color: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  transition: all 0.2s;
+  outline: none;
+  width: 100%;
+}
+
+.phone-input .PhoneInputInput:focus {
+  border-color: #000000;
+  ring: 2px;
+  ring-color: #000000;
+}
+
+.phone-input-error .PhoneInputInput {
+  border-color: #ef4444;
+}
+
+.phone-input .PhoneInputCountrySelect {
+  padding: 0.75rem 0.5rem;
+  background-color: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  margin-right: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.phone-input .PhoneInputCountrySelect:focus {
+  border-color: #000000;
+  outline: none;
+}
+
+.phone-input .PhoneInputCountry {
+  margin-right: 0.5rem;
+}
+
+.phone-input {
+  display: flex;
+  align-items: center;
+}
+
 /* Responsive Typography */
 @media (max-width: 768px) {
   html {

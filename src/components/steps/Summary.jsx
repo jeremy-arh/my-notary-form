@@ -173,6 +173,77 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </div>
       </div>
 
+      {/* Price Breakdown */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+            <Icon icon="heroicons:currency-dollar" className="w-5 h-5 text-gray-600" />
+          </div>
+          Price Details
+        </h3>
+        <div className="space-y-3">
+          {/* Base Service */}
+          <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+            <span className="text-sm text-gray-600">Notary Service Fee</span>
+            <span className="text-sm font-semibold text-gray-900">$75.00</span>
+          </div>
+
+          {/* Additional Services */}
+          {formData.selectedOptions && formData.selectedOptions.some(opt => ['urgent', 'home-visit', 'translation', 'consultation'].includes(opt)) && (
+            <>
+              {formData.selectedOptions.includes('urgent') && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Urgent Service (48h)</span>
+                  <span className="text-sm font-semibold text-gray-900">$50.00</span>
+                </div>
+              )}
+              {formData.selectedOptions.includes('home-visit') && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Home Visit</span>
+                  <span className="text-sm font-semibold text-gray-900">$100.00</span>
+                </div>
+              )}
+              {formData.selectedOptions.includes('translation') && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Translation Service</span>
+                  <span className="text-sm font-semibold text-gray-900">$35.00</span>
+                </div>
+              )}
+              {formData.selectedOptions.includes('consultation') && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Legal Consultation</span>
+                  <span className="text-sm font-semibold text-gray-900">$150.00</span>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Documents Fee */}
+          {formData.documents && formData.documents.length > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Document Processing ({formData.documents.length} files)</span>
+              <span className="text-sm font-semibold text-gray-900">${(formData.documents.length * 10).toFixed(2)}</span>
+            </div>
+          )}
+
+          {/* Total */}
+          <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
+            <span className="text-base font-bold text-gray-900">Total Amount</span>
+            <span className="text-xl font-bold text-gray-900">
+              ${(() => {
+                let total = 75; // Base fee
+                if (formData.selectedOptions?.includes('urgent')) total += 50;
+                if (formData.selectedOptions?.includes('home-visit')) total += 100;
+                if (formData.selectedOptions?.includes('translation')) total += 35;
+                if (formData.selectedOptions?.includes('consultation')) total += 150;
+                if (formData.documents?.length) total += formData.documents.length * 10;
+                return total.toFixed(2);
+              })()}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Confirmation Notice */}
       <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-6">
         <div className="flex items-start">
@@ -218,12 +289,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Submitting...
+                Processing...
               </>
             ) : (
               <>
-                <Icon icon="heroicons:paper-airplane" className="w-5 h-5 mr-2" />
-                Submit Request
+                <Icon icon="heroicons:credit-card" className="w-5 h-5 mr-2" />
+                Confirm & pay
               </>
             )}
           </button>

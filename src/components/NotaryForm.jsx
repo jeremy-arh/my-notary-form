@@ -259,8 +259,11 @@ const NotaryForm = () => {
             </div>
             <div className="h-3 bg-gray-300 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-black to-gray-700 transition-all duration-700 ease-out"
-                style={{ width: `${(currentStep / steps.length) * 100}%` }}
+                className="h-full transition-all duration-700 ease-out"
+                style={{
+                  width: `${(currentStep / steps.length) * 100}%`,
+                  background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
+                }}
               />
             </div>
           </div>
@@ -337,8 +340,11 @@ const NotaryForm = () => {
         </div>
         <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
           <div
-            className="h-full bg-black transition-all duration-500"
-            style={{ width: `${(currentStep / steps.length) * 100}%` }}
+            className="h-full transition-all duration-500"
+            style={{
+              width: `${(currentStep / steps.length) * 100}%`,
+              background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
+            }}
           />
         </div>
       </div>
