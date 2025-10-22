@@ -203,7 +203,7 @@ const Dashboard = () => {
                 <div
                   key={submission.id}
                   className="bg-white rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => window.location.href = '/admin/submissions'}
+                  onClick={() => window.location.href = '/submissions'}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">

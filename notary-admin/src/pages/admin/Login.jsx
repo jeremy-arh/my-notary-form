@@ -24,7 +24,7 @@ const Login = () => {
       if (error) throw error;
 
       if (data.user) {
-        navigate('/admin/dashboard');
+        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -56,7 +56,7 @@ const Login = () => {
 
         {/* Login Form */}
         <div className="bg-[#F3F4F6] rounded-3xl p-8 shadow-sm">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Admin Login</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Notary Login</h1>
           <p className="text-gray-600 text-center mb-8">Sign in to manage notary requests</p>
 
           {error && (
@@ -77,7 +77,7 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                placeholder="admin@notary.com"
+                placeholder="notary@example.com"
                 required
               />
             </div>
