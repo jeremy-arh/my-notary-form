@@ -12,7 +12,7 @@
 -- 1. CREATE CLIENT TABLE
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS client (
-  client_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_client_email ON client(email);
 -- 2. CREATE ADMIN USER TABLE
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS admin_user (
-  admin_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
@@ -69,27 +69,20 @@ CREATE INDEX IF NOT EXISTS idx_message_created ON message(created_at DESC);
 -- ============================================================================
 -- 4. MODIFY SUBMISSION TABLE
 -- ============================================================================
--- Add client_id and notary_id to submission table if not exists
+-- Add client_id to submission table if not exists
+-- Note: assigned_notary_id already exists and references notary(id)
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'submission' AND column_name = 'client_id'
   ) THEN
-    ALTER TABLE submission ADD COLUMN client_id UUID REFERENCES client(client_id);
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'submission' AND column_name = 'notary_id'
-  ) THEN
-    ALTER TABLE submission ADD COLUMN notary_id UUID REFERENCES notary(notary_id);
+    ALTER TABLE submission ADD COLUMN client_id UUID REFERENCES client(id);
   END IF;
 END $$;
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_submission_client ON submission(client_id);
-CREATE INDEX IF NOT EXISTS idx_submission_notary ON submission(notary_id);
 
 -- ============================================================================
 -- 5. ROW LEVEL SECURITY POLICIES
@@ -125,8 +118,8 @@ CREATE POLICY "Notaries can read client data for their submissions"
   USING (
     EXISTS (
       SELECT 1 FROM submission s
-      INNER JOIN notary n ON n.notary_id = s.notary_id
-      WHERE s.client_id = client.client_id
+      INNER JOIN notary n ON n.id = s.assigned_notary_id
+      WHERE s.client_id = client.id
       AND n.user_id = auth.uid()
     )
   );
@@ -176,7 +169,7 @@ CREATE POLICY "Clients can read their messages"
   USING (
     EXISTS (
       SELECT 1 FROM submission s
-      INNER JOIN client c ON c.client_id = s.client_id
+      INNER JOIN client c ON c.id = s.client_id
       WHERE s.id = message.submission_id
       AND c.user_id = auth.uid()
     )
@@ -188,7 +181,7 @@ CREATE POLICY "Notaries can read their messages"
   USING (
     EXISTS (
       SELECT 1 FROM submission s
-      INNER JOIN notary n ON n.notary_id = s.notary_id
+      INNER JOIN notary n ON n.id = s.assigned_notary_id
       WHERE s.id = message.submission_id
       AND n.user_id = auth.uid()
     )
@@ -211,10 +204,10 @@ CREATE POLICY "Clients can send messages"
     sender_type = 'client' AND
     EXISTS (
       SELECT 1 FROM submission s
-      INNER JOIN client c ON c.client_id = s.client_id
+      INNER JOIN client c ON c.id = s.client_id
       WHERE s.id = message.submission_id
       AND c.user_id = auth.uid()
-      AND c.client_id::text = sender_id::text
+      AND c.id::text = sender_id::text
     )
   );
 
@@ -225,10 +218,10 @@ CREATE POLICY "Notaries can send messages"
     sender_type = 'notary' AND
     EXISTS (
       SELECT 1 FROM submission s
-      INNER JOIN notary n ON n.notary_id = s.notary_id
+      INNER JOIN notary n ON n.id = s.assigned_notary_id
       WHERE s.id = message.submission_id
       AND n.user_id = auth.uid()
-      AND n.notary_id::text = sender_id::text
+      AND n.id::text = sender_id::text
     )
   );
 
@@ -240,7 +233,7 @@ CREATE POLICY "Admins can send messages"
     EXISTS (
       SELECT 1 FROM admin_user a
       WHERE a.user_id = auth.uid()
-      AND a.admin_id::text = sender_id::text
+      AND a.id::text = sender_id::text
     )
   );
 
@@ -251,7 +244,7 @@ CREATE POLICY "Users can mark messages as read"
     -- Client can mark messages in their submissions as read
     EXISTS (
       SELECT 1 FROM submission s
-      INNER JOIN client c ON c.client_id = s.client_id
+      INNER JOIN client c ON c.id = s.client_id
       WHERE s.id = message.submission_id
       AND c.user_id = auth.uid()
     )
@@ -259,7 +252,7 @@ CREATE POLICY "Users can mark messages as read"
     -- Notary can mark messages in their submissions as read
     EXISTS (
       SELECT 1 FROM submission s
-      INNER JOIN notary n ON n.notary_id = s.notary_id
+      INNER JOIN notary n ON n.id = s.assigned_notary_id
       WHERE s.id = message.submission_id
       AND n.user_id = auth.uid()
     )
@@ -308,7 +301,7 @@ BEGIN
     SELECT COUNT(*)::INTEGER INTO unread_count
     FROM message m
     INNER JOIN submission s ON s.id = m.submission_id
-    INNER JOIN client c ON c.client_id = s.client_id
+    INNER JOIN client c ON c.id = s.client_id
     WHERE c.user_id = p_user_id
     AND m.read = false
     AND m.sender_type != 'client';
@@ -318,7 +311,7 @@ BEGIN
     SELECT COUNT(*)::INTEGER INTO unread_count
     FROM message m
     INNER JOIN submission s ON s.id = m.submission_id
-    INNER JOIN notary n ON n.notary_id = s.notary_id
+    INNER JOIN notary n ON n.id = s.assigned_notary_id
     WHERE n.user_id = p_user_id
     AND m.read = false
     AND m.sender_type != 'notary';
