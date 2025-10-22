@@ -223,11 +223,11 @@ const NotaryForm = () => {
                     isCurrent
                       ? 'bg-white/20'
                       : isCompleted
-                      ? 'bg-green-100'
+                      ? 'bg-gray-200'
                       : 'bg-gray-100'
                   }`}>
                     {isCompleted ? (
-                      <Icon icon="heroicons:check" className="w-6 h-6 text-green-600 animate-bounce-in" />
+                      <Icon icon="heroicons:check" className="w-6 h-6 text-gray-600 animate-bounce-in" />
                     ) : (
                       <Icon icon={step.icon} className={`w-6 h-6 transition-transform duration-300 ${
                         isCurrent ? 'text-white scale-110' : 'text-gray-400'
@@ -268,9 +268,9 @@ const NotaryForm = () => {
       </aside>
 
       {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center p-5">
+      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center p-5 pb-24 lg:pb-5">
         {/* Form Content - 95vh centered with full width and side margins */}
-        <div className="w-full h-[95vh] bg-[#F3F4F6] rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden">
+        <div className="w-full h-[calc(100vh-8rem)] lg:h-[95vh] bg-[#F3F4F6] rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden">
           <Routes>
             <Route
               path="/documents"

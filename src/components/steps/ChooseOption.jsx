@@ -7,64 +7,64 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
       name: 'Real Estate Transaction',
       description: 'Purchase, sale, or refinancing of property',
       icon: 'heroicons:home-modern',
-      color: 'bg-blue-50',
-      iconColor: 'text-blue-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     },
     {
       id: 'will',
       name: 'Last Will & Testament',
       description: 'Create or update your will',
       icon: 'heroicons:document-text',
-      color: 'bg-purple-50',
-      iconColor: 'text-purple-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     },
     {
       id: 'power-of-attorney',
       name: 'Power of Attorney',
       description: 'Grant legal authority to another person',
       icon: 'heroicons:scale',
-      color: 'bg-green-50',
-      iconColor: 'text-green-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     },
     {
       id: 'marriage-contract',
       name: 'Marriage Contract',
       description: 'Prenuptial or marriage agreement',
       icon: 'heroicons:heart',
-      color: 'bg-pink-50',
-      iconColor: 'text-pink-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     },
     {
       id: 'succession',
       name: 'Succession & Estate',
       description: 'Estate settlement and inheritance',
       icon: 'heroicons:user-group',
-      color: 'bg-orange-50',
-      iconColor: 'text-orange-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     },
     {
       id: 'authentication',
       name: 'Document Authentication',
       description: 'Certify and authenticate documents',
       icon: 'heroicons:shield-check',
-      color: 'bg-indigo-50',
-      iconColor: 'text-indigo-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     },
     {
       id: 'affidavit',
       name: 'Affidavit',
       description: 'Sworn written statement',
       icon: 'heroicons:pencil-square',
-      color: 'bg-cyan-50',
-      iconColor: 'text-cyan-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     },
     {
       id: 'incorporation',
       name: 'Business Incorporation',
       description: 'Company formation and registration',
       icon: 'heroicons:building-office',
-      color: 'bg-amber-50',
-      iconColor: 'text-amber-600'
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
     }
   ];
 
@@ -80,7 +80,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10">
+      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10 pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -140,7 +140,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
       {/* Additional Services */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200">
         <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-          <Icon icon="heroicons:sparkles" className="w-5 h-5 mr-2 text-amber-500" />
+          <Icon icon="heroicons:sparkles" className="w-5 h-5 mr-2 text-gray-600" />
           Additional Services
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

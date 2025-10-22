@@ -61,7 +61,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10">
+      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10 pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">

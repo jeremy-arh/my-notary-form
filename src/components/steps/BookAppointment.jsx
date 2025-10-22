@@ -134,7 +134,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10">
+      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10 pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -148,7 +148,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       {/* Timezone Selector */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200">
         <label className="block text-sm font-semibold text-gray-900 mb-3 flex items-center">
-          <Icon icon="heroicons:globe-alt" className="w-5 h-5 mr-2" />
+          <Icon icon="heroicons:globe-alt" className="w-5 h-5 mr-2 text-gray-600" />
           Your Timezone
         </label>
         <select
@@ -164,94 +164,97 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         </select>
       </div>
 
-      {/* Calendar */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-gray-900">
-            {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-          </h3>
-          <div className="flex space-x-1">
-            <button
-              type="button"
-              onClick={goToPreviousMonth}
-              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Icon icon="heroicons:chevron-left" className="w-4 h-4 text-gray-600" />
-            </button>
-            <button
-              type="button"
-              onClick={goToNextMonth}
-              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Icon icon="heroicons:chevron-right" className="w-4 h-4 text-gray-600" />
-            </button>
-          </div>
-        </div>
-
-        {/* Day names */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map((day) => (
-            <div key={day} className="text-center text-xs font-semibold text-gray-500 py-1">
-              {day.substring(0, 1)}
+      {/* Calendar and Time Slots Row */}
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* Calendar */}
+        <div className="bg-white rounded-2xl p-3 border border-gray-200 lg:w-80 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-900">
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </h3>
+            <div className="flex space-x-1">
+              <button
+                type="button"
+                onClick={goToPreviousMonth}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Icon icon="heroicons:chevron-left" className="w-3.5 h-3.5 text-gray-600" />
+              </button>
+              <button
+                type="button"
+                onClick={goToNextMonth}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Icon icon="heroicons:chevron-right" className="w-3.5 h-3.5 text-gray-600" />
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {calendarDays.map((day, index) => {
-            const disabled = !day.isCurrentMonth || isPast(day.date);
-            const selected = isSelected(day.date);
-            const today = isToday(day.date);
-
-            return (
-              <button
-                key={index}
-                type="button"
-                onClick={() => !disabled && handleDateClick(day.date)}
-                disabled={disabled}
-                className={`aspect-square p-1 rounded-md text-xs font-medium transition-all ${
-                  disabled
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : selected
-                    ? 'bg-black text-white shadow-lg scale-105'
-                    : today
-                    ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                    : 'text-gray-700 hover:bg-gray-100 hover:scale-105'
-                }`}
-              >
-                {day.date.getDate()}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Time Slots */}
-      {selectedDate && (
-        <div className="bg-white rounded-2xl p-6 border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Icon icon="heroicons:clock" className="w-5 h-5 mr-2" />
-            Available Time Slots
-          </h3>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-            {timeSlots.map((slot) => (
-              <button
-                key={slot.value}
-                type="button"
-                onClick={() => handleTimeClick(slot.value)}
-                className={`py-3 px-2 rounded-lg text-sm font-medium transition-all ${
-                  selectedTime === slot.value
-                    ? 'bg-black text-white shadow-lg scale-105'
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:scale-105'
-                }`}
-              >
-                {slot.label}
-              </button>
+          {/* Day names */}
+          <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+            {dayNames.map((day) => (
+              <div key={day} className="text-center text-[10px] font-semibold text-gray-500 py-0.5">
+                {day.substring(0, 1)}
+              </div>
             ))}
           </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {calendarDays.map((day, index) => {
+              const disabled = !day.isCurrentMonth || isPast(day.date);
+              const selected = isSelected(day.date);
+              const today = isToday(day.date);
+
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => !disabled && handleDateClick(day.date)}
+                  disabled={disabled}
+                  className={`aspect-square flex items-center justify-center rounded text-[11px] font-medium transition-all ${
+                    disabled
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : selected
+                      ? 'bg-black text-white shadow-md'
+                      : today
+                      ? 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {day.date.getDate()}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      )}
+
+        {/* Time Slots */}
+        {selectedDate && (
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
+            <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
+              <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-600" />
+              Available Time Slots
+            </h3>
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+              {timeSlots.map((slot) => (
+                <button
+                  key={slot.value}
+                  type="button"
+                  onClick={() => handleTimeClick(slot.value)}
+                  className={`py-2 px-2 rounded-lg text-xs font-medium transition-all ${
+                    selectedTime === slot.value
+                      ? 'bg-black text-white shadow-md'
+                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {slot.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
         </div>
       </div>
 

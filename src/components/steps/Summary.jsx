@@ -51,7 +51,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10">
+      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10 pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -66,8 +66,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       {formData.documents && formData.documents.length > 0 && (
         <div className="bg-white rounded-2xl p-6 border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-              <Icon icon="heroicons:document-text" className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+              <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600" />
             </div>
             Documents ({formData.documents.length})
           </h3>
@@ -89,8 +89,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       {formData.selectedOptions && formData.selectedOptions.length > 0 && (
         <div className="bg-white rounded-2xl p-6 border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-              <Icon icon="heroicons:check-badge" className="w-5 h-5 text-purple-600" />
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+              <Icon icon="heroicons:check-badge" className="w-5 h-5 text-gray-600" />
             </div>
             Selected Services
           </h3>
@@ -110,8 +110,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       {/* Appointment Details */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-            <Icon icon="heroicons:calendar-days" className="w-5 h-5 text-green-600" />
+          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+            <Icon icon="heroicons:calendar-days" className="w-5 h-5 text-gray-600" />
           </div>
           Appointment Details
         </h3>
@@ -134,8 +134,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       {/* Personal Information */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center mr-3">
-            <Icon icon="heroicons:user" className="w-5 h-5 text-amber-600" />
+          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+            <Icon icon="heroicons:user" className="w-5 h-5 text-gray-600" />
           </div>
           Personal Information
         </h3>
@@ -174,18 +174,18 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       </div>
 
       {/* Confirmation Notice */}
-      <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6">
+      <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-6">
         <div className="flex items-start">
           <div className="flex-shrink-0">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
               <Icon icon="heroicons:information-circle" className="w-6 h-6 text-white" />
             </div>
           </div>
           <div className="ml-4">
-            <h4 className="text-sm font-semibold text-blue-900 mb-1">
+            <h4 className="text-sm font-semibold text-gray-900 mb-1">
               What happens next?
             </h4>
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-gray-700">
               After submitting, you'll receive a confirmation email at <strong>{formData.email}</strong>.
               Our team will review your request and contact you within 24 hours to confirm your appointment.
             </p>
