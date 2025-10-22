@@ -3,6 +3,7 @@ import PrivateRoute from './components/PrivateRoute'
 import Login from './pages/admin/Login'
 import Dashboard from './pages/admin/Dashboard'
 import Submissions from './pages/admin/Submissions'
+import Messages from './pages/admin/Messages'
 import Profile from './pages/admin/Profile'
 import './index.css'
 
@@ -25,6 +26,14 @@ function App() {
           element={
             <PrivateRoute>
               <Submissions />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <PrivateRoute>
+              <Messages />
             </PrivateRoute>
           }
         />

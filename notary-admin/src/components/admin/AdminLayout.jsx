@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
@@ -7,12 +7,71 @@ const AdminLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const menuItems = [
     { path: '/dashboard', name: 'Dashboard', icon: 'heroicons:chart-bar' },
     { path: '/submissions', name: 'Submissions', icon: 'heroicons:document-text' },
+    { path: '/messages', name: 'Messages', icon: 'heroicons:chat-bubble-left-right', badge: unreadCount },
     { path: '/profile', name: 'Profile', icon: 'heroicons:user' }
   ];
+
+  useEffect(() => {
+    fetchUnreadCount();
+
+    // Subscribe to message changes
+    const channel = supabase
+      .channel('message-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'message'
+      }, () => {
+        fetchUnreadCount();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: notary } = await supabase
+        .from('notary')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!notary) return;
+
+      // Count unread messages in submissions assigned to this notary
+      const { data: messages } = await supabase
+        .from('message')
+        .select('message_id, submission_id')
+        .eq('read', false)
+        .neq('sender_type', 'notary');
+
+      if (!messages) return;
+
+      // Filter messages for submissions assigned to this notary
+      const { data: submissions } = await supabase
+        .from('submission')
+        .select('id')
+        .eq('assigned_notary_id', notary.id);
+
+      const submissionIds = submissions?.map(s => s.id) || [];
+      const unread = messages.filter(m => submissionIds.includes(m.submission_id));
+
+      setUnreadCount(unread.length);
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -51,14 +110,23 @@ const AdminLayout = ({ children }) => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center p-4 rounded-xl transition-all duration-300 ${
+                  className={`flex items-center justify-between p-4 rounded-xl transition-all duration-300 ${
                     isActive
                       ? 'bg-black text-white shadow-lg'
                       : 'bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md'
                   }`}
                 >
-                  <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
-                  <span className="font-medium">{item.name}</span>
+                  <div className="flex items-center">
+                    <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                    <span className="font-medium">{item.name}</span>
+                  </div>
+                  {item.badge > 0 && (
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                      isActive ? 'bg-white text-black' : 'bg-black text-white'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -114,14 +182,23 @@ const AdminLayout = ({ children }) => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setIsSidebarOpen(false)}
-                      className={`flex items-center p-4 rounded-xl transition-all duration-300 ${
+                      className={`flex items-center justify-between p-4 rounded-xl transition-all duration-300 ${
                         isActive
                           ? 'bg-black text-white shadow-lg'
                           : 'bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md'
                       }`}
                     >
-                      <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
-                      <span className="font-medium">{item.name}</span>
+                      <div className="flex items-center">
+                        <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                        <span className="font-medium">{item.name}</span>
+                      </div>
+                      {item.badge > 0 && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          isActive ? 'bg-white text-black' : 'bg-black text-white'
+                        }`}>
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
