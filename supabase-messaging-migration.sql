@@ -85,7 +85,46 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_submission_client ON submission(client_id);
 
 -- ============================================================================
--- 5. ROW LEVEL SECURITY POLICIES
+-- 5. HELPER FUNCTIONS FOR RLS (to avoid infinite recursion)
+-- ============================================================================
+
+-- Function to check if current user is an admin (bypasses RLS)
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM admin_user
+    WHERE user_id = auth.uid()
+  );
+END;
+$$;
+
+-- Function to check if current user is a super admin (bypasses RLS)
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM admin_user
+    WHERE user_id = auth.uid()
+    AND role = 'super_admin'
+  );
+END;
+$$;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION is_super_admin() TO authenticated;
+
+-- ============================================================================
+-- 6. ROW LEVEL SECURITY POLICIES
 -- ============================================================================
 
 -- Enable RLS on new tables
@@ -124,40 +163,24 @@ CREATE POLICY "Notaries can read client data for their submissions"
     )
   );
 
--- Admins can read all client data
+-- Admins can read all client data (using helper function to avoid recursion)
 CREATE POLICY "Admins can read all client data"
   ON client FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM admin_user
-      WHERE user_id = auth.uid()
-    )
-  );
+  USING (is_admin());
 
 -- ============================================================================
 -- ADMIN USER TABLE POLICIES
 -- ============================================================================
 
--- Admins can read all admin data
+-- Admins can read all admin data (using helper function to avoid recursion)
 CREATE POLICY "Admins can read admin data"
   ON admin_user FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM admin_user
-      WHERE user_id = auth.uid()
-    )
-  );
+  USING (is_admin());
 
--- Only super admins can create new admins
+-- Only super admins can create new admins (using helper function to avoid recursion)
 CREATE POLICY "Super admins can create admins"
   ON admin_user FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM admin_user
-      WHERE user_id = auth.uid()
-      AND role = 'super_admin'
-    )
-  );
+  WITH CHECK (is_super_admin());
 
 -- ============================================================================
 -- MESSAGE TABLE POLICIES
@@ -187,15 +210,10 @@ CREATE POLICY "Notaries can read their messages"
     )
   );
 
--- Admins can read all messages
+-- Admins can read all messages (using helper function to avoid recursion)
 CREATE POLICY "Admins can read all messages"
   ON message FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM admin_user
-      WHERE user_id = auth.uid()
-    )
-  );
+  USING (is_admin());
 
 -- Clients can insert messages for their submissions
 CREATE POLICY "Clients can send messages"
@@ -225,15 +243,16 @@ CREATE POLICY "Notaries can send messages"
     )
   );
 
--- Admins can insert messages
+-- Admins can insert messages (using helper function to avoid recursion)
 CREATE POLICY "Admins can send messages"
   ON message FOR INSERT
   WITH CHECK (
     sender_type = 'admin' AND
+    is_admin() AND
     EXISTS (
       SELECT 1 FROM admin_user a
-      WHERE a.user_id = auth.uid()
-      AND a.id::text = sender_id::text
+      WHERE a.id::text = sender_id::text
+      AND a.user_id = auth.uid()
     )
   );
 
@@ -257,11 +276,8 @@ CREATE POLICY "Users can mark messages as read"
       AND n.user_id = auth.uid()
     )
     OR
-    -- Admin can mark any message as read
-    EXISTS (
-      SELECT 1 FROM admin_user
-      WHERE user_id = auth.uid()
-    )
+    -- Admin can mark any message as read (using helper function to avoid recursion)
+    is_admin()
   );
 
 -- ============================================================================
