@@ -51,7 +51,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10 pb-6">
+      <div className="flex-1 overflow-y-auto px-3 md:px-10 pt-6 md:pt-10 pb-24 lg:pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -267,13 +267,13 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-6 md:px-10 py-6 border-t border-gray-300 bg-[#F3F4F6]">
+      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-16 lg:bottom-auto left-0 right-0 z-40">
         <div className="flex justify-between">
           <button
             type="button"
             onClick={prevStep}
             disabled={isSubmitting}
-            className="btn-glassy-secondary px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Back
           </button>
@@ -281,7 +281,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             type="button"
             onClick={onSubmit}
             disabled={isSubmitting}
-            className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             {isSubmitting ? (
               <>

@@ -50,7 +50,7 @@ const Documents = ({ formData, updateFormData, nextStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-6 md:pt-10 pb-6">
+      <div className="flex-1 overflow-y-auto px-3 md:px-10 pt-6 md:pt-10 pb-24 lg:pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -138,12 +138,12 @@ const Documents = ({ formData, updateFormData, nextStep }) => {
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-6 md:px-10 py-6 border-t border-gray-300 bg-[#F3F4F6]">
+      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-16 lg:bottom-auto left-0 right-0 z-40">
         <div className="flex justify-end">
           <button
             type="button"
             onClick={nextStep}
-            className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
           >
             Continue
           </button>
