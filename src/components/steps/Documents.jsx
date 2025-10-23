@@ -50,7 +50,7 @@ const Documents = ({ formData, updateFormData, nextStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-3 md:px-10 pt-6 md:pt-10 pb-32 lg:pb-6">
+      <div className="flex-1 overflow-y-auto px-3 md:px-10 pt-6 md:pt-10 pb-44 lg:pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">

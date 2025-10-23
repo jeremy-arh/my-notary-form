@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS client (
   last_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
+  address TEXT,
+  city TEXT,
+  postal_code TEXT,
+  country TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
