@@ -42,7 +42,7 @@ const SubmissionDetail = () => {
         .from('submission')
         .select(`
           *,
-          notary:assigned_notary_id(id, name, email, phone)
+          notary!assigned_notary_id(id, name, email, phone)
         `)
         .eq('id', id)
         .eq('client_id', client.id)

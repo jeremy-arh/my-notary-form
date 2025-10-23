@@ -44,7 +44,7 @@ const Dashboard = () => {
         .from('submission')
         .select(`
           *,
-          notary:assigned_notary_id(id, name, email)
+          notary!assigned_notary_id(id, name, email)
         `)
         .eq('client_id', client.id)
         .order('created_at', { ascending: false });
