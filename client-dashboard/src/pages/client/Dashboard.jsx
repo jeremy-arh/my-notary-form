@@ -40,6 +40,7 @@ const Dashboard = () => {
       setClientInfo(client);
 
       // Get submissions
+      console.log('🔍 [NOTARY] Fetching submissions for client:', client.id);
       const { data: submissionsData, error: submissionsError } = await supabase
         .from('submission')
         .select(`
@@ -48,6 +49,20 @@ const Dashboard = () => {
         `)
         .eq('client_id', client.id)
         .order('created_at', { ascending: false });
+
+      console.log('📋 [NOTARY] Submissions data:', submissionsData);
+      console.log('❌ [NOTARY] Submissions error:', submissionsError);
+
+      if (submissionsData && submissionsData.length > 0) {
+        submissionsData.forEach((sub, idx) => {
+          console.log(`📝 [NOTARY] Submission ${idx + 1}:`, {
+            id: sub.id,
+            assigned_notary_id: sub.assigned_notary_id,
+            notary_object: sub.notary,
+            notary_name: sub.notary?.name
+          });
+        });
+      }
 
       if (submissionsError) throw submissionsError;
 

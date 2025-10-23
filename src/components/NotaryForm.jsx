@@ -90,12 +90,15 @@ const NotaryForm = () => {
   useEffect(() => {
     const loadUserData = async () => {
       try {
+        console.log('🔍 [PRE-FILL] Starting to load user data...');
         if (!supabase) {
+          console.log('⚠️  [PRE-FILL] No supabase client available');
           setIsLoadingUserData(false);
           return;
         }
 
         const { data: { user } } = await supabase.auth.getUser();
+        console.log('👤 [PRE-FILL] User:', user ? `${user.id} (${user.email})` : 'Not authenticated');
 
         if (user) {
           // User is authenticated, load their client data
@@ -105,23 +108,31 @@ const NotaryForm = () => {
             .eq('user_id', user.id)
             .single();
 
+          console.log('📋 [PRE-FILL] Client data:', client);
+          console.log('❌ [PRE-FILL] Error:', error);
+
           if (!error && client) {
-            // Pre-fill form with user data
+            // Pre-fill form with user data - Always use client data if available
+            const updatedData = {
+              firstName: client.first_name || '',
+              lastName: client.last_name || '',
+              email: client.email || '',
+              phone: client.phone || '',
+              address: client.address || '',
+              city: client.city || '',
+              postalCode: client.postal_code || '',
+              country: client.country || ''
+            };
+            console.log('✅ [PRE-FILL] Updating form with:', updatedData);
+
             setFormData(prev => ({
               ...prev,
-              firstName: client.first_name || prev.firstName,
-              lastName: client.last_name || prev.lastName,
-              email: client.email || prev.email,
-              phone: client.phone || prev.phone,
-              address: client.address || prev.address,
-              city: client.city || prev.city,
-              postalCode: client.postal_code || prev.postalCode,
-              country: client.country || prev.country
+              ...updatedData
             }));
           }
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
+        console.error('❌ [PRE-FILL] Error loading user data:', error);
       } finally {
         setIsLoadingUserData(false);
       }
