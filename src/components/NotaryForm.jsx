@@ -283,9 +283,9 @@ const NotaryForm = () => {
       </aside>
 
       {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center pb-32 lg:p-5">
+      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5">
         {/* Form Content - 95vh centered with full width and side margins */}
-        <div className="w-full h-screen lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden">
+        <div className="w-full h-screen lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative">
           <Routes>
             <Route
               path="/documents"
