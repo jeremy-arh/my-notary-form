@@ -151,8 +151,10 @@ CREATE POLICY "Clients can update own data"
   USING (auth.uid() = user_id);
 
 -- Anyone can insert (for registration during form submission)
+-- This is necessary because signUp() doesn't automatically authenticate the user
 CREATE POLICY "Anyone can create client account"
   ON client FOR INSERT
+  TO public
   WITH CHECK (true);
 
 -- Notaries can read client data for their submissions
