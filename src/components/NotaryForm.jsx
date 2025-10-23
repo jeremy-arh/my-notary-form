@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { submitNotaryRequest } from '../lib/supabase';
+import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
@@ -12,6 +12,7 @@ import Summary from './steps/Summary';
 const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -85,6 +86,50 @@ const NotaryForm = () => {
     }
   }, [location.pathname, completedSteps, navigate]);
 
+  // Load user data if authenticated
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        if (!supabase) {
+          setIsLoadingUserData(false);
+          return;
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          // User is authenticated, load their client data
+          const { data: client, error } = await supabase
+            .from('client')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
+
+          if (!error && client) {
+            // Pre-fill form with user data
+            setFormData(prev => ({
+              ...prev,
+              firstName: client.first_name || prev.firstName,
+              lastName: client.last_name || prev.lastName,
+              email: client.email || prev.email,
+              phone: client.phone || prev.phone,
+              address: client.address || prev.address,
+              city: client.city || prev.city,
+              postalCode: client.postal_code || prev.postalCode,
+              country: client.country || prev.country
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      } finally {
+        setIsLoadingUserData(false);
+      }
+    };
+
+    loadUserData();
+  }, []);
+
   const updateFormData = (data) => {
     setFormData(prev => ({ ...prev, ...data }));
   };
@@ -136,20 +181,6 @@ const NotaryForm = () => {
       const result = await submitNotaryRequest(formData);
 
       if (result.success) {
-        let message = `Notary service request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\n`;
-
-        if (result.accountCreated) {
-          message += `✅ Your account has been created!\n\n`;
-          message += `📧 A magic link has been sent to ${formData.email}\n\n`;
-          message += `Click the link in your email to access your Client Dashboard at:\n`;
-          message += `${window.location.origin.replace(':5173', ':5175')}\n\n`;
-          message += `You can track your request status and chat with your assigned notary.`;
-        } else {
-          message += `You can track your request in your Client Dashboard using the magic link we'll send you.`;
-        }
-
-        alert(message);
-
         // Clear localStorage
         localStorage.removeItem('notaryFormData');
         localStorage.removeItem('notaryCompletedSteps');
@@ -175,8 +206,33 @@ const NotaryForm = () => {
         // Reset completed steps
         setCompletedSteps([]);
 
-        // Go back to step 1
-        navigate('/documents');
+        if (result.accountCreated && result.magicLinkSent) {
+          // Show message and redirect to dashboard (magic link will authenticate them)
+          alert(`✅ Request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\n📧 A magic link has been sent to ${formData.email}\n\nClick the link in your email to access your Client Dashboard.`);
+
+          // Redirect to client dashboard login page
+          window.location.href = window.location.origin.replace(':5173', ':5175');
+        } else {
+          // User was already authenticated or magic link failed
+          // Try to sign in with OTP anyway
+          if (supabase) {
+            const { error: otpError } = await supabase.auth.signInWithOtp({
+              email: formData.email,
+              options: {
+                emailRedirectTo: `${window.location.origin.replace(':5173', ':5175')}/dashboard`
+              }
+            });
+
+            if (!otpError) {
+              alert(`✅ Request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\n📧 A magic link has been sent to ${formData.email}\n\nClick the link to access your Client Dashboard.`);
+            } else {
+              alert(`✅ Request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\nYou can access your dashboard using the magic link we sent to your email.`);
+            }
+          }
+
+          // Redirect to client dashboard
+          window.location.href = window.location.origin.replace(':5173', ':5175');
+        }
       } else {
         alert(`Error submitting request: ${result.error}\n\nPlease try again or contact support.`);
       }

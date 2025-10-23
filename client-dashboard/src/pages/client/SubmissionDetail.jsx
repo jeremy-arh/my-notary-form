@@ -299,12 +299,12 @@ const SubmissionDetail = () => {
                       <div className="flex items-center">
                         <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 mr-3" />
                         <div>
-                          <p className="font-semibold text-gray-900">{doc.original_filename}</p>
+                          <p className="font-semibold text-gray-900">{doc.file_name}</p>
                           <p className="text-sm text-gray-600">{(doc.file_size / 1024).toFixed(2)} KB</p>
                         </div>
                       </div>
                       <button
-                        onClick={() => downloadDocument(doc.file_path, doc.original_filename)}
+                        onClick={() => downloadDocument(doc.storage_path, doc.file_name)}
                         className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
                       >
                         <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-1" />

@@ -111,6 +111,7 @@ export const submitNotaryRequest = async (formData) => {
     let clientId = null;
     let accountCreated = false;
     let userId = null;
+    let magicLinkSent = false;
 
     // 1. Check if client already exists
     console.log('1️⃣ Checking if client exists with email:', formData.email);
@@ -130,6 +131,29 @@ export const submitNotaryRequest = async (formData) => {
       console.log('✅ Client already exists:', existingClient.id);
       clientId = existingClient.id;
       userId = existingClient.user_id;
+
+      // Update client record with latest info (UPSERT behavior)
+      console.log('2️⃣ Updating client information...');
+      const { error: updateError } = await supabase
+        .from('client')
+        .update({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          postal_code: formData.postalCode,
+          country: formData.country,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', clientId);
+
+      if (updateError) {
+        console.error('⚠️  Warning: Could not update client info:', updateError);
+        // Don't throw - we can continue with old data
+      } else {
+        console.log('✅ Client information updated');
+      }
     } else {
       console.log('2️⃣ Creating new client account...');
 
@@ -191,9 +215,10 @@ export const submitNotaryRequest = async (formData) => {
 
       if (magicLinkError) {
         console.error('⚠️  Warning: Could not send magic link:', magicLinkError);
-        // Don't throw - account was created, magic link is optional
+        magicLinkSent = false;
       } else {
         console.log('✅ Magic link sent!');
+        magicLinkSent = true;
       }
     }
 
@@ -343,6 +368,7 @@ export const submitNotaryRequest = async (formData) => {
     console.log('📋 Submission ID:', submissionId);
     console.log('👤 Client ID:', clientId);
     console.log('🆕 Account Created:', accountCreated);
+    console.log('📧 Magic Link Sent:', magicLinkSent);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     return {
@@ -350,6 +376,7 @@ export const submitNotaryRequest = async (formData) => {
       submissionId: submissionId,
       clientId: clientId,
       accountCreated: accountCreated,
+      magicLinkSent: magicLinkSent,
       message: accountCreated
         ? 'Submission created successfully! A magic link has been sent to your email to access your dashboard.'
         : 'Submission created successfully'
