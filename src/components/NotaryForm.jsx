@@ -136,7 +136,19 @@ const NotaryForm = () => {
       const result = await submitNotaryRequest(formData);
 
       if (result.success) {
-        alert(`Notary service request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\nYou will receive a confirmation email shortly.`);
+        let message = `Notary service request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\n`;
+
+        if (result.accountCreated) {
+          message += `✅ Your account has been created!\n\n`;
+          message += `📧 A magic link has been sent to ${formData.email}\n\n`;
+          message += `Click the link in your email to access your Client Dashboard at:\n`;
+          message += `${window.location.origin.replace(':5173', ':5175')}\n\n`;
+          message += `You can track your request status and chat with your assigned notary.`;
+        } else {
+          message += `You can track your request in your Client Dashboard using the magic link we'll send you.`;
+        }
+
+        alert(message);
 
         // Clear localStorage
         localStorage.removeItem('notaryFormData');
