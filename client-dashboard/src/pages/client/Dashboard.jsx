@@ -43,30 +43,44 @@ const Dashboard = () => {
       console.log('🔍 [NOTARY] Fetching submissions for client:', client.id);
       const { data: submissionsData, error: submissionsError } = await supabase
         .from('submission')
-        .select(`
-          *,
-          notary!assigned_notary_id(id, name, email)
-        `)
+        .select('*')
         .eq('client_id', client.id)
         .order('created_at', { ascending: false });
 
       console.log('📋 [NOTARY] Submissions data:', submissionsData);
       console.log('❌ [NOTARY] Submissions error:', submissionsError);
 
-      if (submissionsData && submissionsData.length > 0) {
-        submissionsData.forEach((sub, idx) => {
-          console.log(`📝 [NOTARY] Submission ${idx + 1}:`, {
-            id: sub.id,
-            assigned_notary_id: sub.assigned_notary_id,
-            notary_object: sub.notary,
-            notary_name: sub.notary?.name
-          });
-        });
-      }
-
       if (submissionsError) throw submissionsError;
 
-      setSubmissions(submissionsData || []);
+      // Manually load notary data for each submission
+      if (submissionsData && submissionsData.length > 0) {
+        const submissionsWithNotaries = await Promise.all(
+          submissionsData.map(async (submission) => {
+            if (submission.assigned_notary_id) {
+              console.log(`🔍 [NOTARY] Loading notary for submission ${submission.id}, notary_id:`, submission.assigned_notary_id);
+              const { data: notaryData, error: notaryError } = await supabase
+                .from('notary')
+                .select('id, name, email')
+                .eq('id', submission.assigned_notary_id)
+                .single();
+
+              console.log(`📋 [NOTARY] Notary data for ${submission.assigned_notary_id}:`, notaryData);
+              console.log(`❌ [NOTARY] Notary error:`, notaryError);
+
+              return {
+                ...submission,
+                notary: notaryData
+              };
+            }
+            return submission;
+          })
+        );
+
+        console.log('✅ [NOTARY] Final submissions with notaries:', submissionsWithNotaries);
+        setSubmissions(submissionsWithNotaries);
+      } else {
+        setSubmissions([]);
+      }
 
       // Calculate stats
       const total = submissionsData?.length || 0;

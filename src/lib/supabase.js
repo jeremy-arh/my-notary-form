@@ -204,7 +204,7 @@ export const submitNotaryRequest = async (formData) => {
       console.log('✅ Client record created:', newClient.id);
       clientId = newClient.id;
 
-      // Send magic link
+      // Send magic link ONLY for new accounts
       console.log('3️⃣ Sending magic link to:', formData.email);
       const { error: magicLinkError } = await supabase.auth.signInWithOtp({
         email: formData.email,
@@ -220,6 +220,14 @@ export const submitNotaryRequest = async (formData) => {
         console.log('✅ Magic link sent!');
         magicLinkSent = true;
       }
+    }
+
+    // If user is already authenticated on this app, don't send magic link
+    console.log('🔍 Checking current auth state...');
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser) {
+      console.log('✅ User is already authenticated, skipping magic link');
+      magicLinkSent = false; // Don't mention magic link in success message
     }
 
     console.log('4️⃣ Creating submission record...');

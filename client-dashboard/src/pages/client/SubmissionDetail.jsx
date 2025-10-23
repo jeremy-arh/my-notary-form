@@ -40,15 +40,24 @@ const SubmissionDetail = () => {
       // Get submission detail
       const { data: submissionData, error: submissionError } = await supabase
         .from('submission')
-        .select(`
-          *,
-          notary!assigned_notary_id(id, name, email, phone)
-        `)
+        .select('*')
         .eq('id', id)
         .eq('client_id', client.id)
         .single();
 
       if (submissionError) throw submissionError;
+
+      // Manually load notary data if assigned
+      if (submissionData && submissionData.assigned_notary_id) {
+        const { data: notaryData } = await supabase
+          .from('notary')
+          .select('id, name, email, phone')
+          .eq('id', submissionData.assigned_notary_id)
+          .single();
+
+        submissionData.notary = notaryData;
+      }
+
       setSubmission(submissionData);
 
       // Get submission services
