@@ -9,12 +9,14 @@ import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
+import Notification from './Notification';
 
 const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [notification, setNotification] = useState(null);
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -34,6 +36,8 @@ const NotaryForm = () => {
     lastName: '',
     email: '',
     phone: '',
+    password: '',
+    confirmPassword: '',
     address: '',
     city: '',
     postalCode: '',
@@ -211,6 +215,8 @@ const NotaryForm = () => {
           lastName: '',
           email: '',
           phone: '',
+          password: '',
+          confirmPassword: '',
           address: '',
           city: '',
           postalCode: '',
@@ -221,30 +227,32 @@ const NotaryForm = () => {
         // Reset completed steps
         setCompletedSteps([]);
 
-        // Check if email confirmation is required
-        if (result.accountCreated && result.magicLinkSent) {
-          // Email confirmation is enabled in Supabase - user needs to check their email
-          alert(`✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\n⚠️ IMPORTANT: Un email de confirmation a été envoyé à ${formData.email}\n\nVeuillez cliquer sur le lien dans l'email pour activer votre compte et accéder à votre tableau de bord.\n\nSi vous ne recevez pas l'email, vérifiez vos spams.`);
+        // User is authenticated - show success notification and redirect
+        const message = result.accountCreated
+          ? `Demande soumise avec succès!\n\nID: ${result.submissionId}\n\nVotre compte a été créé et vous êtes maintenant connecté.\n\nRedirection vers votre tableau de bord...`
+          : `Demande soumise avec succès!\n\nID: ${result.submissionId}\n\nRedirection vers votre tableau de bord...`;
 
-          // Redirect to login page where they can request a new link if needed
-          navigate('/login');
-        } else {
-          // User is authenticated (either new account with auto-confirm or existing user)
-          const message = result.accountCreated
-            ? `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nVotre compte a été créé et vous êtes maintenant connecté.\n\nRedirection vers votre tableau de bord...`
-            : `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nRedirection vers votre tableau de bord...`;
+        setNotification({
+          type: 'success',
+          message: message
+        });
 
-          alert(message);
-
-          // Redirect to dashboard
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
           navigate('/dashboard');
-        }
+        }, 2000);
       } else {
-        alert(`Error submitting request: ${result.error}\n\nPlease try again or contact support.`);
+        setNotification({
+          type: 'error',
+          message: `Erreur lors de la soumission: ${result.error}\n\nVeuillez réessayer.`
+        });
       }
     } catch (error) {
       console.error('Error during submission:', error);
-      alert('An unexpected error occurred. Please try again.');
+      setNotification({
+        type: 'error',
+        message: 'Une erreur inattendue s\'est produite. Veuillez réessayer.'
+      });
     }
   };
 
@@ -418,6 +426,15 @@ const NotaryForm = () => {
           />
         </div>
       </div>
+
+      {/* Notification */}
+      {notification && (
+        <Notification
+          type={notification.type}
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   );
 };

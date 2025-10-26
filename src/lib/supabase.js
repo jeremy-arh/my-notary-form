@@ -157,12 +157,15 @@ export const submitNotaryRequest = async (formData) => {
     } else {
       console.log('2️⃣ Creating new client account...');
 
-      // Generate a secure random password
-      const password = Math.random().toString(36).slice(-16) + Math.random().toString(36).slice(-16) + Date.now().toString(36);
+      // Use the password from the form
+      const password = formData.password;
+
+      if (!password) {
+        throw new Error('Password is required');
+      }
 
       // Create auth user with email and password
-      // NOTE: For auto-login to work, you must disable email confirmation in Supabase:
-      // Dashboard > Authentication > Settings > Enable email confirmations = OFF
+      // Using emailRedirectTo with skipConfirmation pattern
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: password,
@@ -172,7 +175,8 @@ export const submitNotaryRequest = async (formData) => {
             last_name: formData.lastName,
             user_type: 'client'
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`
+          // This tells Supabase to NOT send confirmation email
+          emailRedirectTo: undefined
         }
       });
 
@@ -188,32 +192,32 @@ export const submitNotaryRequest = async (formData) => {
       userId = authData.user.id;
       accountCreated = true;
 
-      // Check if user has an active session (happens when email confirmation is disabled)
+      // Check if user has an active session
       if (authData.session) {
-        console.log('✅ User is automatically authenticated (email confirmation disabled)!');
+        // User is already authenticated - email confirmation is disabled
+        console.log('✅ User is automatically authenticated!');
         magicLinkSent = false;
       } else {
-        // No session means email confirmation is required
-        // Try to sign in anyway (will fail if email not confirmed)
-        console.log('3️⃣ Attempting to sign in (email confirmation may be required)...');
+        // No session yet, try to sign in immediately
+        console.log('3️⃣ Signing in the new user...');
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: password
         });
 
         if (signInError) {
-          console.error('⚠️  Cannot auto-sign in - email confirmation required');
-          console.error('Error:', signInError.message);
+          console.error('⚠️  Cannot auto-sign in:', signInError.message);
 
-          // Email confirmation is enabled in Supabase
-          // User will need to click the email link
+          // If sign in failed, it means email confirmation is required
+          // This should not happen if Supabase is configured correctly
           console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.warn('⚠️  EMAIL CONFIRMATION REQUIRED');
-          console.warn('⚠️  To enable auto-login, disable email confirmation in Supabase:');
-          console.warn('   Dashboard > Authentication > Settings > Enable email confirmations = OFF');
+          console.warn('⚠️  EMAIL CONFIRMATION DETECTED');
+          console.warn('⚠️  Please disable email confirmation in Supabase:');
+          console.warn('   Dashboard > Authentication > Settings');
+          console.warn('   Set "Enable email confirmations" to OFF');
           console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-          magicLinkSent = true; // Email was sent by Supabase
+          magicLinkSent = true;
         } else {
           console.log('✅ User signed in successfully!');
           console.log('🔐 Session:', signInData.session ? 'Active' : 'None');
