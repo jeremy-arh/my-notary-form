@@ -221,19 +221,15 @@ const NotaryForm = () => {
         // Reset completed steps
         setCompletedSteps([]);
 
-        if (result.accountCreated && result.magicLinkSent) {
-          // Show message and redirect to dashboard (magic link will authenticate them)
-          alert(`✅ Request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\n📧 A magic link has been sent to ${formData.email}\n\nClick the link in your email to access your Client Dashboard.`);
+        // Always redirect to dashboard - user is automatically authenticated
+        const message = result.accountCreated
+          ? `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nVotre compte a été créé et vous êtes maintenant connecté.\n\nRedirection vers votre tableau de bord...`
+          : `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nRedirection vers votre tableau de bord...`;
 
-          // Redirect to login page
-          navigate('/login');
-        } else {
-          // User was already authenticated - redirect to dashboard
-          alert(`✅ Request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\nRedirecting to your dashboard...`);
+        alert(message);
 
-          // Redirect to client dashboard
-          navigate('/dashboard');
-        }
+        // Always redirect to dashboard
+        navigate('/dashboard');
       } else {
         alert(`Error submitting request: ${result.error}\n\nPlease try again or contact support.`);
       }

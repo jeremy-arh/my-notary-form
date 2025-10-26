@@ -157,16 +157,20 @@ export const submitNotaryRequest = async (formData) => {
     } else {
       console.log('2️⃣ Creating new client account...');
 
-      // Create auth user with email (passwordless - will use magic link)
+      // Generate a secure random password
+      const password = Math.random().toString(36).slice(-16) + Math.random().toString(36).slice(-16) + Date.now().toString(36);
+
+      // Create auth user with email and password
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
-        password: Math.random().toString(36).slice(-16) + Math.random().toString(36).slice(-16), // Random password (won't be used)
+        password: password,
         options: {
           data: {
             first_name: formData.firstName,
             last_name: formData.lastName,
             user_type: 'client'
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
@@ -178,6 +182,20 @@ export const submitNotaryRequest = async (formData) => {
       console.log('✅ Auth user created:', authData.user?.id);
       userId = authData.user.id;
       accountCreated = true;
+
+      // Immediately sign in the user with the same credentials
+      console.log('3️⃣ Auto-signing in the new user...');
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: password
+      });
+
+      if (signInError) {
+        console.error('⚠️  Warning: Could not auto-sign in user:', signInError);
+        // Continue anyway - user can sign in later
+      } else {
+        console.log('✅ User automatically signed in!');
+      }
 
       // Create client record
       const { data: newClient, error: clientError } = await supabase
@@ -204,30 +222,8 @@ export const submitNotaryRequest = async (formData) => {
       console.log('✅ Client record created:', newClient.id);
       clientId = newClient.id;
 
-      // Send magic link ONLY for new accounts
-      console.log('3️⃣ Sending magic link to:', formData.email);
-      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
-        email: formData.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-
-      if (magicLinkError) {
-        console.error('⚠️  Warning: Could not send magic link:', magicLinkError);
-        magicLinkSent = false;
-      } else {
-        console.log('✅ Magic link sent!');
-        magicLinkSent = true;
-      }
-    }
-
-    // If user is already authenticated on this app, don't send magic link
-    console.log('🔍 Checking current auth state...');
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (currentUser) {
-      console.log('✅ User is already authenticated, skipping magic link');
-      magicLinkSent = false; // Don't mention magic link in success message
+      // No magic link needed - user is already authenticated
+      magicLinkSent = false;
     }
 
     console.log('4️⃣ Creating submission record...');
