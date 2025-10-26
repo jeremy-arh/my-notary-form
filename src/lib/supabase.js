@@ -209,7 +209,7 @@ export const submitNotaryRequest = async (formData) => {
       const { error: magicLinkError } = await supabase.auth.signInWithOtp({
         email: formData.email,
         options: {
-          emailRedirectTo: `${window.location.origin.replace(':5173', ':5175')}/auth/callback`
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 

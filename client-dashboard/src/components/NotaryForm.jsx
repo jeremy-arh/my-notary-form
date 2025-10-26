@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom'
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import Logo from '../assets/Logo';
+import Logo from '@shared/assets/Logo';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -249,21 +249,21 @@ const NotaryForm = () => {
       {/* Left Sidebar - Fixed and 100vh */}
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
         <div className="flex-1 overflow-y-auto p-8 pb-32">
-          {/* Logo with Dashboard button */}
-          <div className="mb-6 animate-fade-in flex items-center justify-between">
-            <Logo width={60} height={60} />
+          {/* Logo with connexion button */}
+          <div className="mb-4 animate-fade-in flex items-center justify-between">
+            <Logo width={50} height={50} />
             {isAuthenticated && (
               <Link
                 to="/dashboard"
                 className="text-sm font-medium text-gray-700 hover:text-black transition-colors"
               >
-                Dashboard
+                connexion
               </Link>
             )}
           </div>
 
           {/* Steps Navigation - Reduced size */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {steps.map((step, index) => {
               const isCompleted = completedSteps.includes(step.id);
               const isCurrent = currentStep === step.id;
@@ -273,7 +273,7 @@ const NotaryForm = () => {
                 <div
                   key={step.id}
                   onClick={() => canAccess && goToStep(step.id)}
-                  className={`flex items-center p-3 rounded-lg transition-all duration-300 ${
+                  className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
                     canAccess ? 'cursor-pointer transform hover:scale-105' : 'cursor-not-allowed opacity-50'
                   } ${
                     isCurrent
@@ -284,7 +284,7 @@ const NotaryForm = () => {
                   }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
-                  <div className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-300 ${
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
                     isCurrent
                       ? 'bg-white/20'
                       : isCompleted
@@ -292,15 +292,15 @@ const NotaryForm = () => {
                       : 'bg-gray-100'
                   }`}>
                     {isCompleted ? (
-                      <Icon icon="heroicons:check" className="w-5 h-5 text-gray-600 animate-bounce-in" />
+                      <Icon icon="heroicons:check" className="w-4 h-4 text-gray-600 animate-bounce-in" />
                     ) : (
-                      <Icon icon={step.icon} className={`w-5 h-5 transition-transform duration-300 ${
+                      <Icon icon={step.icon} className={`w-4 h-4 transition-transform duration-300 ${
                         isCurrent ? 'text-white scale-110' : 'text-gray-400'
                       }`} />
                     )}
                   </div>
-                  <div className="ml-3 flex-1">
-                    <div className={`text-xs font-semibold uppercase tracking-wide ${
+                  <div className="ml-2.5 flex-1">
+                    <div className={`text-[10px] font-semibold uppercase tracking-wide ${
                       isCurrent ? 'text-white/80' : 'text-gray-500'
                     }`}>
                       Step {step.id}
