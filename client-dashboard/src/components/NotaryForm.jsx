@@ -3,18 +3,20 @@ import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom'
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import Logo from '@shared/assets/Logo';
+import Logo from '../assets/Logo';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
+import Notification from './Notification';
 
 const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [notification, setNotification] = useState(null);
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -34,6 +36,8 @@ const NotaryForm = () => {
     lastName: '',
     email: '',
     phone: '',
+    password: '',
+    confirmPassword: '',
     address: '',
     city: '',
     postalCode: '',
@@ -211,6 +215,8 @@ const NotaryForm = () => {
           lastName: '',
           email: '',
           phone: '',
+          password: '',
+          confirmPassword: '',
           address: '',
           city: '',
           postalCode: '',
@@ -221,25 +227,32 @@ const NotaryForm = () => {
         // Reset completed steps
         setCompletedSteps([]);
 
-        if (result.accountCreated && result.magicLinkSent) {
-          // Show message and redirect to dashboard (magic link will authenticate them)
-          alert(`✅ Request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\n📧 A magic link has been sent to ${formData.email}\n\nClick the link in your email to access your Client Dashboard.`);
+        // User is authenticated - show success notification and redirect
+        const message = result.accountCreated
+          ? `Demande soumise avec succès!\n\nID: ${result.submissionId}\n\nVotre compte a été créé et vous êtes maintenant connecté.\n\nRedirection vers votre tableau de bord...`
+          : `Demande soumise avec succès!\n\nID: ${result.submissionId}\n\nRedirection vers votre tableau de bord...`;
 
-          // Redirect to login page
-          navigate('/login');
-        } else {
-          // User was already authenticated - redirect to dashboard
-          alert(`✅ Request submitted successfully!\n\nSubmission ID: ${result.submissionId}\n\nRedirecting to your dashboard...`);
+        setNotification({
+          type: 'success',
+          message: message
+        });
 
-          // Redirect to client dashboard
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
           navigate('/dashboard');
-        }
+        }, 2000);
       } else {
-        alert(`Error submitting request: ${result.error}\n\nPlease try again or contact support.`);
+        setNotification({
+          type: 'error',
+          message: `Erreur lors de la soumission: ${result.error}\n\nVeuillez réessayer.`
+        });
       }
     } catch (error) {
       console.error('Error during submission:', error);
-      alert('An unexpected error occurred. Please try again.');
+      setNotification({
+        type: 'error',
+        message: 'Une erreur inattendue s\'est produite. Veuillez réessayer.'
+      });
     }
   };
 
@@ -413,6 +426,15 @@ const NotaryForm = () => {
           />
         </div>
       </div>
+
+      {/* Notification */}
+      {notification && (
+        <Notification
+          type={notification.type}
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   );
 };

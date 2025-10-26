@@ -157,16 +157,26 @@ export const submitNotaryRequest = async (formData) => {
     } else {
       console.log('2️⃣ Creating new client account...');
 
-      // Create auth user with email (passwordless - will use magic link)
+      // Use the password from the form
+      const password = formData.password;
+
+      if (!password) {
+        throw new Error('Password is required');
+      }
+
+      // Create auth user with email and password
+      // Using emailRedirectTo with skipConfirmation pattern
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
-        password: Math.random().toString(36).slice(-16) + Math.random().toString(36).slice(-16), // Random password (won't be used)
+        password: password,
         options: {
           data: {
             first_name: formData.firstName,
             last_name: formData.lastName,
             user_type: 'client'
-          }
+          },
+          // This tells Supabase to NOT send confirmation email
+          emailRedirectTo: undefined
         }
       });
 
@@ -176,8 +186,44 @@ export const submitNotaryRequest = async (formData) => {
       }
 
       console.log('✅ Auth user created:', authData.user?.id);
+      console.log('📧 Email confirmed:', authData.user?.email_confirmed_at ? 'Yes' : 'No');
+      console.log('🔐 Session:', authData.session ? 'Active' : 'None');
+
       userId = authData.user.id;
       accountCreated = true;
+
+      // Check if user has an active session
+      if (authData.session) {
+        // User is already authenticated - email confirmation is disabled
+        console.log('✅ User is automatically authenticated!');
+        magicLinkSent = false;
+      } else {
+        // No session yet, try to sign in immediately
+        console.log('3️⃣ Signing in the new user...');
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: password
+        });
+
+        if (signInError) {
+          console.error('⚠️  Cannot auto-sign in:', signInError.message);
+
+          // If sign in failed, it means email confirmation is required
+          // This should not happen if Supabase is configured correctly
+          console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.warn('⚠️  EMAIL CONFIRMATION DETECTED');
+          console.warn('⚠️  Please disable email confirmation in Supabase:');
+          console.warn('   Dashboard > Authentication > Settings');
+          console.warn('   Set "Enable email confirmations" to OFF');
+          console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+          magicLinkSent = true;
+        } else {
+          console.log('✅ User signed in successfully!');
+          console.log('🔐 Session:', signInData.session ? 'Active' : 'None');
+          magicLinkSent = false;
+        }
+      }
 
       // Create client record
       const { data: newClient, error: clientError } = await supabase
@@ -203,31 +249,6 @@ export const submitNotaryRequest = async (formData) => {
 
       console.log('✅ Client record created:', newClient.id);
       clientId = newClient.id;
-
-      // Send magic link ONLY for new accounts
-      console.log('3️⃣ Sending magic link to:', formData.email);
-      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
-        email: formData.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-
-      if (magicLinkError) {
-        console.error('⚠️  Warning: Could not send magic link:', magicLinkError);
-        magicLinkSent = false;
-      } else {
-        console.log('✅ Magic link sent!');
-        magicLinkSent = true;
-      }
-    }
-
-    // If user is already authenticated on this app, don't send magic link
-    console.log('🔍 Checking current auth state...');
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (currentUser) {
-      console.log('✅ User is already authenticated, skipping magic link');
-      magicLinkSent = false; // Don't mention magic link in success message
     }
 
     console.log('4️⃣ Creating submission record...');

@@ -1,38 +1,36 @@
-# How to Change the Logo
+# Logo Configuration
 
-The logo is centralized in `/src/assets/Logo.jsx` and is used across all dashboards (form, client dashboard, etc.).
+This directory contains the logo and assets for the client dashboard application.
 
-## Option 1: Use an Image File (Recommended)
+## Changing the Logo
 
-1. Place your logo image in this directory (e.g., `logo.png`, `logo.svg`)
+To change the logo:
 
-2. Replace the content of `Logo.jsx` with:
+1. **Option 1: Replace the SVG in Logo.jsx**
+   - Open `Logo.jsx` in this directory (`client-dashboard/src/assets/Logo.jsx`)
+   - Modify the SVG code inside the component
+   - The changes will automatically apply to the entire application
 
-```jsx
-import logo from './logo.png'; // or ./logo.svg
+2. **Option 2: Use an image file**
+   - Place your logo image (e.g., `logo.png`, `logo.svg`) in this directory
+   - Update `Logo.jsx` to import and export the image:
+     ```javascript
+     import logo from './logo.png'
+     export default logo
+     ```
 
-const Logo = ({ width = 80, height = 80, className = "" }) => {
-  return (
-    <img
-      src={logo}
-      alt="Logo"
-      width={width}
-      height={height}
-      className={className}
-    />
-  );
-};
+3. **Option 3: Use a custom component**
+   - Replace the entire `Logo.jsx` component with your custom React component
+   - Make sure to accept `width`, `height`, and `className` props for flexibility
 
-export default Logo;
-```
+## Current Logo
 
-## Option 2: Use a Custom SVG
+The current logo is a gradient SVG with the following colors:
+- Purple (#491ae9)
+- Magenta (#b300c7)
+- Red (#f20075)
+- Orange (#ff8400)
 
-Replace the SVG code inside the `Logo` component in `Logo.jsx` with your custom SVG code.
-
-## The logo is automatically used in:
-- Notary Form sidebar
-- Client Dashboard sidebar (desktop & mobile)
-- Any future dashboards you create
-
-Just update `Logo.jsx` once and it updates everywhere!
+The logo is used in:
+- NotaryForm (sidebar)
+- ClientLayout (dashboard sidebar)

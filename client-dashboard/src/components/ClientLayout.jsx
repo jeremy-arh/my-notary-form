@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
-import Logo from '@shared/assets/Logo';
+import Logo from '../assets/Logo';
 
 const ClientLayout = ({ children }) => {
   const location = useLocation();
