@@ -221,15 +221,24 @@ const NotaryForm = () => {
         // Reset completed steps
         setCompletedSteps([]);
 
-        // Always redirect to dashboard - user is automatically authenticated
-        const message = result.accountCreated
-          ? `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nVotre compte a été créé et vous êtes maintenant connecté.\n\nRedirection vers votre tableau de bord...`
-          : `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nRedirection vers votre tableau de bord...`;
+        // Check if email confirmation is required
+        if (result.accountCreated && result.magicLinkSent) {
+          // Email confirmation is enabled in Supabase - user needs to check their email
+          alert(`✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\n⚠️ IMPORTANT: Un email de confirmation a été envoyé à ${formData.email}\n\nVeuillez cliquer sur le lien dans l'email pour activer votre compte et accéder à votre tableau de bord.\n\nSi vous ne recevez pas l'email, vérifiez vos spams.`);
 
-        alert(message);
+          // Redirect to login page where they can request a new link if needed
+          navigate('/login');
+        } else {
+          // User is authenticated (either new account with auto-confirm or existing user)
+          const message = result.accountCreated
+            ? `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nVotre compte a été créé et vous êtes maintenant connecté.\n\nRedirection vers votre tableau de bord...`
+            : `✅ Demande soumise avec succès!\n\nID de soumission: ${result.submissionId}\n\nRedirection vers votre tableau de bord...`;
 
-        // Always redirect to dashboard
-        navigate('/dashboard');
+          alert(message);
+
+          // Redirect to dashboard
+          navigate('/dashboard');
+        }
       } else {
         alert(`Error submitting request: ${result.error}\n\nPlease try again or contact support.`);
       }
