@@ -142,7 +142,7 @@ const Login = () => {
           )}
 
           <div className="mt-6 text-center">
-            <a href="http://localhost:5173" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+            <a href="/form" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
               ← Back to form
             </a>
           </div>

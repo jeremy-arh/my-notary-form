@@ -185,7 +185,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">Your Requests</h2>
             <a
-              href="http://localhost:5173"
+              href="/form"
               className="btn-glassy px-6 py-2 text-white text-sm font-semibold rounded-full transition-all hover:scale-105"
             >
               <Icon icon="heroicons:plus" className="w-4 h-4 inline mr-1" />
@@ -198,7 +198,7 @@ const Dashboard = () => {
               <Icon icon="heroicons:document-text" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600 mb-4">No requests yet</p>
               <a
-                href="http://localhost:5173"
+                href="/form"
                 className="inline-block btn-glassy px-6 py-2 text-white text-sm font-semibold rounded-full transition-all hover:scale-105"
               >
                 Submit Your First Request

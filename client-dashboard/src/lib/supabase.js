@@ -102,15 +102,139 @@ export const submitNotaryRequest = async (formData) => {
     return {
       success: true,
       submissionId: 'mock-' + Date.now(),
-      message: 'Mock submission (Supabase not configured)'
+      message: 'Mock submission (Supabase not configured)',
+      accountCreated: false
     };
   }
 
   try {
-    console.log('1️⃣ Creating main submission record...');
+    let clientId = null;
+    let accountCreated = false;
+    let userId = null;
+    let magicLinkSent = false;
 
-    // 1. Create the main submission
+    // 1. Check if client already exists
+    console.log('1️⃣ Checking if client exists with email:', formData.email);
+    const { data: existingClient, error: clientLookupError } = await supabase
+      .from('client')
+      .select('*')
+      .eq('email', formData.email)
+      .single();
+
+    if (clientLookupError && clientLookupError.code !== 'PGRST116') {
+      // PGRST116 is "not found" error, which is expected for new clients
+      console.error('❌ Error looking up client:', clientLookupError);
+      throw clientLookupError;
+    }
+
+    if (existingClient) {
+      console.log('✅ Client already exists:', existingClient.id);
+      clientId = existingClient.id;
+      userId = existingClient.user_id;
+
+      // Update client record with latest info (UPSERT behavior)
+      console.log('2️⃣ Updating client information...');
+      const { error: updateError } = await supabase
+        .from('client')
+        .update({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          postal_code: formData.postalCode,
+          country: formData.country,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', clientId);
+
+      if (updateError) {
+        console.error('⚠️  Warning: Could not update client info:', updateError);
+        // Don't throw - we can continue with old data
+      } else {
+        console.log('✅ Client information updated');
+      }
+    } else {
+      console.log('2️⃣ Creating new client account...');
+
+      // Create auth user with email (passwordless - will use magic link)
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: Math.random().toString(36).slice(-16) + Math.random().toString(36).slice(-16), // Random password (won't be used)
+        options: {
+          data: {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            user_type: 'client'
+          }
+        }
+      });
+
+      if (signUpError) {
+        console.error('❌ Error creating auth user:', signUpError);
+        throw signUpError;
+      }
+
+      console.log('✅ Auth user created:', authData.user?.id);
+      userId = authData.user.id;
+      accountCreated = true;
+
+      // Create client record
+      const { data: newClient, error: clientError } = await supabase
+        .from('client')
+        .insert({
+          user_id: userId,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          postal_code: formData.postalCode,
+          country: formData.country
+        })
+        .select()
+        .single();
+
+      if (clientError) {
+        console.error('❌ Error creating client record:', clientError);
+        throw clientError;
+      }
+
+      console.log('✅ Client record created:', newClient.id);
+      clientId = newClient.id;
+
+      // Send magic link ONLY for new accounts
+      console.log('3️⃣ Sending magic link to:', formData.email);
+      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
+        email: formData.email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+
+      if (magicLinkError) {
+        console.error('⚠️  Warning: Could not send magic link:', magicLinkError);
+        magicLinkSent = false;
+      } else {
+        console.log('✅ Magic link sent!');
+        magicLinkSent = true;
+      }
+    }
+
+    // If user is already authenticated on this app, don't send magic link
+    console.log('🔍 Checking current auth state...');
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser) {
+      console.log('✅ User is already authenticated, skipping magic link');
+      magicLinkSent = false; // Don't mention magic link in success message
+    }
+
+    console.log('4️⃣ Creating submission record...');
+
+    // 2. Create the main submission linked to client
     const submissionData = {
+      client_id: clientId,
       appointment_date: formData.appointmentDate,
       appointment_time: formData.appointmentTime,
       timezone: formData.timezone,
@@ -142,9 +266,9 @@ export const submitNotaryRequest = async (formData) => {
     const submissionId = submission.id;
     console.log('✅ Submission created! ID:', submissionId);
 
-    // 2. Process selected services and options
+    // 5. Process selected services and options
     if (formData.selectedOptions && formData.selectedOptions.length > 0) {
-      console.log('2️⃣ Processing selected services/options:', formData.selectedOptions);
+      console.log('5️⃣ Processing selected services/options:', formData.selectedOptions);
 
       // Get service IDs from service_id field
       const { data: services, error: servicesLookupError } = await supabase
@@ -199,9 +323,9 @@ export const submitNotaryRequest = async (formData) => {
       }
     }
 
-    // 3. Upload documents (if any)
+    // 6. Upload documents (if any)
     if (formData.documents && formData.documents.length > 0) {
-      console.log('3️⃣ Uploading documents:', formData.documents.length);
+      console.log('6️⃣ Uploading documents:', formData.documents.length);
 
       for (const doc of formData.documents) {
         // Generate unique file name
@@ -250,12 +374,20 @@ export const submitNotaryRequest = async (formData) => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('✅ SUBMISSION COMPLETE!');
     console.log('📋 Submission ID:', submissionId);
+    console.log('👤 Client ID:', clientId);
+    console.log('🆕 Account Created:', accountCreated);
+    console.log('📧 Magic Link Sent:', magicLinkSent);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     return {
       success: true,
       submissionId: submissionId,
-      message: 'Submission created successfully'
+      clientId: clientId,
+      accountCreated: accountCreated,
+      magicLinkSent: magicLinkSent,
+      message: accountCreated
+        ? 'Submission created successfully! A magic link has been sent to your email to access your dashboard.'
+        : 'Submission created successfully'
     };
   } catch (error) {
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
