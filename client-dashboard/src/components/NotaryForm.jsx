@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import Logo from '../assets/Logo';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -13,6 +14,7 @@ const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -99,6 +101,8 @@ const NotaryForm = () => {
 
         const { data: { user } } = await supabase.auth.getUser();
         console.log('👤 [PRE-FILL] User:', user ? `${user.id} (${user.email})` : 'Not authenticated');
+
+        setIsAuthenticated(!!user);
 
         if (user) {
           // User is authenticated, load their client data
@@ -243,27 +247,23 @@ const NotaryForm = () => {
   return (
     <div className="flex min-h-screen bg-white">
       {/* Left Sidebar - Fixed and 100vh */}
-      <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen overflow-y-auto">
-        <div className="p-8">
-          {/* Logo */}
-          <div className="mb-10 animate-fade-in flex items-center justify-center">
-            <div className="relative">
-              <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="60" cy="60" r="58" stroke="url(#gradient)" strokeWidth="3"/>
-                <path d="M60 25 L60 95 M40 45 L60 25 L80 45" stroke="url(#gradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="60" cy="85" r="8" fill="url(#gradient)"/>
-                <defs>
-                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#000000" />
-                    <stop offset="100%" stopColor="#4B5563" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+      <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
+        <div className="flex-1 overflow-y-auto p-8 pb-32">
+          {/* Logo with Dashboard button */}
+          <div className="mb-6 animate-fade-in flex items-center justify-between">
+            <Logo width={60} height={60} />
+            {isAuthenticated && (
+              <Link
+                to="/dashboard"
+                className="text-sm font-medium text-gray-700 hover:text-black transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
           </div>
 
-          {/* Steps Navigation */}
-          <div className="space-y-3">
+          {/* Steps Navigation - Reduced size */}
+          <div className="space-y-2">
             {steps.map((step, index) => {
               const isCompleted = completedSteps.includes(step.id);
               const isCurrent = currentStep === step.id;
@@ -273,7 +273,7 @@ const NotaryForm = () => {
                 <div
                   key={step.id}
                   onClick={() => canAccess && goToStep(step.id)}
-                  className={`flex items-center p-4 rounded-xl transition-all duration-300 ${
+                  className={`flex items-center p-3 rounded-lg transition-all duration-300 ${
                     canAccess ? 'cursor-pointer transform hover:scale-105' : 'cursor-not-allowed opacity-50'
                   } ${
                     isCurrent
@@ -284,7 +284,7 @@ const NotaryForm = () => {
                   }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
-                  <div className={`flex items-center justify-center w-12 h-12 rounded-lg transition-all duration-300 ${
+                  <div className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-300 ${
                     isCurrent
                       ? 'bg-white/20'
                       : isCompleted
@@ -292,20 +292,20 @@ const NotaryForm = () => {
                       : 'bg-gray-100'
                   }`}>
                     {isCompleted ? (
-                      <Icon icon="heroicons:check" className="w-6 h-6 text-gray-600 animate-bounce-in" />
+                      <Icon icon="heroicons:check" className="w-5 h-5 text-gray-600 animate-bounce-in" />
                     ) : (
-                      <Icon icon={step.icon} className={`w-6 h-6 transition-transform duration-300 ${
+                      <Icon icon={step.icon} className={`w-5 h-5 transition-transform duration-300 ${
                         isCurrent ? 'text-white scale-110' : 'text-gray-400'
                       }`} />
                     )}
                   </div>
-                  <div className="ml-4 flex-1">
+                  <div className="ml-3 flex-1">
                     <div className={`text-xs font-semibold uppercase tracking-wide ${
                       isCurrent ? 'text-white/80' : 'text-gray-500'
                     }`}>
                       Step {step.id}
                     </div>
-                    <div className={`text-sm font-medium mt-0.5 ${
+                    <div className={`text-xs font-medium mt-0.5 ${
                       isCurrent ? 'text-white' : 'text-gray-900'
                     }`}>
                       {step.name}
@@ -315,22 +315,22 @@ const NotaryForm = () => {
               );
             })}
           </div>
+        </div>
 
-          {/* Progress Bar */}
-          <div className="mt-8 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
-            <div className="flex justify-between text-sm text-gray-600 mb-2">
-              <span className="font-medium">Progress</span>
-              <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
-            </div>
-            <div className="h-3 bg-gray-300 rounded-full overflow-hidden">
-              <div
-                className="h-full transition-all duration-700 ease-out"
-                style={{
-                  width: `${(currentStep / steps.length) * 100}%`,
-                  background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
-                }}
-              />
-            </div>
+        {/* Progress Bar - Fixed at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#F3F4F6] border-t border-gray-200">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span className="font-medium">Progress</span>
+            <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
+          </div>
+          <div className="h-3 bg-gray-300 rounded-full overflow-hidden">
+            <div
+              className="h-full transition-all duration-700 ease-out"
+              style={{
+                width: `${(currentStep / steps.length) * 100}%`,
+                background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
+              }}
+            />
           </div>
         </div>
       </aside>

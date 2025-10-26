@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
+import Logo from '../assets/Logo';
 
 const ClientLayout = ({ children }) => {
   const location = useLocation();
@@ -24,23 +25,10 @@ const ClientLayout = ({ children }) => {
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen overflow-y-auto">
         <div className="p-8">
           {/* Logo */}
-          <div className="mb-10 animate-fade-in flex items-center justify-center">
-            <div className="relative">
-              <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="60" cy="60" r="58" stroke="url(#gradient)" strokeWidth="3"/>
-                <path d="M60 25 L60 95 M40 45 L60 25 L80 45" stroke="url(#gradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="60" cy="85" r="8" fill="url(#gradient)"/>
-                <defs>
-                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#000000" />
-                    <stop offset="100%" stopColor="#4B5563" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+          <div className="mb-10 animate-fade-in flex flex-col items-center justify-center">
+            <Logo width={80} height={80} />
+            <h2 className="text-xl font-bold text-gray-900 mt-4">Client Portal</h2>
           </div>
-
-          <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">Client Portal</h2>
 
           {/* Menu Items */}
           <div className="space-y-2">
@@ -87,23 +75,10 @@ const ClientLayout = ({ children }) => {
         <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setIsSidebarOpen(false)}>
           <aside className="w-80 bg-[#F3F4F6] h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-8">
-              <div className="mb-10 flex items-center justify-center">
-                <div className="relative">
-                  <svg width="80" height="80" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="60" cy="60" r="58" stroke="url(#gradient-mobile)" strokeWidth="3"/>
-                    <path d="M60 25 L60 95 M40 45 L60 25 L80 45" stroke="url(#gradient-mobile)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                    <circle cx="60" cy="85" r="8" fill="url(#gradient-mobile)"/>
-                    <defs>
-                      <linearGradient id="gradient-mobile" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#000000" />
-                        <stop offset="100%" stopColor="#4B5563" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </div>
+              <div className="mb-10 flex flex-col items-center justify-center">
+                <Logo width={80} height={80} />
+                <h2 className="text-xl font-bold text-gray-900 mt-4">Client Portal</h2>
               </div>
-
-              <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">Client Portal</h2>
 
               <div className="space-y-2">
                 {menuItems.map((item) => {

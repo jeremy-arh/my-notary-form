@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Home from './components/Home'
 import Login from './pages/client/Login'
 import Dashboard from './pages/client/Dashboard'
 import SubmissionDetail from './pages/client/SubmissionDetail'
@@ -10,8 +11,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Default redirect to form for public access */}
-        <Route path="/" element={<Navigate to="/form" replace />} />
+        {/* Smart redirect based on authentication */}
+        <Route path="/" element={<Home />} />
 
         {/* Public form routes */}
         <Route path="/form/*" element={<NotaryForm />} />
