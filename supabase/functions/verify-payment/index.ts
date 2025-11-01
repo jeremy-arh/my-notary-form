@@ -24,8 +24,10 @@ serve(async (req) => {
       throw new Error('Missing session ID')
     }
 
-    // Retrieve the Stripe session
-    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    // Retrieve the Stripe session with expanded payment_intent
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['payment_intent', 'invoice']
+    })
 
     if (session.payment_status !== 'paid') {
       return new Response(
@@ -35,6 +37,26 @@ serve(async (req) => {
           status: 400,
         }
       )
+    }
+
+    // Get invoice/receipt URL
+    let invoiceUrl = null
+
+    // Try to get invoice URL (for subscription payments)
+    if (session.invoice && typeof session.invoice === 'object') {
+      invoiceUrl = session.invoice.hosted_invoice_url || session.invoice.invoice_pdf
+    }
+
+    // For one-time payments, get receipt URL from payment_intent
+    if (!invoiceUrl && session.payment_intent && typeof session.payment_intent === 'object') {
+      const charges = await stripe.charges.list({
+        payment_intent: session.payment_intent.id,
+        limit: 1
+      })
+
+      if (charges.data.length > 0) {
+        invoiceUrl = charges.data[0].receipt_url
+      }
     }
 
     // Get the submission ID from metadata
@@ -72,6 +94,7 @@ serve(async (req) => {
         currency: session.currency,
         payment_status: session.payment_status,
         paid_at: new Date().toISOString(),
+        invoice_url: invoiceUrl,
       },
     }
 
@@ -95,6 +118,7 @@ serve(async (req) => {
         verified: true,
         submissionId: submission.id,
         accountCreated: accountCreated,
+        invoiceUrl: invoiceUrl,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

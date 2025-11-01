@@ -10,6 +10,7 @@ const PaymentSuccess = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submissionId, setSubmissionId] = useState(null);
+  const [invoiceUrl, setInvoiceUrl] = useState(null);
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -31,6 +32,7 @@ const PaymentSuccess = () => {
 
         if (data.verified && data.submissionId) {
           setSubmissionId(data.submissionId);
+          setInvoiceUrl(data.invoiceUrl);
         } else {
           setError('Payment verification failed');
         }
@@ -97,10 +99,10 @@ const PaymentSuccess = () => {
         </div>
 
         {/* Success Card */}
-        <div className="bg-green-50 border-2 border-green-200 rounded-3xl p-8 md:p-12 text-center">
+        <div className="bg-[#F3F4F6] border-2 border-gray-200 rounded-3xl p-8 md:p-12 text-center">
           {/* Success Icon */}
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-scale-in">
-            <Icon icon="heroicons:check-circle" className="w-12 h-12 text-green-600" />
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-scale-in">
+            <Icon icon="heroicons:check-circle" className="w-12 h-12 text-black" />
           </div>
 
           {/* Success Message */}
@@ -119,6 +121,23 @@ const PaymentSuccess = () => {
             </div>
           )}
 
+          {/* Invoice Download */}
+          {invoiceUrl && (
+            <div className="bg-white rounded-xl p-4 mb-6">
+              <div className="flex items-center justify-center">
+                <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 mr-2" />
+                <a
+                  href={invoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-gray-900 hover:text-black underline"
+                >
+                  Download Invoice
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Information Box */}
           <div className="bg-white rounded-2xl p-6 mb-8 text-left">
             <div className="flex items-start">
@@ -129,21 +148,27 @@ const PaymentSuccess = () => {
                 <h3 className="text-base font-semibold text-gray-900 mb-2">What happens next?</h3>
                 <ul className="text-sm text-gray-700 space-y-2">
                   <li className="flex items-start">
-                    <Icon icon="heroicons:check" className="w-5 h-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <Icon icon="heroicons:check" className="w-5 h-5 text-gray-600 mr-2 mt-0.5 flex-shrink-0" />
                     <span>You'll receive a confirmation email shortly</span>
                   </li>
                   <li className="flex items-start">
-                    <Icon icon="heroicons:check" className="w-5 h-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <Icon icon="heroicons:check" className="w-5 h-5 text-gray-600 mr-2 mt-0.5 flex-shrink-0" />
                     <span>Our team will review your request within 24 hours</span>
                   </li>
                   <li className="flex items-start">
-                    <Icon icon="heroicons:check" className="w-5 h-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <Icon icon="heroicons:check" className="w-5 h-5 text-gray-600 mr-2 mt-0.5 flex-shrink-0" />
                     <span>We'll contact you to confirm your appointment details</span>
                   </li>
                   <li className="flex items-start">
-                    <Icon icon="heroicons:check" className="w-5 h-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <Icon icon="heroicons:check" className="w-5 h-5 text-gray-600 mr-2 mt-0.5 flex-shrink-0" />
                     <span>Track your request status in your dashboard</span>
                   </li>
+                  {invoiceUrl && (
+                    <li className="flex items-start">
+                      <Icon icon="heroicons:check" className="w-5 h-5 text-gray-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Your invoice is available for download above</span>
+                    </li>
+                  )}
                 </ul>
               </div>
             </div>
