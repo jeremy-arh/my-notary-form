@@ -263,8 +263,8 @@ const NotaryForm = () => {
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
         <div className="flex-1 overflow-y-auto p-8 pb-32">
           {/* Logo */}
-          <div className="mb-4 animate-fade-in flex items-center justify-center">
-            <Logo width={50} height={50} />
+          <div className="mb-10 animate-fade-in flex items-center justify-center">
+            <Logo width={150} height={150} />
           </div>
 
           {/* Steps Navigation - Reduced size */}

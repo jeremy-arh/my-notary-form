@@ -63,12 +63,11 @@ const Login = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-10 flex items-center justify-center">
-          <Logo width={120} height={120} />
+          <Logo width={150} height={150} />
         </div>
 
         {/* Login Form */}
         <div className="bg-[#F3F4F6] rounded-3xl p-8 shadow-sm">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Client Portal</h1>
           <p className="text-gray-600 text-center mb-8">Enter your email to receive a magic link</p>
 
           {error && (

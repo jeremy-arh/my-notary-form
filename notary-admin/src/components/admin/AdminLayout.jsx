@@ -86,10 +86,8 @@ const AdminLayout = ({ children }) => {
         <div className="p-8">
           {/* Logo */}
           <div className="mb-10 animate-fade-in flex items-center justify-center">
-            <Logo width={120} height={120} />
+            <Logo width={150} height={150} />
           </div>
-
-          <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">Notary Panel</h2>
 
           {/* Menu Items */}
           <div className="space-y-2">
@@ -146,10 +144,8 @@ const AdminLayout = ({ children }) => {
           <aside className="w-80 bg-[#F3F4F6] h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-8">
               <div className="mb-10 flex items-center justify-center">
-                <Logo width={80} height={80} />
+                <Logo width={150} height={150} />
               </div>
-
-              <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">Notary Panel</h2>
 
               <div className="space-y-2">
                 {menuItems.map((item) => {
