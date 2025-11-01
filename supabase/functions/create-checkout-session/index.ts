@@ -86,7 +86,7 @@ serve(async (req) => {
     }
 
     const { data: submission, error: submissionError } = await supabase
-      .from('submissions')
+      .from('submission')
       .insert([submissionData])
       .select()
       .single()
