@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Home from './components/Home'
 import Login from './pages/client/Login'
+import ResetPassword from './pages/client/ResetPassword'
 import Dashboard from './pages/client/Dashboard'
 import SubmissionDetail from './pages/client/SubmissionDetail'
 import Profile from './pages/client/Profile'
@@ -20,6 +21,7 @@ function App() {
         {/* Client authentication and dashboard */}
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<Login />} />
+        <Route path="/auth/reset-password" element={<ResetPassword />} />
         <Route
           path="/dashboard"
           element={
