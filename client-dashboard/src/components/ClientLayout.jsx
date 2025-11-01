@@ -26,8 +26,7 @@ const ClientLayout = ({ children }) => {
         <div className="p-8">
           {/* Logo */}
           <div className="mb-10 animate-fade-in flex flex-col items-center justify-center">
-            <Logo width={80} height={80} />
-            <h2 className="text-xl font-bold text-gray-900 mt-4">Client Portal</h2>
+            <Logo width={150} height={150} />
           </div>
 
           {/* Menu Items */}
@@ -76,8 +75,7 @@ const ClientLayout = ({ children }) => {
           <aside className="w-80 bg-[#F3F4F6] h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-8">
               <div className="mb-10 flex flex-col items-center justify-center">
-                <Logo width={80} height={80} />
-                <h2 className="text-xl font-bold text-gray-900 mt-4">Client Portal</h2>
+                <Logo width={150} height={150} />
               </div>
 
               <div className="space-y-2">

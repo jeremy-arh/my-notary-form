@@ -262,7 +262,7 @@ const NotaryForm = () => {
         <div className="p-8">
           {/* Logo */}
           <div className="mb-10 animate-fade-in flex items-center justify-center">
-            <Logo width={120} height={120} />
+            <Logo width={150} height={150} />
           </div>
 
           {/* Steps Navigation */}
