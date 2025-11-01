@@ -66,23 +66,24 @@ serve(async (req) => {
 
     // Create temporary submission in database with status 'pending_payment'
     const submissionData = {
-      user_id: userId,
+      client_id: userId,
       status: 'pending_payment',
-      type: 'notary_request',
-      data: {
-        selectedOptions: formData.selectedOptions,
-        appointmentDate: formData.appointmentDate,
-        appointmentTime: formData.appointmentTime,
-        timezone: formData.timezone,
-        documents: simplifiedDocuments,
-        notes: formData.notes,
-      },
-      email: formData.email,
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      phone: formData.phone,
       appointment_date: formData.appointmentDate,
       appointment_time: formData.appointmentTime,
+      timezone: formData.timezone,
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      email: formData.email,
+      phone: formData.phone,
+      address: formData.address,
+      city: formData.city,
+      postal_code: formData.postalCode,
+      country: formData.country,
+      notes: formData.notes || null,
+      data: {
+        selectedOptions: formData.selectedOptions,
+        documents: simplifiedDocuments,
+      },
     }
 
     const { data: submission, error: submissionError } = await supabase
@@ -189,7 +190,7 @@ serve(async (req) => {
       customer_email: formData.email || user?.email,
       metadata: {
         submission_id: submission.id,
-        user_id: userId || 'guest',
+        client_id: userId || 'guest',
         account_created: accountCreated ? 'true' : 'false',
       },
     })
