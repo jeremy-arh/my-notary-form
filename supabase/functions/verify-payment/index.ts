@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { serve } from 'https://deno.land/std@0.177.1/http/server.ts'
 import Stripe from 'https://esm.sh/stripe@14.10.0?target=deno'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
@@ -37,94 +37,64 @@ serve(async (req) => {
       )
     }
 
+    // Get the submission ID from metadata
+    const submissionId = session.metadata.submission_id
+    const accountCreated = session.metadata.account_created === 'true'
+
+    if (!submissionId) {
+      throw new Error('Missing submission ID in payment metadata')
+    }
+
     // Get the authorization header
-    const authHeader = req.headers.get('Authorization')!
     const supabaseUrl = Deno.env.get('SUPABASE_URL') as string
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Parse form data from session metadata
-    const formData = JSON.parse(session.metadata.form_data)
-
-    // Create user account if doesn't exist (guest checkout)
-    let userId = session.metadata.user_id
-
-    if (userId === 'guest' && formData.email && formData.password) {
-      // Create user account
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: formData.password,
-        email_confirm: true,
-      })
-
-      if (authError) {
-        console.error('Error creating user:', authError)
-        // If user already exists, try to get their ID
-        const { data: existingUser } = await supabase
-          .from('auth.users')
-          .select('id')
-          .eq('email', formData.email)
-          .single()
-
-        userId = existingUser?.id || userId
-      } else {
-        userId = authData.user.id
-      }
-    }
-
-    // Upload documents to storage if any
-    const documentUrls = []
-    if (formData.documents && formData.documents.length > 0) {
-      for (const doc of formData.documents) {
-        // Note: In real implementation, documents should be uploaded from client
-        // and their URLs stored in formData before payment
-        documentUrls.push({
-          name: doc.name,
-          url: `placeholder-url-${doc.name}`,
-        })
-      }
-    }
-
-    // Insert submission into database
-    const submissionData = {
-      user_id: userId !== 'guest' ? userId : null,
-      status: 'pending',
-      type: 'notary_request',
-      data: {
-        ...formData,
-        documents: documentUrls,
-        payment: {
-          stripe_session_id: sessionId,
-          amount_paid: session.amount_total,
-          currency: session.currency,
-          payment_status: session.payment_status,
-        },
-      },
-      email: formData.email,
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      phone: formData.phone,
-      appointment_date: formData.appointmentDate,
-      appointment_time: formData.appointmentTime,
-    }
-
-    const { data: submission, error: submissionError } = await supabase
+    // Get the existing submission
+    const { data: existingSubmission, error: fetchError } = await supabase
       .from('submissions')
-      .insert([submissionData])
+      .select('*')
+      .eq('id', submissionId)
+      .single()
+
+    if (fetchError || !existingSubmission) {
+      console.error('Error fetching submission:', fetchError)
+      throw new Error('Submission not found')
+    }
+
+    // Update submission with payment information and change status to 'pending'
+    const updatedData = {
+      ...existingSubmission.data,
+      payment: {
+        stripe_session_id: sessionId,
+        amount_paid: session.amount_total,
+        currency: session.currency,
+        payment_status: session.payment_status,
+        paid_at: new Date().toISOString(),
+      },
+    }
+
+    const { data: submission, error: updateError } = await supabase
+      .from('submissions')
+      .update({
+        status: 'pending',
+        data: updatedData,
+      })
+      .eq('id', submissionId)
       .select()
       .single()
 
-    if (submissionError) {
-      console.error('Error creating submission:', submissionError)
-      throw new Error('Failed to create submission')
+    if (updateError) {
+      console.error('Error updating submission:', updateError)
+      throw new Error('Failed to update submission')
     }
 
     return new Response(
       JSON.stringify({
         verified: true,
         submissionId: submission.id,
-        accountCreated: userId !== 'guest' && session.metadata.user_id === 'guest',
+        accountCreated: accountCreated,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
