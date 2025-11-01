@@ -12,8 +12,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
-    accepted: 0,
-    rejected: 0
+    accepted: 0
   });
 
   useEffect(() => {
@@ -86,9 +85,8 @@ const Dashboard = () => {
       const total = submissionsData?.length || 0;
       const pending = submissionsData?.filter(s => s.status === 'pending').length || 0;
       const accepted = submissionsData?.filter(s => s.status === 'accepted').length || 0;
-      const rejected = submissionsData?.filter(s => s.status === 'rejected').length || 0;
 
-      setStats({ total, pending, accepted, rejected });
+      setStats({ total, pending, accepted });
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -99,6 +97,7 @@ const Dashboard = () => {
   const getStatusBadge = (status) => {
     const styles = {
       pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      pending_payment: 'bg-orange-100 text-orange-800 border-orange-200',
       accepted: 'bg-green-100 text-green-800 border-green-200',
       rejected: 'bg-red-100 text-red-800 border-red-200',
       completed: 'bg-blue-100 text-blue-800 border-blue-200'
@@ -106,7 +105,27 @@ const Dashboard = () => {
 
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[status] || styles.pending}`}>
-        {status?.charAt(0).toUpperCase() + status?.slice(1)}
+        {status?.charAt(0).toUpperCase() + status?.slice(1).replace('_', ' ')}
+      </span>
+    );
+  };
+
+  const getPaymentStatusBadge = (paymentStatus) => {
+    const styles = {
+      paid: 'bg-green-100 text-green-800 border-green-200',
+      unpaid: 'bg-red-100 text-red-800 border-red-200',
+      no_payment_required: 'bg-gray-100 text-gray-800 border-gray-200'
+    };
+
+    const labels = {
+      paid: 'Paid',
+      unpaid: 'Unpaid',
+      no_payment_required: 'N/A'
+    };
+
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[paymentStatus] || styles.unpaid}`}>
+        {labels[paymentStatus] || 'Pending'}
       </span>
     );
   };
@@ -138,7 +157,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
             <div className="flex items-center justify-between mb-2">
               <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
@@ -167,16 +186,6 @@ const Dashboard = () => {
             </div>
             <p className="text-2xl font-bold text-gray-900">{stats.accepted}</p>
             <p className="text-sm text-gray-600">Accepted</p>
-          </div>
-
-          <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center">
-                <Icon icon="heroicons:x-circle" className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{stats.rejected}</p>
-            <p className="text-sm text-gray-600">Rejected</p>
           </div>
         </div>
 
@@ -213,6 +222,7 @@ const Dashboard = () => {
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Appointment</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Notary</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Payment</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Actions</th>
                   </tr>
                 </thead>
@@ -230,6 +240,9 @@ const Dashboard = () => {
                       </td>
                       <td className="py-4 px-4">
                         {getStatusBadge(submission.status)}
+                      </td>
+                      <td className="py-4 px-4">
+                        {getPaymentStatusBadge(submission.data?.payment?.payment_status)}
                       </td>
                       <td className="py-4 px-4">
                         <button
