@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Home from './components/Home'
 import Login from './pages/client/Login'
 import ResetPassword from './pages/client/ResetPassword'
+import PaymentSuccess from './pages/PaymentSuccess'
+import PaymentFailed from './pages/PaymentFailed'
 import Dashboard from './pages/client/Dashboard'
 import SubmissionDetail from './pages/client/SubmissionDetail'
 import Profile from './pages/client/Profile'
@@ -17,6 +19,10 @@ function App() {
 
         {/* Public form routes */}
         <Route path="/form/*" element={<NotaryForm />} />
+
+        {/* Payment routes */}
+        <Route path="/payment/success" element={<PaymentSuccess />} />
+        <Route path="/payment/failed" element={<PaymentFailed />} />
 
         {/* Client authentication and dashboard */}
         <Route path="/login" element={<Login />} />
