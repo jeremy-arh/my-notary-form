@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom'
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import Logo from '../assets/Logo';
+import { Logo } from '../../../shared/assets';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
