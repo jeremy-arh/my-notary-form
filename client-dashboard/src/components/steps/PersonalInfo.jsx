@@ -3,7 +3,7 @@ import { Icon } from '@iconify/react';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 
-const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
+const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false }) => {
   const [errors, setErrors] = useState({});
 
   const handleChange = (field, value) => {
@@ -24,27 +24,30 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
       newErrors.lastName = 'Last name is required';
     }
 
-    if (!formData.email?.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+    // Only validate email and password if user is not authenticated
+    if (!isAuthenticated) {
+      if (!formData.email?.trim()) {
+        newErrors.email = 'Email is required';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+        newErrors.email = 'Invalid email format';
+      }
+
+      // Password validation
+      if (!formData.password?.trim()) {
+        newErrors.password = 'Password is required';
+      } else if (formData.password.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters';
+      }
+
+      if (!formData.confirmPassword?.trim()) {
+        newErrors.confirmPassword = 'Please confirm your password';
+      } else if (formData.password !== formData.confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match';
+      }
     }
 
     if (!formData.phone?.trim()) {
       newErrors.phone = 'Phone number is required';
-    }
-
-    // Password validation
-    if (!formData.password?.trim()) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-
-    if (!formData.confirmPassword?.trim()) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
     }
 
     if (!formData.address?.trim()) {
@@ -138,29 +141,31 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
         </div>
 
         {/* Email & Phone */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:envelope" className="w-4 h-4 mr-2 text-gray-400" />
-              Email Address <span className="text-red-500 ml-1">*</span>
-            </label>
-            <input
-              type="email"
-              id="email"
-              value={formData.email || ''}
-              onChange={(e) => handleChange('email', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-                errors.email ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder="john.doe@example.com"
-            />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.email}
-              </p>
-            )}
-          </div>
+        <div className={`grid grid-cols-1 ${!isAuthenticated ? 'md:grid-cols-2' : ''} gap-4`}>
+          {!isAuthenticated && (
+            <div>
+              <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
+                <Icon icon="heroicons:envelope" className="w-4 h-4 mr-2 text-gray-400" />
+                Email Address <span className="text-red-500 ml-1">*</span>
+              </label>
+              <input
+                type="email"
+                id="email"
+                value={formData.email || ''}
+                onChange={(e) => handleChange('email', e.target.value)}
+                className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                  errors.email ? 'border-red-500' : 'border-gray-200'
+                }`}
+                placeholder="john.doe@example.com"
+              />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
+                  {errors.email}
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <label htmlFor="phone" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
@@ -183,54 +188,56 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
           </div>
         </div>
 
-        {/* Password & Confirm Password */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
-              Mot de passe <span className="text-red-500 ml-1">*</span>
-            </label>
-            <input
-              type="password"
-              id="password"
-              value={formData.password || ''}
-              onChange={(e) => handleChange('password', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-                errors.password ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder="••••••••"
-            />
-            {errors.password && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.password}
-              </p>
-            )}
-          </div>
+        {/* Password & Confirm Password - Only show for non-authenticated users */}
+        {!isAuthenticated && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="password" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
+                <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
+                Mot de passe <span className="text-red-500 ml-1">*</span>
+              </label>
+              <input
+                type="password"
+                id="password"
+                value={formData.password || ''}
+                onChange={(e) => handleChange('password', e.target.value)}
+                className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                  errors.password ? 'border-red-500' : 'border-gray-200'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.password && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
+                  {errors.password}
+                </p>
+              )}
+            </div>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
-              Confirmer le mot de passe <span className="text-red-500 ml-1">*</span>
-            </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              value={formData.confirmPassword || ''}
-              onChange={(e) => handleChange('confirmPassword', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-                errors.confirmPassword ? 'border-red-500' : 'border-gray-200'
-              }`}
-              placeholder="••••••••"
-            />
-            {errors.confirmPassword && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.confirmPassword}
-              </p>
-            )}
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
+                <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
+                Confirmer le mot de passe <span className="text-red-500 ml-1">*</span>
+              </label>
+              <input
+                type="password"
+                id="confirmPassword"
+                value={formData.confirmPassword || ''}
+                onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                  errors.confirmPassword ? 'border-red-500' : 'border-gray-200'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.confirmPassword && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
+                  {errors.confirmPassword}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Address */}
         <div>

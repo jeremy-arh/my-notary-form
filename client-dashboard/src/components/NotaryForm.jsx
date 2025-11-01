@@ -397,6 +397,7 @@ const NotaryForm = () => {
                   updateFormData={updateFormData}
                   nextStep={nextStep}
                   prevStep={prevStep}
+                  isAuthenticated={isAuthenticated}
                 />
               }
             />
