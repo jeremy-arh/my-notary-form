@@ -7,6 +7,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [clientInfo, setClientInfo] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -49,6 +50,19 @@ const Profile = () => {
           postalCode: client.postal_code || '',
           country: client.country || ''
         });
+
+        // Fetch invoices
+        const { data: submissionsData } = await supabase
+          .from('submission')
+          .select('*')
+          .eq('client_id', client.id)
+          .order('created_at', { ascending: false });
+
+        // Filter submissions that have invoice URLs
+        const paidInvoices = submissionsData?.filter(
+          sub => sub.data?.payment?.invoice_url
+        ) || [];
+        setInvoices(paidInvoices);
       }
     } catch (error) {
       console.error('Error fetching client info:', error);
@@ -124,12 +138,17 @@ const Profile = () => {
     );
   }
 
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
   return (
     <ClientLayout>
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6 space-y-6 mb-8">
           {/* Name Fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -277,6 +296,62 @@ const Profile = () => {
             </button>
           </div>
         </form>
+
+        {/* Invoices Section */}
+        <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+            <Icon icon="heroicons:document-text" className="w-6 h-6 mr-2" />
+            Invoices
+          </h2>
+
+          {invoices.length === 0 ? (
+            <div className="text-center py-12">
+              <Icon icon="heroicons:document-text" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No invoices available yet</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-300">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Date</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Amount</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((invoice) => (
+                    <tr key={invoice.id} className="border-b border-gray-200 hover:bg-white transition-colors">
+                      <td className="py-4 px-4 text-sm text-gray-900">
+                        {formatDate(invoice.data.payment.paid_at || invoice.created_at)}
+                      </td>
+                      <td className="py-4 px-4 text-sm text-gray-900">
+                        ${((invoice.data.payment.amount_paid || 0) / 100).toFixed(2)} {(invoice.data.payment.currency || 'usd').toUpperCase()}
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-green-100 text-green-800 border-green-200">
+                          {invoice.data.payment.payment_status === 'paid' ? 'Paid' : invoice.data.payment.payment_status}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <a
+                          href={invoice.data.payment.invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
+                        >
+                          <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-1" />
+                          Download
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </ClientLayout>
   );

@@ -100,6 +100,7 @@ const SubmissionDetail = () => {
   const getStatusBadge = (status) => {
     const styles = {
       pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      pending_payment: 'bg-orange-100 text-orange-800 border-orange-200',
       accepted: 'bg-green-100 text-green-800 border-green-200',
       rejected: 'bg-red-100 text-red-800 border-red-200',
       completed: 'bg-blue-100 text-blue-800 border-blue-200'
@@ -107,7 +108,27 @@ const SubmissionDetail = () => {
 
     return (
       <span className={`px-4 py-2 rounded-full text-sm font-semibold border ${styles[status] || styles.pending}`}>
-        {status?.charAt(0).toUpperCase() + status?.slice(1)}
+        {status?.charAt(0).toUpperCase() + status?.slice(1).replace('_', ' ')}
+      </span>
+    );
+  };
+
+  const getPaymentStatusBadge = (paymentStatus) => {
+    const styles = {
+      paid: 'bg-green-100 text-green-800 border-green-200',
+      unpaid: 'bg-red-100 text-red-800 border-red-200',
+      no_payment_required: 'bg-gray-100 text-gray-800 border-gray-200'
+    };
+
+    const labels = {
+      paid: 'Paid',
+      unpaid: 'Unpaid',
+      no_payment_required: 'N/A'
+    };
+
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[paymentStatus] || styles.unpaid}`}>
+        {labels[paymentStatus] || 'Pending'}
       </span>
     );
   };
@@ -214,6 +235,51 @@ const SubmissionDetail = () => {
                 </div>
               </div>
             </div>
+
+            {/* Payment Info */}
+            {submission.data?.payment && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                    <Icon icon="heroicons:credit-card" className="w-5 h-5 text-gray-600" />
+                  </div>
+                  Payment Information
+                </h2>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Status:</span>
+                    {getPaymentStatusBadge(submission.data.payment.payment_status)}
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Amount:</span>
+                    <span className="font-semibold text-gray-900">
+                      ${((submission.data.payment.amount_paid || 0) / 100).toFixed(2)} {(submission.data.payment.currency || 'usd').toUpperCase()}
+                    </span>
+                  </div>
+                  {submission.data.payment.paid_at && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Paid on:</span>
+                      <span className="font-semibold text-gray-900">
+                        {formatDate(submission.data.payment.paid_at)}
+                      </span>
+                    </div>
+                  )}
+                  {submission.data.payment.invoice_url && (
+                    <div className="pt-3 border-t border-gray-200">
+                      <a
+                        href={submission.data.payment.invoice_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center bg-white text-black hover:bg-gray-100 font-medium text-sm py-3 px-4 rounded-lg transition-colors"
+                      >
+                        <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-2" />
+                        Download Invoice
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Notary Info */}
             {submission.notary && (
