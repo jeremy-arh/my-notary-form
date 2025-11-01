@@ -213,20 +213,42 @@ const NotaryForm = () => {
         }
       });
 
-      if (error) throw error;
+      console.log('Edge Function response:', { data, error });
 
-      if (data.url) {
+      if (error) {
+        console.error('Edge Function error details:', error);
+        throw error;
+      }
+
+      if (data?.error) {
+        console.error('Edge Function returned error:', data.error);
+        throw new Error(data.error);
+      }
+
+      if (data?.url) {
         // Form data is already saved in localStorage by useLocalStorage hook
         // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
-        throw new Error('No checkout URL received');
+        throw new Error('No checkout URL received from payment service');
       }
     } catch (error) {
       console.error('Error creating payment session:', error);
+
+      // Show detailed error message
+      let errorMessage = 'Une erreur s\'est produite lors de la création de la session de paiement.';
+
+      if (error.message?.includes('Edge Function') || error.message?.includes('FunctionsHttpError')) {
+        errorMessage += '\n\n⚠️ Les fonctions de paiement ne sont pas encore déployées.\n\nVeuillez consulter le README dans /supabase/functions/ pour les instructions de déploiement.';
+      } else if (error.message) {
+        errorMessage += `\n\nDétails: ${error.message}`;
+      }
+
+      errorMessage += '\n\nVeuillez réessayer ou contacter le support.';
+
       setNotification({
         type: 'error',
-        message: 'Une erreur s\'est produite lors de la création de la session de paiement. Veuillez réessayer.'
+        message: errorMessage
       });
     }
   };
