@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { serve } from 'https://deno.land/std@0.177.1/http/server.ts'
 import Stripe from 'https://esm.sh/stripe@14.10.0?target=deno'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
@@ -27,16 +27,74 @@ serve(async (req) => {
     // Get the authorization header
     const authHeader = req.headers.get('Authorization')!
     const supabaseUrl = Deno.env.get('SUPABASE_URL') as string
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') as string
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Get user session (using anon key for user context)
+    const supabaseAnon = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') as string, {
       global: { headers: { Authorization: authHeader } },
     })
 
-    // Get user session
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await supabaseAnon.auth.getUser()
+
+    // Create user account if guest and has password
+    let userId = user?.id || null
+    let accountCreated = false
+
+    if (!userId && formData.email && formData.password) {
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: formData.email,
+        password: formData.password,
+        email_confirm: true,
+      })
+
+      if (!authError && authData.user) {
+        userId = authData.user.id
+        accountCreated = true
+      }
+    }
+
+    // Prepare simplified document data (just names and sizes, not file objects)
+    const simplifiedDocuments = formData.documents?.map((doc: any) => ({
+      name: doc.name,
+      size: doc.size,
+      type: doc.type
+    })) || []
+
+    // Create temporary submission in database with status 'pending_payment'
+    const submissionData = {
+      user_id: userId,
+      status: 'pending_payment',
+      type: 'notary_request',
+      data: {
+        selectedOptions: formData.selectedOptions,
+        appointmentDate: formData.appointmentDate,
+        appointmentTime: formData.appointmentTime,
+        timezone: formData.timezone,
+        documents: simplifiedDocuments,
+        notes: formData.notes,
+      },
+      email: formData.email,
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      phone: formData.phone,
+      appointment_date: formData.appointmentDate,
+      appointment_time: formData.appointmentTime,
+    }
+
+    const { data: submission, error: submissionError } = await supabase
+      .from('submissions')
+      .insert([submissionData])
+      .select()
+      .single()
+
+    if (submissionError) {
+      console.error('Error creating submission:', submissionError)
+      throw new Error('Failed to create submission')
+    }
 
     // Calculate line items for Stripe
     const lineItems = []
@@ -108,20 +166,20 @@ serve(async (req) => {
     }
 
     // Document processing
-    if (formData.documents?.length > 0) {
+    if (simplifiedDocuments.length > 0) {
       lineItems.push({
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `Document Processing (${formData.documents.length} files)`,
+            name: `Document Processing (${simplifiedDocuments.length} files)`,
           },
           unit_amount: 1000, // $10.00 per document
         },
-        quantity: formData.documents.length,
+        quantity: simplifiedDocuments.length,
       })
     }
 
-    // Create Stripe Checkout Session
+    // Create Stripe Checkout Session with minimal metadata
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
@@ -130,13 +188,14 @@ serve(async (req) => {
       cancel_url: `${req.headers.get('origin')}/payment/failed`,
       customer_email: formData.email || user?.email,
       metadata: {
-        user_id: user?.id || 'guest',
-        form_data: JSON.stringify(formData),
+        submission_id: submission.id,
+        user_id: userId || 'guest',
+        account_created: accountCreated ? 'true' : 'false',
       },
     })
 
     return new Response(
-      JSON.stringify({ url: session.url }),
+      JSON.stringify({ url: session.url, submissionId: submission.id }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
