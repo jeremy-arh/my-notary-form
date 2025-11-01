@@ -6,6 +6,14 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [selectedTime, setSelectedTime] = useState(formData.appointmentTime || '');
   const [timezone, setTimezone] = useState(formData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
 
+  // Detect if user prefers 12-hour format based on locale
+  const [use12HourFormat, setUse12HourFormat] = useState(() => {
+    // Check if the locale uses 12-hour format
+    const testDate = new Date(2023, 0, 1, 13, 0);
+    const timeString = testDate.toLocaleTimeString(undefined, { hour: 'numeric' });
+    return timeString.toLowerCase().includes('pm') || timeString.toLowerCase().includes('am');
+  });
+
   // Common timezones
   const timezones = [
     { value: 'America/New_York', label: 'Eastern Time (ET)', offset: 'UTC-5' },
@@ -25,9 +33,18 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     for (let hour = 9; hour < 17; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const displayTime = `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+
+        let displayTime;
+        if (use12HourFormat) {
+          // 12-hour format with AM/PM
+          const period = hour >= 12 ? 'PM' : 'AM';
+          const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+          displayTime = `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+        } else {
+          // 24-hour format
+          displayTime = time;
+        }
+
         slots.push({ value: time, label: displayTime });
       }
     }
@@ -167,40 +184,40 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       {/* Calendar and Time Slots Row */}
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Calendar */}
-        <div className="bg-white rounded-2xl p-3 border border-gray-200 lg:w-80 flex-shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-900">
+        <div className="bg-white rounded-2xl p-6 border border-gray-200 lg:w-96 flex-shrink-0">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-900">
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h3>
             <div className="flex space-x-1">
               <button
                 type="button"
                 onClick={goToPreviousMonth}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <Icon icon="heroicons:chevron-left" className="w-3.5 h-3.5 text-gray-600" />
+                <Icon icon="heroicons:chevron-left" className="w-5 h-5 text-gray-600" />
               </button>
               <button
                 type="button"
                 onClick={goToNextMonth}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <Icon icon="heroicons:chevron-right" className="w-3.5 h-3.5 text-gray-600" />
+                <Icon icon="heroicons:chevron-right" className="w-5 h-5 text-gray-600" />
               </button>
             </div>
           </div>
 
           {/* Day names */}
-          <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+          <div className="grid grid-cols-7 gap-1 mb-2">
             {dayNames.map((day) => (
-              <div key={day} className="text-center text-[10px] font-semibold text-gray-500 py-0.5">
-                {day.substring(0, 1)}
+              <div key={day} className="text-center text-xs font-semibold text-gray-500 py-1">
+                {day}
               </div>
             ))}
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-0.5">
+          <div className="grid grid-cols-7 gap-1">
             {calendarDays.map((day, index) => {
               const disabled = !day.isCurrentMonth || isPast(day.date);
               const selected = isSelected(day.date);
@@ -212,7 +229,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="button"
                   onClick={() => !disabled && handleDateClick(day.date)}
                   disabled={disabled}
-                  className={`aspect-square flex items-center justify-center rounded text-[11px] font-medium transition-all ${
+                  className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
                     disabled
                       ? 'text-gray-300 cursor-not-allowed'
                       : selected
@@ -230,30 +247,36 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         </div>
 
         {/* Time Slots */}
-        {selectedDate && (
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
-            <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-              <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-600" />
-              Available Time Slots
-            </h3>
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-              {timeSlots.map((slot) => (
-                <button
-                  key={slot.value}
-                  type="button"
-                  onClick={() => handleTimeClick(slot.value)}
-                  className={`py-2 px-2 rounded-lg text-xs font-medium transition-all ${
-                    selectedTime === slot.value
-                      ? 'bg-black text-white shadow-md'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {slot.label}
-                </button>
-              ))}
-            </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
+          <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
+            <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-600" />
+            Available Time Slots
+          </h3>
+          {!selectedDate && (
+            <p className="text-sm text-gray-500 italic mb-3">
+              Please select a date first to choose a time slot
+            </p>
+          )}
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+            {timeSlots.map((slot) => (
+              <button
+                key={slot.value}
+                type="button"
+                onClick={() => selectedDate && handleTimeClick(slot.value)}
+                disabled={!selectedDate}
+                className={`py-2 px-2 rounded-lg text-xs font-medium transition-all ${
+                  !selectedDate
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : selectedTime === slot.value
+                    ? 'bg-black text-white shadow-md'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {slot.label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
       </div>
         </div>
       </div>

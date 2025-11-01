@@ -262,17 +262,9 @@ const NotaryForm = () => {
       {/* Left Sidebar - Fixed and 100vh */}
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
         <div className="flex-1 overflow-y-auto p-8 pb-32">
-          {/* Logo with connexion button */}
-          <div className="mb-4 animate-fade-in flex items-center justify-between">
+          {/* Logo */}
+          <div className="mb-4 animate-fade-in flex items-center justify-center">
             <Logo width={50} height={50} />
-            {isAuthenticated && (
-              <Link
-                to="/dashboard"
-                className="text-sm font-medium text-gray-700 hover:text-black transition-colors"
-              >
-                connexion
-              </Link>
-            )}
           </div>
 
           {/* Steps Navigation - Reduced size */}
@@ -330,8 +322,20 @@ const NotaryForm = () => {
           </div>
         </div>
 
-        {/* Progress Bar - Fixed at bottom */}
+        {/* Progress Bar & Dashboard Button - Fixed at bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#F3F4F6] border-t border-gray-200">
+          {/* Dashboard Button */}
+          {isAuthenticated && (
+            <Link
+              to="/dashboard"
+              className="flex items-center justify-center w-full mb-4 p-3 bg-white text-gray-700 rounded-xl hover:bg-gray-100 hover:shadow-md transition-all font-medium"
+            >
+              <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
+              Dashboard
+            </Link>
+          )}
+
+          {/* Progress Bar */}
           <div className="flex justify-between text-sm text-gray-600 mb-2">
             <span className="font-medium">Progress</span>
             <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
