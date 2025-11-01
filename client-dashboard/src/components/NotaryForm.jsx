@@ -195,63 +195,38 @@ const NotaryForm = () => {
 
   const handleSubmit = async () => {
     try {
-      console.log('Submitting form data:', formData);
+      console.log('Creating payment session for form data:', formData);
 
-      const result = await submitNotaryRequest(formData);
+      // Calculate total amount
+      let amount = 75; // Base fee
+      if (formData.selectedOptions?.includes('urgent')) amount += 50;
+      if (formData.selectedOptions?.includes('home-visit')) amount += 100;
+      if (formData.selectedOptions?.includes('translation')) amount += 35;
+      if (formData.selectedOptions?.includes('consultation')) amount += 150;
+      if (formData.documents?.length) amount += formData.documents.length * 10;
 
-      if (result.success) {
-        // Clear localStorage
-        localStorage.removeItem('notaryFormData');
-        localStorage.removeItem('notaryCompletedSteps');
+      // Call Supabase Edge Function to create Stripe checkout session
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          formData,
+          amount: amount * 100 // Convert to cents
+        }
+      });
 
-        // Reset form after successful submission
-        setFormData({
-          documents: [],
-          selectedOptions: [],
-          appointmentDate: '',
-          appointmentTime: '',
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          firstName: '',
-          lastName: '',
-          email: '',
-          phone: '',
-          password: '',
-          confirmPassword: '',
-          address: '',
-          city: '',
-          postalCode: '',
-          country: '',
-          notes: ''
-        });
+      if (error) throw error;
 
-        // Reset completed steps
-        setCompletedSteps([]);
-
-        // User is authenticated - show success notification and redirect
-        const message = result.accountCreated
-          ? `Demande soumise avec succès!\n\nID: ${result.submissionId}\n\nVotre compte a été créé et vous êtes maintenant connecté.\n\nRedirection vers votre tableau de bord...`
-          : `Demande soumise avec succès!\n\nID: ${result.submissionId}\n\nRedirection vers votre tableau de bord...`;
-
-        setNotification({
-          type: 'success',
-          message: message
-        });
-
-        // Redirect to dashboard after a short delay
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+      if (data.url) {
+        // Form data is already saved in localStorage by useLocalStorage hook
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
       } else {
-        setNotification({
-          type: 'error',
-          message: `Erreur lors de la soumission: ${result.error}\n\nVeuillez réessayer.`
-        });
+        throw new Error('No checkout URL received');
       }
     } catch (error) {
-      console.error('Error during submission:', error);
+      console.error('Error creating payment session:', error);
       setNotification({
         type: 'error',
-        message: 'Une erreur inattendue s\'est produite. Veuillez réessayer.'
+        message: 'Une erreur s\'est produite lors de la création de la session de paiement. Veuillez réessayer.'
       });
     }
   };
