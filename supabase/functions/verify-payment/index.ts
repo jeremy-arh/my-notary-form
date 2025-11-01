@@ -53,7 +53,7 @@ serve(async (req) => {
 
     // Get the existing submission
     const { data: existingSubmission, error: fetchError } = await supabase
-      .from('submissions')
+      .from('submission')
       .select('*')
       .eq('id', submissionId)
       .single()
@@ -76,7 +76,7 @@ serve(async (req) => {
     }
 
     const { data: submission, error: updateError } = await supabase
-      .from('submissions')
+      .from('submission')
       .update({
         status: 'pending',
         data: updatedData,
