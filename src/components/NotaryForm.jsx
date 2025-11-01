@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { Logo } from '../../shared/assets';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -261,19 +262,7 @@ const NotaryForm = () => {
         <div className="p-8">
           {/* Logo */}
           <div className="mb-10 animate-fade-in flex items-center justify-center">
-            <div className="relative">
-              <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="60" cy="60" r="58" stroke="url(#gradient)" strokeWidth="3"/>
-                <path d="M60 25 L60 95 M40 45 L60 25 L80 45" stroke="url(#gradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="60" cy="85" r="8" fill="url(#gradient)"/>
-                <defs>
-                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#000000" />
-                    <stop offset="100%" stopColor="#4B5563" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+            <Logo width={120} height={120} />
           </div>
 
           {/* Steps Navigation */}
