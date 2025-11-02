@@ -4,66 +4,86 @@ import { Icon } from '@iconify/react';
 const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [selectedDate, setSelectedDate] = useState(formData.appointmentDate || '');
   const [selectedTime, setSelectedTime] = useState(formData.appointmentTime || '');
-  const [timezone, setTimezone] = useState(formData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+  // Get default timezone - if formData has a UTC value, use it; otherwise default to UTC-5 (Eastern Time)
+  const getDefaultTimezone = () => {
+    if (formData.timezone && formData.timezone.startsWith('UTC')) {
+      return formData.timezone;
+    }
+    return 'UTC-5'; // Default to Eastern Time
+  };
+
+  const [timezone, setTimezone] = useState(getDefaultTimezone());
   const timeSlotsRef = useRef(null);
+
+  // Save default timezone to formData on mount if not already set
+  useEffect(() => {
+    if (!formData.timezone || !formData.timezone.startsWith('UTC')) {
+      updateFormData({ timezone: 'UTC-5' });
+    }
+  }, []);
 
   // Always use 12-hour format (AM/PM) in English
   const use12HourFormat = true;
 
-  // Common timezones
+  // All UTC timezones from UTC-12 to UTC+14
   const timezones = [
-    { value: 'America/New_York', label: 'Eastern Time (ET)', offset: 'UTC-5' },
-    { value: 'America/Chicago', label: 'Central Time (CT)', offset: 'UTC-6' },
-    { value: 'America/Denver', label: 'Mountain Time (MT)', offset: 'UTC-7' },
-    { value: 'America/Los_Angeles', label: 'Pacific Time (PT)', offset: 'UTC-8' },
-    { value: 'America/Toronto', label: 'Toronto (ET)', offset: 'UTC-5' },
-    { value: 'America/Vancouver', label: 'Vancouver (PT)', offset: 'UTC-8' },
-    { value: 'America/Montreal', label: 'Montreal (ET)', offset: 'UTC-5' },
-    { value: 'Europe/London', label: 'London (GMT)', offset: 'UTC+0' },
-    { value: 'Europe/Paris', label: 'Paris (CET)', offset: 'UTC+1' },
+    { value: 'UTC-12', label: 'UTC-12:00', offset: -12 },
+    { value: 'UTC-11', label: 'UTC-11:00', offset: -11 },
+    { value: 'UTC-10', label: 'UTC-10:00 (Hawaii)', offset: -10 },
+    { value: 'UTC-9', label: 'UTC-09:00 (Alaska)', offset: -9 },
+    { value: 'UTC-8', label: 'UTC-08:00 (Pacific Time)', offset: -8 },
+    { value: 'UTC-7', label: 'UTC-07:00 (Mountain Time)', offset: -7 },
+    { value: 'UTC-6', label: 'UTC-06:00 (Central Time)', offset: -6 },
+    { value: 'UTC-5', label: 'UTC-05:00 (Eastern Time)', offset: -5 },
+    { value: 'UTC-4', label: 'UTC-04:00 (Atlantic Time)', offset: -4 },
+    { value: 'UTC-3:30', label: 'UTC-03:30 (Newfoundland)', offset: -3.5 },
+    { value: 'UTC-3', label: 'UTC-03:00', offset: -3 },
+    { value: 'UTC-2', label: 'UTC-02:00', offset: -2 },
+    { value: 'UTC-1', label: 'UTC-01:00', offset: -1 },
+    { value: 'UTC+0', label: 'UTC+00:00 (GMT/London)', offset: 0 },
+    { value: 'UTC+1', label: 'UTC+01:00 (Paris/Berlin)', offset: 1 },
+    { value: 'UTC+2', label: 'UTC+02:00 (Cairo/Athens)', offset: 2 },
+    { value: 'UTC+3', label: 'UTC+03:00 (Moscow)', offset: 3 },
+    { value: 'UTC+3:30', label: 'UTC+03:30 (Tehran)', offset: 3.5 },
+    { value: 'UTC+4', label: 'UTC+04:00 (Dubai)', offset: 4 },
+    { value: 'UTC+4:30', label: 'UTC+04:30 (Kabul)', offset: 4.5 },
+    { value: 'UTC+5', label: 'UTC+05:00 (Pakistan)', offset: 5 },
+    { value: 'UTC+5:30', label: 'UTC+05:30 (India)', offset: 5.5 },
+    { value: 'UTC+5:45', label: 'UTC+05:45 (Nepal)', offset: 5.75 },
+    { value: 'UTC+6', label: 'UTC+06:00 (Bangladesh)', offset: 6 },
+    { value: 'UTC+6:30', label: 'UTC+06:30 (Myanmar)', offset: 6.5 },
+    { value: 'UTC+7', label: 'UTC+07:00 (Bangkok)', offset: 7 },
+    { value: 'UTC+8', label: 'UTC+08:00 (Singapore/Beijing)', offset: 8 },
+    { value: 'UTC+8:45', label: 'UTC+08:45 (Eucla)', offset: 8.75 },
+    { value: 'UTC+9', label: 'UTC+09:00 (Tokyo/Seoul)', offset: 9 },
+    { value: 'UTC+9:30', label: 'UTC+09:30 (Adelaide)', offset: 9.5 },
+    { value: 'UTC+10', label: 'UTC+10:00 (Sydney)', offset: 10 },
+    { value: 'UTC+10:30', label: 'UTC+10:30 (Lord Howe)', offset: 10.5 },
+    { value: 'UTC+11', label: 'UTC+11:00', offset: 11 },
+    { value: 'UTC+12', label: 'UTC+12:00 (Auckland)', offset: 12 },
+    { value: 'UTC+12:45', label: 'UTC+12:45 (Chatham)', offset: 12.75 },
+    { value: 'UTC+13', label: 'UTC+13:00', offset: 13 },
+    { value: 'UTC+14', label: 'UTC+14:00', offset: 14 },
   ];
 
-  // Generate time slots - Base hours are 9 AM to 5 PM Eastern Time
+  // Generate time slots - Base hours are 9 AM to 5 PM Eastern Time (UTC-5)
   // Convert to selected timezone
   const generateTimeSlots = () => {
     const slots = [];
-    const baseTimezone = 'America/New_York'; // Base timezone (Eastern Time)
+    const baseOffsetHours = -5; // Eastern Time is UTC-5
 
-    // Create a reference date (we'll use today's date)
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const day = today.getDate();
+    // Find the selected timezone's offset
+    const selectedTz = timezones.find(tz => tz.value === timezone);
+    const selectedOffsetHours = selectedTz ? selectedTz.offset : baseOffsetHours;
+
+    // Calculate the offset difference
+    const offsetDiff = selectedOffsetHours - baseOffsetHours;
 
     for (let hour = 9; hour < 17; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        // Create a date in Eastern Time
-        const dateString = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
-
-        // Parse as Eastern Time
-        const easternDate = new Date(dateString + '-05:00'); // EST offset (approximate)
-
-        // Convert to selected timezone by getting the offset difference
-        const easternOffset = 5 * 60; // Eastern Time is UTC-5 (in minutes)
-
-        // Get the offset for the selected timezone (approximate based on common timezones)
-        const timezoneOffsets = {
-          'America/New_York': 5 * 60,    // UTC-5
-          'America/Chicago': 6 * 60,     // UTC-6
-          'America/Denver': 7 * 60,      // UTC-7
-          'America/Los_Angeles': 8 * 60, // UTC-8
-          'America/Toronto': 5 * 60,     // UTC-5
-          'America/Vancouver': 8 * 60,   // UTC-8
-          'America/Montreal': 5 * 60,    // UTC-5
-          'Europe/London': -0 * 60,      // UTC+0
-          'Europe/Paris': -1 * 60,       // UTC+1
-        };
-
-        const selectedOffset = timezoneOffsets[timezone] || easternOffset;
-        const offsetDiff = easternOffset - selectedOffset;
-
-        // Calculate the converted hour
-        let convertedHour = hour - Math.floor(offsetDiff / 60);
+        // Calculate the converted time
+        let convertedHour = hour + offsetDiff;
         let convertedMinute = minute;
 
         // Handle day overflow
@@ -74,11 +94,12 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         }
 
         // Store the time in 24-hour format for the value
-        const time = `${convertedHour.toString().padStart(2, '0')}:${convertedMinute.toString().padStart(2, '0')}`;
+        const time = `${Math.floor(convertedHour).toString().padStart(2, '0')}:${convertedMinute.toString().padStart(2, '0')}`;
 
         // Display in 12-hour AM/PM format
-        const period = convertedHour >= 12 ? 'PM' : 'AM';
-        const displayHour = convertedHour > 12 ? convertedHour - 12 : convertedHour === 0 ? 12 : convertedHour;
+        const displayHourValue = Math.floor(convertedHour);
+        const period = displayHourValue >= 12 ? 'PM' : 'AM';
+        const displayHour = displayHourValue > 12 ? displayHourValue - 12 : displayHourValue === 0 ? 12 : displayHourValue;
         const displayTime = `${displayHour}:${convertedMinute.toString().padStart(2, '0')} ${period}`;
 
         slots.push({ value: time, label: displayTime });
@@ -228,7 +249,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         >
           {timezones.map((tz) => (
             <option key={tz.value} value={tz.value}>
-              {tz.label} ({tz.offset})
+              {tz.label}
             </option>
           ))}
         </select>
