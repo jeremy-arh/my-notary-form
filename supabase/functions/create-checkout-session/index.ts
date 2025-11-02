@@ -269,16 +269,16 @@ serve(async (req) => {
     }
 
     // Document processing
-    if (simplifiedDocuments.length > 0) {
+    if (documentsData.length > 0) {
       lineItems.push({
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `Document Processing (${simplifiedDocuments.length} files)`,
+            name: `Document Processing (${documentsData.length} files)`,
           },
           unit_amount: 1000, // $10.00 per document
         },
-        quantity: simplifiedDocuments.length,
+        quantity: documentsData.length,
       })
     }
 
