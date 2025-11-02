@@ -189,27 +189,14 @@ const SubmissionDetail = () => {
       };
 
       console.log('📋 Reconstructed formData:', formData);
-
-      // Calculate total amount from submission data (same logic as NotaryForm)
-      let amount = 75; // Base fee
-      if (formData.selectedOptions?.includes('urgent')) amount += 50;
-      if (formData.selectedOptions?.includes('home-visit')) amount += 100;
-      if (formData.selectedOptions?.includes('translation')) amount += 35;
-      if (formData.selectedOptions?.includes('consultation')) amount += 150;
-
-      // Add document processing fee
-      const documentsCount = formData.uploadedFiles?.length || 0;
-      if (documentsCount > 0) amount += documentsCount * 10;
-
-      console.log('💰 Calculated amount: $' + amount + ' (cents: ' + (amount * 100) + ')');
       console.log('📦 Selected options:', formData.selectedOptions);
-      console.log('📄 Documents count:', documentsCount);
+      console.log('📄 Documents count:', formData.uploadedFiles?.length || 0);
 
-      // Create a new checkout session (same format as initial payment)
+      // Create a new checkout session
+      // The Edge Function will fetch services from database and calculate the amount
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
-          formData: formData,
-          amount: amount * 100 // Convert to cents for Stripe
+          formData: formData
         }
       });
 

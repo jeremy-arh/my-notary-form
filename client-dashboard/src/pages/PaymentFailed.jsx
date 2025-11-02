@@ -26,19 +26,11 @@ const PaymentFailed = () => {
 
       const formData = JSON.parse(savedFormData);
 
-      // Calculate total amount
-      let amount = 75; // Base fee
-      if (formData.selectedOptions?.includes('urgent')) amount += 50;
-      if (formData.selectedOptions?.includes('home-visit')) amount += 100;
-      if (formData.selectedOptions?.includes('translation')) amount += 35;
-      if (formData.selectedOptions?.includes('consultation')) amount += 150;
-      if (formData.documents?.length) amount += formData.documents.length * 10;
-
       // Call Supabase Edge Function to create Stripe checkout session
+      // The Edge Function will fetch services from database and calculate the amount
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
-          formData,
-          amount: amount * 100 // Convert to cents
+          formData
         }
       });
 

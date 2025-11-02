@@ -18,10 +18,10 @@ serve(async (req) => {
   }
 
   try {
-    const { formData, amount } = await req.json()
+    const { formData } = await req.json()
 
-    if (!formData || !amount) {
-      throw new Error('Missing required fields: formData and amount')
+    if (!formData) {
+      throw new Error('Missing required field: formData')
     }
 
     // Get the authorization header
@@ -199,87 +199,54 @@ serve(async (req) => {
 
     console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
 
-    // Calculate line items for Stripe
-    const lineItems = []
+    // Fetch services from database to get pricing
+    const { data: services, error: servicesError } = await supabase
+      .from('services')
+      .select('*')
+      .eq('is_active', true)
 
-    // Base notary service
-    lineItems.push({
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: 'Notary Service Fee',
-          description: 'Base notary service',
-        },
-        unit_amount: 7500, // $75.00 in cents
-      },
-      quantity: 1,
+    if (servicesError) {
+      console.error('❌ [SERVICES] Error fetching services:', servicesError)
+      throw new Error('Failed to fetch services: ' + servicesError.message)
+    }
+
+    console.log('✅ [SERVICES] Fetched services:', services.length)
+
+    // Create a map of service_id to service
+    const servicesMap = {}
+    services.forEach(service => {
+      servicesMap[service.service_id] = service
     })
 
-    // Additional services
-    if (formData.selectedOptions?.includes('urgent')) {
-      lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Urgent Service (48h)',
-          },
-          unit_amount: 5000, // $50.00
-        },
-        quantity: 1,
-      })
+    // Calculate line items for Stripe from selected services
+    const lineItems = []
+
+    if (formData.selectedOptions && formData.selectedOptions.length > 0) {
+      for (const serviceId of formData.selectedOptions) {
+        const service = servicesMap[serviceId]
+        if (service) {
+          lineItems.push({
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: service.name,
+                description: service.short_description || service.description,
+              },
+              unit_amount: Math.round(service.base_price * 100), // Convert to cents
+            },
+            quantity: 1,
+          })
+          console.log(`✅ [SERVICES] Added service: ${service.name} - $${service.base_price}`)
+        } else {
+          console.warn(`⚠️ [SERVICES] Service not found: ${serviceId}`)
+        }
+      }
     }
 
-    if (formData.selectedOptions?.includes('home-visit')) {
-      lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Home Visit',
-          },
-          unit_amount: 10000, // $100.00
-        },
-        quantity: 1,
-      })
-    }
-
-    if (formData.selectedOptions?.includes('translation')) {
-      lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Translation Service',
-          },
-          unit_amount: 3500, // $35.00
-        },
-        quantity: 1,
-      })
-    }
-
-    if (formData.selectedOptions?.includes('consultation')) {
-      lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Legal Consultation',
-          },
-          unit_amount: 15000, // $150.00
-        },
-        quantity: 1,
-      })
-    }
-
-    // Document processing
-    if (documentsData.length > 0) {
-      lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `Document Processing (${documentsData.length} files)`,
-          },
-          unit_amount: 1000, // $10.00 per document
-        },
-        quantity: documentsData.length,
-      })
+    // Ensure we have at least one line item
+    if (lineItems.length === 0) {
+      console.error('❌ [SERVICES] No valid services selected')
+      throw new Error('No valid services selected')
     }
 
     // Create Stripe Checkout Session with minimal metadata

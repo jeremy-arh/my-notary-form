@@ -1,22 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { supabase } from '../../lib/supabase';
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [services, setServices] = useState([]);
+  const [servicesMap, setServicesMap] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  const notaryOptions = {
-    'real-estate': 'Real Estate Transaction',
-    'will': 'Last Will & Testament',
-    'power-of-attorney': 'Power of Attorney',
-    'marriage-contract': 'Marriage Contract',
-    'succession': 'Succession & Estate',
-    'authentication': 'Document Authentication',
-    'affidavit': 'Affidavit',
-    'incorporation': 'Business Incorporation',
-    'urgent': 'Urgent Service (48h)',
-    'home-visit': 'Home Visit',
-    'translation': 'Translation Service',
-    'consultation': 'Legal Consultation'
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      setServices(data);
+
+      // Create a map of service_id to service object
+      const map = {};
+      data.forEach(service => {
+        map[service.service_id] = service;
+      });
+      setServicesMap(map);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      setServices([]);
+      setServicesMap({});
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onSubmit = async () => {
@@ -94,16 +113,25 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             </div>
             Selected Services
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {formData.selectedOptions.map((optionId) => (
-              <div key={optionId} className="flex items-center p-3 bg-gray-50 rounded-xl">
-                <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center mr-3">
-                  <Icon icon="heroicons:check" className="w-4 h-4 text-white" />
-                </div>
-                <span className="text-sm text-gray-900">{notaryOptions[optionId]}</span>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {formData.selectedOptions.map((optionId) => {
+                const service = servicesMap[optionId];
+                return (
+                  <div key={optionId} className="flex items-center p-3 bg-gray-50 rounded-xl">
+                    <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center mr-3">
+                      <Icon icon="heroicons:check" className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-sm text-gray-900">{service?.name || optionId}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -181,67 +209,55 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           </div>
           Price Details
         </h3>
-        <div className="space-y-3">
-          {/* Base Service */}
-          <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-            <span className="text-sm text-gray-600">Notary Service Fee</span>
-            <span className="text-sm font-semibold text-gray-900">$75.00</span>
+        {loading ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
           </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Selected Services */}
+            {formData.selectedOptions && formData.selectedOptions.length > 0 && (
+              <>
+                {formData.selectedOptions.map((optionId, index) => {
+                  const service = servicesMap[optionId];
+                  if (!service) return null;
 
-          {/* Additional Services */}
-          {formData.selectedOptions && formData.selectedOptions.some(opt => ['urgent', 'home-visit', 'translation', 'consultation'].includes(opt)) && (
-            <>
-              {formData.selectedOptions.includes('urgent') && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Urgent Service (48h)</span>
-                  <span className="text-sm font-semibold text-gray-900">$50.00</span>
-                </div>
-              )}
-              {formData.selectedOptions.includes('home-visit') && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Home Visit</span>
-                  <span className="text-sm font-semibold text-gray-900">$100.00</span>
-                </div>
-              )}
-              {formData.selectedOptions.includes('translation') && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Translation Service</span>
-                  <span className="text-sm font-semibold text-gray-900">$35.00</span>
-                </div>
-              )}
-              {formData.selectedOptions.includes('consultation') && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Legal Consultation</span>
-                  <span className="text-sm font-semibold text-gray-900">$150.00</span>
-                </div>
-              )}
-            </>
-          )}
+                  return (
+                    <div
+                      key={optionId}
+                      className={`flex justify-between items-center ${index === 0 ? 'pb-3 border-b border-gray-200' : ''}`}
+                    >
+                      <span className="text-sm text-gray-600">{service.name}</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        ${(service.base_price || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
 
-          {/* Documents Fee */}
-          {formData.documents && formData.documents.length > 0 && (
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Document Processing ({formData.documents.length} files)</span>
-              <span className="text-sm font-semibold text-gray-900">${(formData.documents.length * 10).toFixed(2)}</span>
+            {/* Total */}
+            <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
+              <span className="text-base font-bold text-gray-900">Total Amount</span>
+              <span className="text-xl font-bold text-gray-900">
+                ${(() => {
+                  let total = 0;
+                  // Calculate total from selected services
+                  if (formData.selectedOptions) {
+                    formData.selectedOptions.forEach(optionId => {
+                      const service = servicesMap[optionId];
+                      if (service) {
+                        total += service.base_price || 0;
+                      }
+                    });
+                  }
+                  return total.toFixed(2);
+                })()}
+              </span>
             </div>
-          )}
-
-          {/* Total */}
-          <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-            <span className="text-base font-bold text-gray-900">Total Amount</span>
-            <span className="text-xl font-bold text-gray-900">
-              ${(() => {
-                let total = 75; // Base fee
-                if (formData.selectedOptions?.includes('urgent')) total += 50;
-                if (formData.selectedOptions?.includes('home-visit')) total += 100;
-                if (formData.selectedOptions?.includes('translation')) total += 35;
-                if (formData.selectedOptions?.includes('consultation')) total += 150;
-                if (formData.documents?.length) total += formData.documents.length * 10;
-                return total.toFixed(2);
-              })()}
-            </span>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Confirmation Notice */}
