@@ -232,22 +232,25 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               <Icon icon="heroicons:phone" className="w-4 h-4 mr-2 text-gray-400" />
               Phone Number <span className="text-red-500 ml-1">*</span>
             </label>
-            <PhoneInput
-              international
-              defaultCountry="US"
-              value={formData.phone || ''}
-              onChange={handlePhoneChange}
-              className="phone-input"
-              style={{
-                '--PhoneInputCountryFlag-borderColor': errors.phone ? '#ef4444' : '#e5e7eb',
-                '--PhoneInput-color--focus': errors.phone ? '#ef4444' : '#000000',
-              }}
-              numberInputProps={{
-                className: `w-full px-4 py-3 bg-gray-50 border ${
-                  errors.phone ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 focus:ring-black'
-                } rounded-xl focus:ring-2 focus:border-black transition-all`
-              }}
-            />
+            <div className={`flex items-center bg-gray-50 border ${
+              errors.phone ? 'border-red-500' : 'border-gray-200'
+            } rounded-xl overflow-hidden transition-all focus-within:ring-2 ${
+              errors.phone ? 'focus-within:ring-red-500' : 'focus-within:ring-black'
+            } focus-within:border-black`}>
+              <PhoneInput
+                international
+                defaultCountry="US"
+                value={formData.phone || ''}
+                onChange={handlePhoneChange}
+                className="phone-input-integrated w-full flex"
+                countrySelectProps={{
+                  className: "px-3 py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none"
+                }}
+                numberInputProps={{
+                  className: "flex-1 px-4 py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0"
+                }}
+              />
+            </div>
             {errors.phone && (
               <p className="mt-1 text-sm text-red-600 flex items-center">
                 <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
