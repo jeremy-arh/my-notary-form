@@ -74,29 +74,42 @@ serve(async (req) => {
         .from('client')
         .select('id')
         .eq('user_id', userId)
-        .single()
+        .maybeSingle() // Use maybeSingle() instead of single() to avoid error when not found
 
       console.log('🔍 [CLIENT] Existing client:', existingClient, 'Error:', fetchError)
 
       if (existingClient) {
         clientId = existingClient.id
         console.log('✅ [CLIENT] Found existing client:', clientId)
-      } else {
-        // Create new client record
+      } else if (!fetchError || fetchError.code === 'PGRST116') {
+        // Create new client record (PGRST116 = no rows returned, which is expected)
         console.log('🆕 [CLIENT] Creating new client for userId:', userId)
+
+        // Use auth user email as fallback if formData.email is empty
+        const clientEmail = formData.email || user?.email
+
+        if (!clientEmail) {
+          console.error('❌ [CLIENT] No email available for client creation')
+          throw new Error('Email is required to create client account')
+        }
+
+        const clientData = {
+          user_id: userId,
+          first_name: formData.firstName || 'Guest',
+          last_name: formData.lastName || 'User',
+          email: clientEmail,
+          phone: formData.phone || '',
+          address: formData.address || '',
+          city: formData.city || '',
+          postal_code: formData.postalCode || '',
+          country: formData.country || '',
+        }
+
+        console.log('🆕 [CLIENT] Client data to insert:', JSON.stringify(clientData, null, 2))
+
         const { data: newClient, error: clientError } = await supabase
           .from('client')
-          .insert([{
-            user_id: userId,
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            email: formData.email,
-            phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            postal_code: formData.postalCode,
-            country: formData.country,
-          }])
+          .insert([clientData])
           .select('id')
           .single()
 
@@ -104,12 +117,15 @@ serve(async (req) => {
 
         if (clientError) {
           console.error('❌ [CLIENT] Error creating client:', clientError)
+          // Don't throw here, let submission continue with null client_id
         }
 
         if (!clientError && newClient) {
           clientId = newClient.id
           console.log('✅ [CLIENT] Created new client:', clientId)
         }
+      } else {
+        console.error('❌ [CLIENT] Unexpected error fetching client:', fetchError)
       }
     } else {
       console.warn('⚠️ [CLIENT] No userId - submission will have null client_id')
