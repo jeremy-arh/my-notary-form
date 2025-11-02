@@ -40,20 +40,26 @@ serve(async (req) => {
       data: { user },
     } = await supabaseAnon.auth.getUser()
 
-    // Create user account if guest and has password
+    // Create user account if guest
     let userId = user?.id || null
     let accountCreated = false
 
-    if (!userId && formData.email && formData.password) {
+    if (!userId && formData.email) {
+      // Create account with password if provided, otherwise generate random password
+      const password = formData.password || crypto.randomUUID()
+
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: formData.email,
-        password: formData.password,
+        password: password,
         email_confirm: true,
       })
 
       if (!authError && authData.user) {
         userId = authData.user.id
         accountCreated = true
+        console.log('✅ [AUTH] Created new account for:', formData.email, 'with auto-generated password:', !formData.password)
+      } else {
+        console.error('❌ [AUTH] Failed to create account:', authError)
       }
     }
 
