@@ -59,6 +59,46 @@ const NotaryForm = () => {
     { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
 
+  // Validation function to check if current step can proceed
+  const canProceedFromCurrentStep = () => {
+    switch (currentStep) {
+      case 1: // Documents
+        return formData.documents && formData.documents.length > 0;
+
+      case 2: // Choose option
+        return formData.selectedOptions && formData.selectedOptions.length > 0;
+
+      case 3: // Book an appointment
+        return formData.appointmentDate && formData.appointmentTime;
+
+      case 4: // Personal informations
+        const requiredFields = [
+          formData.firstName,
+          formData.lastName,
+          formData.email,
+          formData.phone,
+          formData.address,
+          formData.city,
+          formData.postalCode,
+          formData.country
+        ];
+
+        // If not authenticated, also require password
+        if (!isAuthenticated) {
+          requiredFields.push(formData.password, formData.confirmPassword);
+        }
+
+        // Check all required fields are filled
+        return requiredFields.every(field => field && field.trim() !== '');
+
+      case 5: // Summary
+        return true; // No validation needed for summary
+
+      default:
+        return true;
+    }
+  };
+
   // Get current step from URL
   const getCurrentStepFromPath = () => {
     const step = steps.find(s => s.path === location.pathname);
@@ -601,7 +641,7 @@ const NotaryForm = () => {
               <button
                 type="button"
                 onClick={nextStep}
-                disabled={currentStep === 1 && (!formData.documents || formData.documents.length === 0)}
+                disabled={!canProceedFromCurrentStep()}
                 className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 Continue
