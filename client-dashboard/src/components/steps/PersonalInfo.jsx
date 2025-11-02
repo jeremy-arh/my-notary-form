@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
-import PhoneInput from 'react-phone-number-input';
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { supabase } from '../../lib/supabase';
 
@@ -18,6 +18,22 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
     // Reset email exists error when email changes
     if (field === 'email' && emailExists) {
       setEmailExists(false);
+    }
+  };
+
+  const handlePhoneChange = (value) => {
+    updateFormData({ phone: value });
+
+    // Clear error when user starts typing
+    if (errors.phone) {
+      setErrors(prev => ({ ...prev, phone: '' }));
+    }
+
+    // Validate phone number in real-time if value exists
+    if (value && value.length > 3) {
+      if (!isValidPhoneNumber(value)) {
+        setErrors(prev => ({ ...prev, phone: 'Please enter a valid phone number' }));
+      }
     }
   };
 
@@ -79,6 +95,8 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
 
     if (!formData.phone?.trim()) {
       newErrors.phone = 'Phone number is required';
+    } else if (formData.phone && !isValidPhoneNumber(formData.phone)) {
+      newErrors.phone = 'Please enter a valid phone number';
     }
 
     if (!formData.address?.trim()) {
@@ -218,8 +236,17 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               international
               defaultCountry="US"
               value={formData.phone || ''}
-              onChange={(value) => handleChange('phone', value)}
-              className={`phone-input ${errors.phone ? 'phone-input-error' : ''}`}
+              onChange={handlePhoneChange}
+              className="phone-input"
+              style={{
+                '--PhoneInputCountryFlag-borderColor': errors.phone ? '#ef4444' : '#e5e7eb',
+                '--PhoneInput-color--focus': errors.phone ? '#ef4444' : '#000000',
+              }}
+              numberInputProps={{
+                className: `w-full px-4 py-3 bg-gray-50 border ${
+                  errors.phone ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 focus:ring-black'
+                } rounded-xl focus:ring-2 focus:border-black transition-all`
+              }}
             />
             {errors.phone && (
               <p className="mt-1 text-sm text-red-600 flex items-center">
