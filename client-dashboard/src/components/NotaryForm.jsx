@@ -585,10 +585,41 @@ const NotaryForm = () => {
         </div>
       </main>
 
-      {/* Mobile Footer - Progress Bar Only (buttons are in each step component) */}
+      {/* Mobile Footer - Navigation Buttons + Progress Bar in ONE fixed container */}
       {!isMobileMenuOpen && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] z-40">
-          <div className="px-4 pt-0 pb-4">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] z-50">
+          {/* Navigation Buttons */}
+          <div className="px-4 pt-4 pb-3 flex justify-between border-b border-gray-200">
+            {currentStep > 1 ? (
+              <button
+                type="button"
+                onClick={prevStep}
+                className="btn-glassy-secondary px-6 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+              >
+                Back
+              </button>
+            ) : <div></div>}
+            {currentStep < steps.length ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+              >
+                Continue
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+              >
+                Confirm & Pay
+              </button>
+            )}
+          </div>
+
+          {/* Progress Bar */}
+          <div className="px-4 py-3">
             <div className="flex justify-between text-sm text-gray-600 mb-2">
               <span className="font-medium">Step {currentStep} of {steps.length}</span>
               <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
