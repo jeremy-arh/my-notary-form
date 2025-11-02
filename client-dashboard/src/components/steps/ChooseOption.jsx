@@ -1,72 +1,45 @@
+import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { supabase } from '../../lib/supabase';
 
 const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
-  const notaryOptions = [
-    {
-      id: 'real-estate',
-      name: 'Real Estate Transaction',
-      description: 'Purchase, sale, or refinancing of property',
-      icon: 'heroicons:home-modern',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      id: 'will',
-      name: 'Last Will & Testament',
-      description: 'Create or update your will',
-      icon: 'heroicons:document-text',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      id: 'power-of-attorney',
-      name: 'Power of Attorney',
-      description: 'Grant legal authority to another person',
-      icon: 'heroicons:scale',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      id: 'marriage-contract',
-      name: 'Marriage Contract',
-      description: 'Prenuptial or marriage agreement',
-      icon: 'heroicons:heart',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      id: 'succession',
-      name: 'Succession & Estate',
-      description: 'Estate settlement and inheritance',
-      icon: 'heroicons:user-group',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      id: 'authentication',
-      name: 'Document Authentication',
-      description: 'Certify and authenticate documents',
-      icon: 'heroicons:shield-check',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      id: 'affidavit',
-      name: 'Affidavit',
-      description: 'Sworn written statement',
-      icon: 'heroicons:pencil-square',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      id: 'incorporation',
-      name: 'Business Incorporation',
-      description: 'Company formation and registration',
-      icon: 'heroicons:building-office',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
+  const [notaryOptions, setNotaryOptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      // Map database fields to component structure
+      const mappedOptions = data.map(service => ({
+        id: service.service_id,
+        name: service.name,
+        description: service.short_description || service.description,
+        icon: service.icon || 'heroicons:document-text',
+        color: service.color || 'bg-gray-100',
+        iconColor: 'text-gray-600',
+        basePrice: service.base_price
+      }));
+
+      setNotaryOptions(mappedOptions);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      // Fallback to empty array on error
+      setNotaryOptions([]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const toggleOption = (optionId) => {
     const currentOptions = formData.selectedOptions || [];
@@ -92,7 +65,16 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
           </div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+        </div>
+      ) : notaryOptions.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-600">No services available at the moment.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {notaryOptions.map((option) => {
           const isSelected = formData.selectedOptions?.includes(option.id);
           return (
@@ -136,6 +118,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
           );
         })}
       </div>
+      )}
 
       {/* Additional Services */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200">
