@@ -603,7 +603,8 @@ const NotaryForm = () => {
               <button
                 type="button"
                 onClick={nextStep}
-                className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+                disabled={currentStep === 1 && (!formData.documents || formData.documents.length === 0)}
+                className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 Continue
               </button>
