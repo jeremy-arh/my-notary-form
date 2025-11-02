@@ -254,13 +254,19 @@ const NotaryForm = () => {
 
       // Call Supabase Edge Function to create Stripe checkout session
       // The Edge Function will fetch services from database and calculate the amount
+      console.log('📤 Calling Edge Function with data:', {
+        selectedOptions: submissionData.selectedOptions,
+        email: submissionData.email,
+        uploadedFiles: submissionData.uploadedFiles?.length
+      });
+
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           formData: submissionData
         }
       });
 
-      console.log('Edge Function response:', { data, error });
+      console.log('📥 Edge Function response:', { data, error });
 
       if (error) {
         console.error('Edge Function error details:', error);
