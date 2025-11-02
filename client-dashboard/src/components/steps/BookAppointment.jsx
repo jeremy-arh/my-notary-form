@@ -1,18 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 
 const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [selectedDate, setSelectedDate] = useState(formData.appointmentDate || '');
   const [selectedTime, setSelectedTime] = useState(formData.appointmentTime || '');
   const [timezone, setTimezone] = useState(formData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const timeSlotsRef = useRef(null);
 
-  // Detect if user prefers 12-hour format based on locale
-  const [use12HourFormat, setUse12HourFormat] = useState(() => {
-    // Check if the locale uses 12-hour format
-    const testDate = new Date(2023, 0, 1, 13, 0);
-    const timeString = testDate.toLocaleTimeString(undefined, { hour: 'numeric' });
-    return timeString.toLowerCase().includes('pm') || timeString.toLowerCase().includes('am');
-  });
+  // Always use 12-hour format (AM/PM) in English
+  const use12HourFormat = true;
 
   // Common timezones
   const timezones = [
@@ -107,6 +103,13 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     const formattedDate = date.toISOString().split('T')[0];
     setSelectedDate(formattedDate);
     updateFormData({ appointmentDate: formattedDate });
+
+    // Scroll to time slots on mobile
+    if (window.innerWidth < 1024 && timeSlotsRef.current) {
+      setTimeout(() => {
+        timeSlotsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
   };
 
   const handleTimeClick = (time) => {
@@ -247,7 +250,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         </div>
 
         {/* Time Slots */}
-        <div className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
+        <div ref={timeSlotsRef} className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
           <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
             <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-600" />
             Available Time Slots
@@ -282,7 +285,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-16 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
+      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
         <div className="flex justify-between">
           <button
             type="button"

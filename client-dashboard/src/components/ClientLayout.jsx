@@ -21,6 +21,19 @@ const ClientLayout = ({ children }) => {
 
   return (
     <div className="flex min-h-screen bg-white">
+      {/* Mobile Header - Fixed at top */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-16">
+        <div className="flex items-center justify-between h-full px-4">
+          <Logo width={100} height={100} />
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Icon icon={isSidebarOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-6 h-6 text-gray-900" />
+          </button>
+        </div>
+      </header>
+
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
         <div className="flex-1 overflow-y-auto p-8 pb-0">
@@ -63,17 +76,9 @@ const ClientLayout = ({ children }) => {
         </div>
       </aside>
 
-      {/* Mobile Sidebar Toggle */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-black text-white rounded-xl shadow-lg"
-      >
-        <Icon icon={isSidebarOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-6 h-6" />
-      </button>
-
       {/* Mobile Sidebar */}
       {isSidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setIsSidebarOpen(false)}>
+        <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50 top-16" onClick={() => setIsSidebarOpen(false)}>
           <aside className="w-80 bg-[#F3F4F6] h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex-1 overflow-y-auto p-8 pb-0">
               <div className="mb-10 flex flex-col items-center justify-center">
@@ -117,7 +122,7 @@ const ClientLayout = ({ children }) => {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-80 min-h-screen bg-white">
+      <main className="flex-1 lg:ml-80 min-h-screen bg-white pt-16 lg:pt-0">
         <div className="p-6 md:p-8">
           {children}
         </div>

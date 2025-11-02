@@ -17,6 +17,7 @@ const NotaryForm = () => {
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -310,6 +311,112 @@ const NotaryForm = () => {
 
   return (
     <div className="flex min-h-screen bg-white">
+      {/* Mobile Header - Fixed at top */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-16">
+        <div className="flex items-center justify-between h-full px-4">
+          <Logo width={100} height={100} />
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-6 h-6 text-gray-900" />
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-16"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <div
+            className="bg-white w-80 h-full overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Navigation Link */}
+            {isAuthenticated ? (
+              <Link
+                to="/dashboard"
+                className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-medium"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-medium"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+                Connexion
+              </Link>
+            )}
+
+            {/* Steps Navigation */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Form Steps</h3>
+              {steps.map((step) => {
+                const isCompleted = completedSteps.includes(step.id);
+                const isCurrent = currentStep === step.id;
+                const canAccess = step.id === 1 || completedSteps.includes(step.id - 1);
+
+                return (
+                  <div
+                    key={step.id}
+                    onClick={() => {
+                      if (canAccess) {
+                        goToStep(step.id);
+                        setIsMobileMenuOpen(false);
+                      }
+                    }}
+                    className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
+                      canAccess ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                    } ${
+                      isCurrent
+                        ? 'bg-black text-white'
+                        : isCompleted
+                        ? 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                        : 'bg-white text-gray-400'
+                    }`}
+                  >
+                    <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                      isCurrent
+                        ? 'bg-white/20'
+                        : isCompleted
+                        ? 'bg-gray-200'
+                        : 'bg-gray-100'
+                    }`}>
+                      {isCompleted ? (
+                        <Icon icon="heroicons:check" className="w-4 h-4 text-gray-600" />
+                      ) : (
+                        <Icon icon={step.icon} className={`w-4 h-4 ${
+                          isCurrent ? 'text-white' : 'text-gray-400'
+                        }`} />
+                      )}
+                    </div>
+                    <div className="ml-2.5 flex-1">
+                      <div className={`text-[10px] font-semibold uppercase tracking-wide ${
+                        isCurrent ? 'text-white/80' : 'text-gray-500'
+                      }`}>
+                        Step {step.id}
+                      </div>
+                      <div className={`text-xs font-medium mt-0.5 ${
+                        isCurrent ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {step.name}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left Sidebar - Fixed and 100vh */}
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
         <div className="flex-1 overflow-y-auto p-8 pb-32">
@@ -373,16 +480,24 @@ const NotaryForm = () => {
           </div>
         </div>
 
-        {/* Progress Bar & Dashboard Button - Fixed at bottom */}
+        {/* Progress Bar & Navigation Button - Fixed at bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#F3F4F6] border-t border-gray-200">
-          {/* Dashboard Button */}
-          {isAuthenticated && (
+          {/* Dashboard or Login Button */}
+          {isAuthenticated ? (
             <Link
               to="/dashboard"
-              className="flex items-center justify-center w-full mb-4 p-3 bg-white text-gray-700 rounded-xl hover:bg-gray-100 hover:shadow-md transition-all font-medium"
+              className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 hover:shadow-md transition-all font-medium"
             >
               <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
               Dashboard
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 hover:shadow-md transition-all font-medium"
+            >
+              <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+              Connexion
             </Link>
           )}
 
@@ -404,9 +519,9 @@ const NotaryForm = () => {
       </aside>
 
       {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5">
+      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5 pt-16 lg:pt-5">
         {/* Form Content - 95vh centered with full width and side margins */}
-        <div className="w-full h-screen lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative">
+        <div className="w-full h-[calc(100vh-4rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative">
           <Routes>
             <Route
               path="documents"
@@ -466,20 +581,22 @@ const NotaryForm = () => {
         </div>
       </main>
 
-      {/* Mobile Progress Indicator */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-50">
-        <div className="flex justify-between text-sm text-gray-600 mb-2">
-          <span className="font-medium">Step {currentStep} of {steps.length}</span>
-          <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
-        </div>
-        <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
-          <div
-            className="h-full transition-all duration-500"
-            style={{
-              width: `${(currentStep / steps.length) * 100}%`,
-              background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
-            }}
-          />
+      {/* Mobile Footer - Progress Indicator (no navigation buttons, those are in each step) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] border-t border-gray-300 z-40">
+        <div className="p-4">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span className="font-medium">Step {currentStep} of {steps.length}</span>
+            <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
+          </div>
+          <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
+            <div
+              className="h-full transition-all duration-500"
+              style={{
+                width: `${(currentStep / steps.length) * 100}%`,
+                background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
+              }}
+            />
+          </div>
         </div>
       </div>
 
