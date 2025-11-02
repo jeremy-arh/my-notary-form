@@ -267,7 +267,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-4 py-4 bg-[#F3F4F6] fixed lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto lg:border-t lg:border-gray-300">
+      <div className="hidden lg:block flex-shrink-0 px-4 py-4 bg-[#F3F4F6] lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto lg:border-t lg:border-gray-300">
         <div className="flex justify-between">
           <button
             type="button"
