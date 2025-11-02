@@ -182,7 +182,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
+      <div className="flex-shrink-0 px-3 md:px-10 py-4 bg-[#F3F4F6] fixed lg:relative bottom-[72px] lg:bottom-auto left-0 right-0 z-50 lg:z-auto lg:border-t lg:border-gray-300">
         <div className="flex justify-between">
           <button
             type="button"
@@ -194,7 +194,8 @@ const ChooseOption = ({ formData, updateFormData, nextStep, prevStep }) => {
           <button
             type="button"
             onClick={nextStep}
-            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+            disabled={!formData.selectedOptions || formData.selectedOptions.length === 0}
+            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             Continue
           </button>

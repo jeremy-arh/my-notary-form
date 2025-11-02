@@ -331,33 +331,13 @@ const NotaryForm = () => {
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
-            className="bg-white w-80 h-full overflow-y-auto p-6"
+            className="bg-[#F3F4F6] w-80 h-full flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Navigation Link */}
-            {isAuthenticated ? (
-              <Link
-                to="/dashboard"
-                className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-medium"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
-                Dashboard
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-medium"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
-                Connexion
-              </Link>
-            )}
-
-            {/* Steps Navigation */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Form Steps</h3>
+            {/* Steps Navigation - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Form Steps</h3>
               {steps.map((step) => {
                 const isCompleted = completedSteps.includes(step.id);
                 const isCurrent = currentStep === step.id;
@@ -412,6 +392,30 @@ const NotaryForm = () => {
                   </div>
                 );
               })}
+              </div>
+            </div>
+
+            {/* Navigation Link - Fixed at bottom */}
+            <div className="p-6 border-t border-gray-200">
+              {isAuthenticated ? (
+                <Link
+                  to="/dashboard"
+                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
+                  Dashboard
+                </Link>
+              ) : (
+                <Link
+                  to="/login"
+                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+                  Connexion
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -486,7 +490,7 @@ const NotaryForm = () => {
           {isAuthenticated ? (
             <Link
               to="/dashboard"
-              className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 hover:shadow-md transition-all font-medium"
+              className="flex items-center justify-center w-full mb-4 text-gray-700 hover:text-gray-900 transition-colors font-medium"
             >
               <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
               Dashboard
@@ -494,7 +498,7 @@ const NotaryForm = () => {
           ) : (
             <Link
               to="/login"
-              className="flex items-center justify-center w-full mb-4 p-3 bg-black text-white rounded-xl hover:bg-gray-800 hover:shadow-md transition-all font-medium"
+              className="flex items-center justify-center w-full mb-4 text-gray-700 hover:text-gray-900 transition-colors font-medium"
             >
               <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
               Connexion
@@ -582,23 +586,25 @@ const NotaryForm = () => {
       </main>
 
       {/* Mobile Footer - Progress Indicator (no navigation buttons, those are in each step) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] border-t border-gray-300 z-40">
-        <div className="p-4">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span className="font-medium">Step {currentStep} of {steps.length}</span>
-            <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
-          </div>
-          <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
-            <div
-              className="h-full transition-all duration-500"
-              style={{
-                width: `${(currentStep / steps.length) * 100}%`,
-                background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
-              }}
-            />
+      {!isMobileMenuOpen && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] z-40 shadow-lg">
+          <div className="p-4">
+            <div className="flex justify-between text-sm text-gray-600 mb-2">
+              <span className="font-medium">Step {currentStep} of {steps.length}</span>
+              <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
+            </div>
+            <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
+              <div
+                className="h-full transition-all duration-500"
+                style={{
+                  width: `${(currentStep / steps.length) * 100}%`,
+                  background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
+                }}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Notification */}
       {notification && (

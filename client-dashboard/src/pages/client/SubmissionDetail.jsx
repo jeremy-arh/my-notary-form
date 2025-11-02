@@ -14,6 +14,7 @@ const SubmissionDetail = () => {
   const [services, setServices] = useState([]);
   const [options, setOptions] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const [isRetryingPayment, setIsRetryingPayment] = useState(false);
 
   useEffect(() => {
     fetchSubmissionDetail();
@@ -160,6 +161,39 @@ const SubmissionDetail = () => {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  const retryPayment = async () => {
+    setIsRetryingPayment(true);
+    try {
+      // Calculate total amount from submission data
+      const paymentData = submission.data?.payment;
+      const amount = paymentData?.amount_paid || 0;
+
+      // Create a new checkout session
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          formData: submission.data,
+          amount: amount,
+          submissionId: submission.id
+        }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL received from payment service');
+      }
+    } catch (error) {
+      console.error('Error retrying payment:', error);
+      alert('Failed to create payment session. Please try again or contact support.');
+    } finally {
+      setIsRetryingPayment(false);
+    }
+  };
+
   if (loading) {
     return (
       <ClientLayout>
@@ -275,6 +309,30 @@ const SubmissionDetail = () => {
                         <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-2" />
                         Download Invoice
                       </a>
+                    </div>
+                  )}
+                  {submission.data.payment.payment_status === 'unpaid' && (
+                    <div className={submission.data.payment.invoice_url ? "mt-3" : "pt-3 border-t border-gray-200"}>
+                      <button
+                        onClick={retryPayment}
+                        disabled={isRetryingPayment}
+                        className="w-full flex items-center justify-center bg-black text-white hover:bg-gray-800 font-medium text-sm py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isRetryingPayment ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Icon icon="heroicons:arrow-path" className="w-5 h-5 mr-2" />
+                            Retry Payment
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
