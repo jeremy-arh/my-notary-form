@@ -165,42 +165,46 @@ const SubmissionDetail = () => {
     setIsRetryingPayment(true);
     try {
       console.log('🔄 Retrying payment for submission:', submission.id);
-      console.log('📋 Submission data:', submission);
+      console.log('📋 Submission data:', submission.data);
 
-      // Get payment data
-      const paymentData = submission.data?.payment;
-      const amount = paymentData?.amount_paid || 0;
+      // Calculate total amount from submission data (same logic as NotaryForm)
+      let amount = 75; // Base fee
+      if (submission.data?.selectedOptions?.includes('urgent')) amount += 50;
+      if (submission.data?.selectedOptions?.includes('home-visit')) amount += 100;
+      if (submission.data?.selectedOptions?.includes('translation')) amount += 35;
+      if (submission.data?.selectedOptions?.includes('consultation')) amount += 150;
 
-      console.log('💰 Amount:', amount);
+      // Add document processing fee
+      const documentsCount = submission.data?.uploadedFiles?.length || 0;
+      if (documentsCount > 0) amount += documentsCount * 10;
 
-      if (amount === 0) {
-        throw new Error('Payment amount is missing or invalid');
-      }
+      console.log('💰 Calculated amount: $' + amount + ' (cents: ' + (amount * 100) + ')');
+      console.log('📦 Selected options:', submission.data?.selectedOptions);
+      console.log('📄 Documents count:', documentsCount);
 
       // Create a new checkout session
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           formData: submission.data,
-          amount: amount,
+          amount: amount * 100, // Convert to cents for Stripe
           submissionId: submission.id
         }
       });
 
       console.log('✅ Edge Function response:', data);
-      console.log('❌ Edge Function error:', error);
 
       if (error) {
-        console.error('Edge Function error details:', error);
+        console.error('❌ Edge Function error:', error);
         throw error;
       }
 
       if (data?.error) {
-        console.error('Edge Function returned error:', data.error);
+        console.error('❌ Edge Function returned error:', data.error);
         throw new Error(data.error);
       }
 
       if (data?.url) {
-        console.log('🔗 Redirecting to:', data.url);
+        console.log('🔗 Redirecting to Stripe Checkout:', data.url);
         // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
@@ -214,10 +218,6 @@ const SubmissionDetail = () => {
 
       if (error.message) {
         errorMessage += `\n\nError: ${error.message}`;
-      }
-
-      if (error.context) {
-        errorMessage += `\n\nDetails: ${JSON.stringify(error.context)}`;
       }
 
       errorMessage += '\n\nPlease try again or contact support.';
