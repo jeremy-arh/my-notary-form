@@ -197,18 +197,72 @@ const NotaryForm = () => {
     try {
       console.log('Creating payment session for form data:', formData);
 
+      // Upload documents to Supabase Storage first
+      const uploadedFiles = [];
+      if (formData.documents && formData.documents.length > 0) {
+        console.log('📤 Uploading documents to storage...');
+
+        for (const doc of formData.documents) {
+          if (!doc.file) {
+            console.warn('⚠️ Document missing file object:', doc);
+            continue;
+          }
+
+          // Generate unique file name
+          const timestamp = Date.now();
+          const randomId = Math.random().toString(36).substring(7);
+          const fileName = `temp/${timestamp}_${randomId}_${doc.name}`;
+
+          console.log('📤 Uploading:', fileName);
+
+          // Upload file to Supabase Storage
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('submission-documents')
+            .upload(fileName, doc.file);
+
+          if (uploadError) {
+            console.error('❌ Error uploading file:', uploadError);
+            throw new Error(`Failed to upload ${doc.name}: ${uploadError.message}`);
+          }
+
+          console.log('✅ File uploaded:', fileName);
+
+          // Get public URL
+          const { data: urlData } = supabase.storage
+            .from('submission-documents')
+            .getPublicUrl(fileName);
+
+          uploadedFiles.push({
+            name: doc.name,
+            size: doc.size,
+            type: doc.type,
+            storage_path: fileName,
+            public_url: urlData.publicUrl
+          });
+        }
+
+        console.log('✅ All files uploaded:', uploadedFiles.length);
+      }
+
       // Calculate total amount
       let amount = 75; // Base fee
       if (formData.selectedOptions?.includes('urgent')) amount += 50;
       if (formData.selectedOptions?.includes('home-visit')) amount += 100;
       if (formData.selectedOptions?.includes('translation')) amount += 35;
       if (formData.selectedOptions?.includes('consultation')) amount += 150;
-      if (formData.documents?.length) amount += formData.documents.length * 10;
+      if (uploadedFiles.length) amount += uploadedFiles.length * 10;
+
+      // Prepare form data without File objects
+      const submissionData = {
+        ...formData,
+        uploadedFiles, // Add uploaded file paths
+        documents: undefined // Remove original documents with File objects
+      };
 
       // Call Supabase Edge Function to create Stripe checkout session
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
-          formData,
+          formData: submissionData,
           amount: amount * 100 // Convert to cents
         }
       });

@@ -360,7 +360,7 @@ const SubmissionDetail = () => {
             )}
 
             {/* Documents */}
-            {(documents.length > 0 || submission.data?.documents?.length > 0) && (
+            {documents.length > 0 && (
               <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                   <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
@@ -369,7 +369,6 @@ const SubmissionDetail = () => {
                   Your Documents
                 </h2>
                 <div className="space-y-3">
-                  {/* Documents from submission_files table (uploaded) */}
                   {documents.map((doc) => (
                     <div key={doc.id} className="bg-white rounded-xl p-4 flex items-center justify-between">
                       <div className="flex items-center">
@@ -386,21 +385,6 @@ const SubmissionDetail = () => {
                         <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-1" />
                         Download
                       </button>
-                    </div>
-                  ))}
-
-                  {/* Documents from submission.data (metadata only from Stripe payment) */}
-                  {submission.data?.documents?.map((doc, idx) => (
-                    <div key={`data-doc-${idx}`} className="bg-white rounded-xl p-4 flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 mr-3" />
-                        <div>
-                          <p className="font-semibold text-gray-900">{doc.name}</p>
-                          <p className="text-sm text-gray-600">{(doc.size / 1024).toFixed(2)} KB - {doc.type}</p>
-                          <p className="text-xs text-orange-600 mt-1">⚠️ File not uploaded (created via payment)</p>
-                        </div>
-                      </div>
-                      <span className="text-sm text-gray-500 italic">Metadata only</span>
                     </div>
                   ))}
                 </div>
