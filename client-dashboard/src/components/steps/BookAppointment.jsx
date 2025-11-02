@@ -23,23 +23,63 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     { value: 'Europe/Paris', label: 'Paris (CET)', offset: 'UTC+1' },
   ];
 
-  // Generate time slots (9 AM to 5 PM, 30-minute intervals)
+  // Generate time slots - Base hours are 9 AM to 5 PM Eastern Time
+  // Convert to selected timezone
   const generateTimeSlots = () => {
     const slots = [];
+    const baseTimezone = 'America/New_York'; // Base timezone (Eastern Time)
+
+    // Create a reference date (we'll use today's date)
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const day = today.getDate();
+
     for (let hour = 9; hour < 17; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        // Create a date in Eastern Time
+        const dateString = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
 
-        let displayTime;
-        if (use12HourFormat) {
-          // 12-hour format with AM/PM
-          const period = hour >= 12 ? 'PM' : 'AM';
-          const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-          displayTime = `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
-        } else {
-          // 24-hour format
-          displayTime = time;
+        // Parse as Eastern Time
+        const easternDate = new Date(dateString + '-05:00'); // EST offset (approximate)
+
+        // Convert to selected timezone by getting the offset difference
+        const easternOffset = 5 * 60; // Eastern Time is UTC-5 (in minutes)
+
+        // Get the offset for the selected timezone (approximate based on common timezones)
+        const timezoneOffsets = {
+          'America/New_York': 5 * 60,    // UTC-5
+          'America/Chicago': 6 * 60,     // UTC-6
+          'America/Denver': 7 * 60,      // UTC-7
+          'America/Los_Angeles': 8 * 60, // UTC-8
+          'America/Toronto': 5 * 60,     // UTC-5
+          'America/Vancouver': 8 * 60,   // UTC-8
+          'America/Montreal': 5 * 60,    // UTC-5
+          'Europe/London': -0 * 60,      // UTC+0
+          'Europe/Paris': -1 * 60,       // UTC+1
+        };
+
+        const selectedOffset = timezoneOffsets[timezone] || easternOffset;
+        const offsetDiff = easternOffset - selectedOffset;
+
+        // Calculate the converted hour
+        let convertedHour = hour - Math.floor(offsetDiff / 60);
+        let convertedMinute = minute;
+
+        // Handle day overflow
+        if (convertedHour < 0) {
+          convertedHour += 24;
+        } else if (convertedHour >= 24) {
+          convertedHour -= 24;
         }
+
+        // Store the time in 24-hour format for the value
+        const time = `${convertedHour.toString().padStart(2, '0')}:${convertedMinute.toString().padStart(2, '0')}`;
+
+        // Display in 12-hour AM/PM format
+        const period = convertedHour >= 12 ? 'PM' : 'AM';
+        const displayHour = convertedHour > 12 ? convertedHour - 12 : convertedHour === 0 ? 12 : convertedHour;
+        const displayTime = `${displayHour}:${convertedMinute.toString().padStart(2, '0')} ${period}`;
 
         slots.push({ value: time, label: displayTime });
       }
@@ -47,7 +87,12 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     return slots;
   };
 
-  const timeSlots = generateTimeSlots();
+  const [timeSlots, setTimeSlots] = useState(generateTimeSlots());
+
+  // Regenerate time slots when timezone changes
+  useEffect(() => {
+    setTimeSlots(generateTimeSlots());
+  }, [timezone]);
 
   // Generate calendar days for current month
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -285,7 +330,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
+      <div className="flex-shrink-0 px-3 md:px-10 py-4 bg-[#F3F4F6] fixed lg:relative bottom-[72px] lg:bottom-auto left-0 right-0 z-50 lg:z-auto lg:border-t lg:border-gray-300">
         <div className="flex justify-between">
           <button
             type="button"
