@@ -60,18 +60,24 @@ serve(async (req) => {
     // Get or create client record
     let clientId = null
 
+    console.log('🔍 [CLIENT] userId:', userId, 'accountCreated:', accountCreated)
+
     if (userId) {
       // Try to get existing client
-      const { data: existingClient } = await supabase
+      const { data: existingClient, error: fetchError } = await supabase
         .from('client')
         .select('id')
         .eq('user_id', userId)
         .single()
 
+      console.log('🔍 [CLIENT] Existing client:', existingClient, 'Error:', fetchError)
+
       if (existingClient) {
         clientId = existingClient.id
+        console.log('✅ [CLIENT] Found existing client:', clientId)
       } else {
         // Create new client record
+        console.log('🆕 [CLIENT] Creating new client for userId:', userId)
         const { data: newClient, error: clientError } = await supabase
           .from('client')
           .insert([{
@@ -88,11 +94,22 @@ serve(async (req) => {
           .select('id')
           .single()
 
+        console.log('🆕 [CLIENT] New client result:', newClient, 'Error:', clientError)
+
+        if (clientError) {
+          console.error('❌ [CLIENT] Error creating client:', clientError)
+        }
+
         if (!clientError && newClient) {
           clientId = newClient.id
+          console.log('✅ [CLIENT] Created new client:', clientId)
         }
       }
+    } else {
+      console.warn('⚠️ [CLIENT] No userId - submission will have null client_id')
     }
+
+    console.log('📋 [CLIENT] Final clientId for submission:', clientId)
 
     // Prepare simplified document data (just names and sizes, not file objects)
     const simplifiedDocuments = formData.documents?.map((doc: any) => ({
@@ -123,6 +140,8 @@ serve(async (req) => {
       },
     }
 
+    console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
+
     const { data: submission, error: submissionError } = await supabase
       .from('submission')
       .insert([submissionData])
@@ -130,9 +149,11 @@ serve(async (req) => {
       .single()
 
     if (submissionError) {
-      console.error('Error creating submission:', submissionError)
-      throw new Error('Failed to create submission')
+      console.error('❌ [SUBMISSION] Error creating submission:', submissionError)
+      throw new Error('Failed to create submission: ' + submissionError.message)
     }
+
+    console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
 
     // Calculate line items for Stripe
     const lineItems = []
