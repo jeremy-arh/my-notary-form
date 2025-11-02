@@ -153,12 +153,14 @@ serve(async (req) => {
 
     console.log('📋 [CLIENT] Final clientId for submission:', clientId)
 
-    // Prepare simplified document data (just names and sizes, not file objects)
-    const simplifiedDocuments = formData.documents?.map((doc: any) => ({
+    // Use uploaded files if available, otherwise fall back to simplified document data
+    const documentsData = formData.uploadedFiles || formData.documents?.map((doc: any) => ({
       name: doc.name,
       size: doc.size,
       type: doc.type
     })) || []
+
+    console.log('📁 [FILES] Documents data to store:', documentsData)
 
     // Create temporary submission in database with status 'pending_payment'
     const submissionData = {
@@ -178,7 +180,7 @@ serve(async (req) => {
       notes: formData.notes || null,
       data: {
         selectedOptions: formData.selectedOptions,
-        documents: simplifiedDocuments,
+        uploadedFiles: documentsData, // Store uploaded file paths
       },
     }
 

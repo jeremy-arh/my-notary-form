@@ -113,6 +113,31 @@ serve(async (req) => {
       throw new Error('Failed to update submission')
     }
 
+    // Create submission_files entries for uploaded files
+    if (existingSubmission.data?.uploadedFiles && existingSubmission.data.uploadedFiles.length > 0) {
+      console.log('📁 [FILES] Creating submission_files entries for', existingSubmission.data.uploadedFiles.length, 'files')
+
+      const fileEntries = existingSubmission.data.uploadedFiles.map((file: any) => ({
+        submission_id: submissionId,
+        file_name: file.name,
+        file_url: file.public_url,
+        file_type: file.type,
+        file_size: file.size,
+        storage_path: file.storage_path,
+      }))
+
+      const { error: filesError } = await supabase
+        .from('submission_files')
+        .insert(fileEntries)
+
+      if (filesError) {
+        console.error('❌ [FILES] Error creating submission_files entries:', filesError)
+        // Don't throw - payment is successful, just log the error
+      } else {
+        console.log('✅ [FILES] Created', fileEntries.length, 'submission_files entries')
+      }
+    }
+
     return new Response(
       JSON.stringify({
         verified: true,
