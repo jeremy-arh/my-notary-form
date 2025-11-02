@@ -2,14 +2,45 @@ import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+import { supabase } from '../../lib/supabase';
 
 const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false }) => {
   const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
 
   const handleChange = (field, value) => {
     updateFormData({ [field]: value });
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+    // Reset email exists error when email changes
+    if (field === 'email' && emailExists) {
+      setEmailExists(false);
+    }
+  };
+
+  const checkEmailExists = async (email) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return;
+    }
+
+    try {
+      // Check if email exists in client table
+      const { data, error } = await supabase
+        .from('client')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      if (data && !error) {
+        setEmailExists(true);
+      } else {
+        setEmailExists(false);
+      }
+    } catch (error) {
+      console.error('Error checking email:', error);
     }
   };
 
@@ -71,6 +102,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
   };
 
   const handleNext = () => {
+    if (emailExists) {
+      // Don't allow submission if email exists
+      return;
+    }
     if (validate()) {
       nextStep();
     }
@@ -153,8 +188,9 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 id="email"
                 value={formData.email || ''}
                 onChange={(e) => handleChange('email', e.target.value)}
+                onBlur={(e) => checkEmailExists(e.target.value)}
                 className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-                  errors.email ? 'border-red-500' : 'border-gray-200'
+                  errors.email || emailExists ? 'border-red-500' : 'border-gray-200'
                 }`}
                 placeholder="john.doe@example.com"
               />
@@ -162,6 +198,12 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
                   {errors.email}
+                </p>
+              )}
+              {emailExists && !errors.email && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
+                  This email is already registered. Please login or use a different email.
                 </p>
               )}
             </div>
@@ -196,16 +238,28 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
                 Mot de passe <span className="text-red-500 ml-1">*</span>
               </label>
-              <input
-                type="password"
-                id="password"
-                value={formData.password || ''}
-                onChange={(e) => handleChange('password', e.target.value)}
-                className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-                  errors.password ? 'border-red-500' : 'border-gray-200'
-                }`}
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  value={formData.password || ''}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  className={`w-full px-4 py-3 pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                    errors.password ? 'border-red-500' : 'border-gray-200'
+                  }`}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <Icon
+                    icon={showPassword ? "heroicons:eye-slash" : "heroicons:eye"}
+                    className="w-5 h-5"
+                  />
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
@@ -219,16 +273,28 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
                 Confirmer le mot de passe <span className="text-red-500 ml-1">*</span>
               </label>
-              <input
-                type="password"
-                id="confirmPassword"
-                value={formData.confirmPassword || ''}
-                onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-                  errors.confirmPassword ? 'border-red-500' : 'border-gray-200'
-                }`}
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  id="confirmPassword"
+                  value={formData.confirmPassword || ''}
+                  onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                  className={`w-full px-4 py-3 pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                    errors.confirmPassword ? 'border-red-500' : 'border-gray-200'
+                  }`}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <Icon
+                    icon={showConfirmPassword ? "heroicons:eye-slash" : "heroicons:eye"}
+                    className="w-5 h-5"
+                  />
+                </button>
+              </div>
               {errors.confirmPassword && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
@@ -354,7 +420,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-16 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
+      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
         <div className="flex justify-between">
           <button
             type="button"
@@ -366,7 +432,12 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <button
             type="button"
             onClick={handleNext}
-            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+            disabled={emailExists}
+            className={`px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 ${
+              emailExists
+                ? 'bg-red-500 hover:bg-red-600 cursor-not-allowed opacity-75'
+                : 'btn-glassy'
+            }`}
           >
             Continue
           </button>
