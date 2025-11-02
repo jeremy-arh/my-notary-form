@@ -6,6 +6,7 @@ import ClientLayout from '../../components/ClientLayout';
 const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' or 'invoices'
   const [clientInfo, setClientInfo] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [formData, setFormData] = useState({
@@ -148,7 +149,39 @@ const Profile = () => {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
 
-        <form onSubmit={handleSubmit} className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6 space-y-6 mb-8">
+        {/* Tabs */}
+        <div className="flex space-x-8 mb-8 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`pb-4 text-base font-semibold transition-colors relative ${
+              activeTab === 'profile'
+                ? 'text-black'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Profile
+            {activeTab === 'profile' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`pb-4 text-base font-semibold transition-colors relative ${
+              activeTab === 'invoices'
+                ? 'text-black'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Invoices
+            {activeTab === 'invoices' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+            )}
+          </button>
+        </div>
+
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <form onSubmit={handleSubmit} className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6 space-y-6">
           {/* Name Fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -296,62 +329,60 @@ const Profile = () => {
             </button>
           </div>
         </form>
+        )}
 
-        {/* Invoices Section */}
-        <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <Icon icon="heroicons:document-text" className="w-6 h-6 mr-2" />
-            Invoices
-          </h2>
-
-          {invoices.length === 0 ? (
-            <div className="text-center py-12">
-              <Icon icon="heroicons:document-text" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No invoices available yet</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-300">
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Date</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Amount</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((invoice) => (
-                    <tr key={invoice.id} className="border-b border-gray-200 hover:bg-white transition-colors">
-                      <td className="py-4 px-4 text-sm text-gray-900">
-                        {formatDate(invoice.data.payment.paid_at || invoice.created_at)}
-                      </td>
-                      <td className="py-4 px-4 text-sm text-gray-900">
-                        ${((invoice.data.payment.amount_paid || 0) / 100).toFixed(2)} {(invoice.data.payment.currency || 'usd').toUpperCase()}
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-green-100 text-green-800 border-green-200">
-                          {invoice.data.payment.payment_status === 'paid' ? 'Paid' : invoice.data.payment.payment_status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <a
-                          href={invoice.data.payment.invoice_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
-                        >
-                          <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-1" />
-                          Download
-                        </a>
-                      </td>
+        {/* Invoices Tab */}
+        {activeTab === 'invoices' && (
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+            {invoices.length === 0 ? (
+              <div className="text-center py-12">
+                <Icon icon="heroicons:document-text" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No invoices available yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-300">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Date</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Amount</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                  </thead>
+                  <tbody>
+                    {invoices.map((invoice) => (
+                      <tr key={invoice.id} className="border-b border-gray-200 hover:bg-white transition-colors">
+                        <td className="py-4 px-4 text-sm text-gray-900">
+                          {formatDate(invoice.data.payment.paid_at || invoice.created_at)}
+                        </td>
+                        <td className="py-4 px-4 text-sm text-gray-900">
+                          ${((invoice.data.payment.amount_paid || 0) / 100).toFixed(2)} {(invoice.data.payment.currency || 'usd').toUpperCase()}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-green-100 text-green-800 border-green-200">
+                            {invoice.data.payment.payment_status === 'paid' ? 'Paid' : invoice.data.payment.payment_status}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <a
+                            href={invoice.data.payment.invoice_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
+                          >
+                            <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-1" />
+                            Download
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </ClientLayout>
   );
