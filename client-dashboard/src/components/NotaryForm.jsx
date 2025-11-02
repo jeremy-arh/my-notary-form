@@ -585,10 +585,10 @@ const NotaryForm = () => {
         </div>
       </main>
 
-      {/* Mobile Footer - Progress Indicator (no navigation buttons, those are in each step) */}
+      {/* Mobile Footer - Progress Bar Only (buttons are in each step component) */}
       {!isMobileMenuOpen && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] z-40 shadow-lg">
-          <div className="p-4">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] z-40">
+          <div className="px-4 pt-0 pb-4">
             <div className="flex justify-between text-sm text-gray-600 mb-2">
               <span className="font-medium">Step {currentStep} of {steps.length}</span>
               <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>

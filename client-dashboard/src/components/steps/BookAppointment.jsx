@@ -199,7 +199,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-3 md:px-10 pt-6 md:pt-10 pb-44 lg:pb-6">
+      <div className="flex-1 overflow-y-auto px-4 pt-6 md:pt-10 pb-44 lg:pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -329,9 +329,9 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         </div>
       </div>
 
-      {/* Fixed Navigation - Mobile Fixed, Desktop Relative */}
-      <div className="flex-shrink-0 lg:border-t lg:border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-[70px] lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
-        <div className="px-3 md:px-10 py-4 flex justify-between">
+      {/* Fixed Navigation - Mobile Fixed at bottom-[52px], Desktop Relative */}
+      <div className="flex-shrink-0 lg:border-t lg:border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-[52px] lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
+        <div className="px-4 py-4 flex justify-between">
           <button
             type="button"
             onClick={prevStep}
