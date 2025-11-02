@@ -165,27 +165,50 @@ const SubmissionDetail = () => {
     setIsRetryingPayment(true);
     try {
       console.log('🔄 Retrying payment for submission:', submission.id);
-      console.log('📋 Submission data:', submission.data);
+      console.log('📋 Full submission:', submission);
+
+      // Reconstruct complete formData from submission (Edge Function needs ALL fields)
+      const formData = {
+        // Personal info from submission columns
+        firstName: submission.first_name,
+        lastName: submission.last_name,
+        email: submission.email,
+        phone: submission.phone,
+        address: submission.address,
+        city: submission.city,
+        postalCode: submission.postal_code,
+        country: submission.country,
+        notes: submission.notes,
+        // Appointment info
+        appointmentDate: submission.appointment_date,
+        appointmentTime: submission.appointment_time,
+        timezone: submission.timezone,
+        // From data column
+        selectedOptions: submission.data?.selectedOptions || [],
+        uploadedFiles: submission.data?.uploadedFiles || [],
+      };
+
+      console.log('📋 Reconstructed formData:', formData);
 
       // Calculate total amount from submission data (same logic as NotaryForm)
       let amount = 75; // Base fee
-      if (submission.data?.selectedOptions?.includes('urgent')) amount += 50;
-      if (submission.data?.selectedOptions?.includes('home-visit')) amount += 100;
-      if (submission.data?.selectedOptions?.includes('translation')) amount += 35;
-      if (submission.data?.selectedOptions?.includes('consultation')) amount += 150;
+      if (formData.selectedOptions?.includes('urgent')) amount += 50;
+      if (formData.selectedOptions?.includes('home-visit')) amount += 100;
+      if (formData.selectedOptions?.includes('translation')) amount += 35;
+      if (formData.selectedOptions?.includes('consultation')) amount += 150;
 
       // Add document processing fee
-      const documentsCount = submission.data?.uploadedFiles?.length || 0;
+      const documentsCount = formData.uploadedFiles?.length || 0;
       if (documentsCount > 0) amount += documentsCount * 10;
 
       console.log('💰 Calculated amount: $' + amount + ' (cents: ' + (amount * 100) + ')');
-      console.log('📦 Selected options:', submission.data?.selectedOptions);
+      console.log('📦 Selected options:', formData.selectedOptions);
       console.log('📄 Documents count:', documentsCount);
 
       // Create a new checkout session (same format as initial payment)
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
-          formData: submission.data,
+          formData: formData,
           amount: amount * 100 // Convert to cents for Stripe
         }
       });
