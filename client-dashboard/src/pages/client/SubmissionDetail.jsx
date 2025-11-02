@@ -271,7 +271,7 @@ const SubmissionDetail = () => {
             </div>
 
             {/* Payment Info */}
-            {submission.data?.payment && (
+            {(submission.data?.payment || submission.status === 'pending_payment') && (
               <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                   <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
@@ -280,39 +280,43 @@ const SubmissionDetail = () => {
                   Payment Information
                 </h2>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Status:</span>
-                    {getPaymentStatusBadge(submission.data.payment.payment_status)}
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Amount:</span>
-                    <span className="font-semibold text-gray-900">
-                      ${((submission.data.payment.amount_paid || 0) / 100).toFixed(2)} {(submission.data.payment.currency || 'usd').toUpperCase()}
-                    </span>
-                  </div>
-                  {submission.data.payment.paid_at && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Paid on:</span>
-                      <span className="font-semibold text-gray-900">
-                        {formatDate(submission.data.payment.paid_at)}
-                      </span>
-                    </div>
-                  )}
-                  {submission.data.payment.invoice_url && (
-                    <div className="pt-3 border-t border-gray-200">
-                      <a
-                        href={submission.data.payment.invoice_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center justify-center bg-white text-black hover:bg-gray-100 font-medium text-sm py-3 px-4 rounded-lg transition-colors"
-                      >
-                        <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-2" />
-                        Download Invoice
-                      </a>
-                    </div>
+                  {submission.data?.payment && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Status:</span>
+                        {getPaymentStatusBadge(submission.data.payment.payment_status)}
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Amount:</span>
+                        <span className="font-semibold text-gray-900">
+                          ${((submission.data.payment.amount_paid || 0) / 100).toFixed(2)} {(submission.data.payment.currency || 'usd').toUpperCase()}
+                        </span>
+                      </div>
+                      {submission.data.payment.paid_at && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Paid on:</span>
+                          <span className="font-semibold text-gray-900">
+                            {formatDate(submission.data.payment.paid_at)}
+                          </span>
+                        </div>
+                      )}
+                      {submission.data.payment.invoice_url && (
+                        <div className="pt-3 border-t border-gray-200">
+                          <a
+                            href={submission.data.payment.invoice_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full flex items-center justify-center bg-white text-black hover:bg-gray-100 font-medium text-sm py-3 px-4 rounded-lg transition-colors"
+                          >
+                            <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-2" />
+                            Download Invoice
+                          </a>
+                        </div>
+                      )}
+                    </>
                   )}
                   {submission.status === 'pending_payment' && (
-                    <div className={submission.data.payment.invoice_url ? "mt-3" : "pt-3 border-t border-gray-200"}>
+                    <div className={submission.data?.payment?.invoice_url ? "mt-3" : (submission.data?.payment ? "pt-3 border-t border-gray-200" : "")}>
                       <button
                         onClick={retryPayment}
                         disabled={isRetryingPayment}
