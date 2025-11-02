@@ -11,7 +11,7 @@ const ClientLayout = ({ children }) => {
 
   const menuItems = [
     { path: '/dashboard', name: 'My Requests', icon: 'heroicons:document-text' },
-    { path: '/profile', name: 'Profile', icon: 'heroicons:user' }
+    { path: '/profile', name: 'Settings', icon: 'heroicons:cog-6-tooth' }
   ];
 
   const handleLogout = async () => {
@@ -30,21 +30,21 @@ const ClientLayout = ({ children }) => {
           </div>
 
           {/* Menu Items */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center p-4 rounded-xl transition-all duration-300 ${
+                  className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
                     isActive
                       ? 'bg-black text-white shadow-lg'
                       : 'bg-white text-gray-700 hover:bg-gray-100 hover:shadow-md'
                   }`}
                 >
-                  <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
-                  <span className="font-medium">{item.name}</span>
+                  <Icon icon={item.icon} className={`w-5 h-5 mr-2 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                  <span className="text-sm font-medium">{item.name}</span>
                 </Link>
               );
             })}
@@ -80,7 +80,7 @@ const ClientLayout = ({ children }) => {
                 <Logo width={150} height={150} />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {menuItems.map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
@@ -88,14 +88,14 @@ const ClientLayout = ({ children }) => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setIsSidebarOpen(false)}
-                      className={`flex items-center p-4 rounded-xl transition-all duration-300 ${
+                      className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
                         isActive
                           ? 'bg-black text-white shadow-lg'
                           : 'bg-white text-gray-700 hover:bg-gray-100 hover:shadow-md'
                       }`}
                     >
-                      <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
-                      <span className="font-medium">{item.name}</span>
+                      <Icon icon={item.icon} className={`w-5 h-5 mr-2 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                      <span className="text-sm font-medium">{item.name}</span>
                     </Link>
                   );
                 })}
