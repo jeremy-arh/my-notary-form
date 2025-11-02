@@ -245,14 +245,6 @@ const NotaryForm = () => {
         console.log('✅ All files uploaded:', uploadedFiles.length);
       }
 
-      // Calculate total amount
-      let amount = 75; // Base fee
-      if (formData.selectedOptions?.includes('urgent')) amount += 50;
-      if (formData.selectedOptions?.includes('home-visit')) amount += 100;
-      if (formData.selectedOptions?.includes('translation')) amount += 35;
-      if (formData.selectedOptions?.includes('consultation')) amount += 150;
-      if (uploadedFiles.length) amount += uploadedFiles.length * 10;
-
       // Prepare form data without File objects
       const submissionData = {
         ...formData,
@@ -261,10 +253,10 @@ const NotaryForm = () => {
       };
 
       // Call Supabase Edge Function to create Stripe checkout session
+      // The Edge Function will fetch services from database and calculate the amount
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
-          formData: submissionData,
-          amount: amount * 100 // Convert to cents
+          formData: submissionData
         }
       });
 
