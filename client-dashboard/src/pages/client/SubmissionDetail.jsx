@@ -164,9 +164,18 @@ const SubmissionDetail = () => {
   const retryPayment = async () => {
     setIsRetryingPayment(true);
     try {
-      // Calculate total amount from submission data
+      console.log('🔄 Retrying payment for submission:', submission.id);
+      console.log('📋 Submission data:', submission);
+
+      // Get payment data
       const paymentData = submission.data?.payment;
       const amount = paymentData?.amount_paid || 0;
+
+      console.log('💰 Amount:', amount);
+
+      if (amount === 0) {
+        throw new Error('Payment amount is missing or invalid');
+      }
 
       // Create a new checkout session
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
@@ -177,18 +186,43 @@ const SubmissionDetail = () => {
         }
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      console.log('✅ Edge Function response:', data);
+      console.log('❌ Edge Function error:', error);
+
+      if (error) {
+        console.error('Edge Function error details:', error);
+        throw error;
+      }
+
+      if (data?.error) {
+        console.error('Edge Function returned error:', data.error);
+        throw new Error(data.error);
+      }
 
       if (data?.url) {
+        console.log('🔗 Redirecting to:', data.url);
         // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
         throw new Error('No checkout URL received from payment service');
       }
     } catch (error) {
-      console.error('Error retrying payment:', error);
-      alert('Failed to create payment session. Please try again or contact support.');
+      console.error('❌ Error retrying payment:', error);
+
+      // Show user-friendly error message
+      let errorMessage = 'Failed to create payment session.';
+
+      if (error.message) {
+        errorMessage += `\n\nError: ${error.message}`;
+      }
+
+      if (error.context) {
+        errorMessage += `\n\nDetails: ${JSON.stringify(error.context)}`;
+      }
+
+      errorMessage += '\n\nPlease try again or contact support.';
+
+      alert(errorMessage);
     } finally {
       setIsRetryingPayment(false);
     }
