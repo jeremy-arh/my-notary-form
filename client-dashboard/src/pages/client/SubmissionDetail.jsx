@@ -311,7 +311,7 @@ const SubmissionDetail = () => {
                       </a>
                     </div>
                   )}
-                  {(submission.data.payment.payment_status === 'unpaid' || !submission.data.payment.payment_status || submission.data.payment.payment_status === 'pending') && (
+                  {submission.data.payment.payment_status !== 'paid' && (
                     <div className={submission.data.payment.invoice_url ? "mt-3" : "pt-3 border-t border-gray-200"}>
                       <button
                         onClick={retryPayment}
