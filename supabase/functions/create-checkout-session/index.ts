@@ -54,12 +54,32 @@ serve(async (req) => {
         email_confirm: true,
       })
 
-      if (!authError && authData.user) {
+      if (authError) {
+        console.error('❌ [AUTH] Failed to create account:', authError)
+
+        // If account already exists, try to get the user by email
+        if (authError.message?.includes('already been registered') || authError.code === 'email_exists') {
+          console.log('🔍 [AUTH] Account exists, fetching user by email:', formData.email)
+
+          const { data: { users }, error: listError } = await supabase.auth.admin.listUsers()
+
+          if (!listError && users) {
+            const existingUser = users.find(u => u.email === formData.email)
+            if (existingUser) {
+              userId = existingUser.id
+              accountCreated = false
+              console.log('✅ [AUTH] Found existing user:', userId)
+            } else {
+              console.error('❌ [AUTH] Could not find user with email:', formData.email)
+            }
+          } else {
+            console.error('❌ [AUTH] Error listing users:', listError)
+          }
+        }
+      } else if (authData.user) {
         userId = authData.user.id
         accountCreated = true
         console.log('✅ [AUTH] Created new account for:', formData.email, 'with auto-generated password:', !formData.password)
-      } else {
-        console.error('❌ [AUTH] Failed to create account:', authError)
       }
     }
 
