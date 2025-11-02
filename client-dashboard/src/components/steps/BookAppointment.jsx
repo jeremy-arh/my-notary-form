@@ -330,7 +330,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Fixed Navigation - Mobile Fixed at bottom-[52px], Desktop Relative */}
-      <div className="flex-shrink-0 lg:border-t lg:border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-[52px] lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
+      <div className="flex-shrink-0 lg:border-t lg:border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
         <div className="px-4 py-4 flex justify-between">
           <button
             type="button"
