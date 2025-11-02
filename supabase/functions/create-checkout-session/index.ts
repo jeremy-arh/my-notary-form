@@ -57,6 +57,43 @@ serve(async (req) => {
       }
     }
 
+    // Get or create client record
+    let clientId = null
+
+    if (userId) {
+      // Try to get existing client
+      const { data: existingClient } = await supabase
+        .from('client')
+        .select('id')
+        .eq('user_id', userId)
+        .single()
+
+      if (existingClient) {
+        clientId = existingClient.id
+      } else {
+        // Create new client record
+        const { data: newClient, error: clientError } = await supabase
+          .from('client')
+          .insert([{
+            user_id: userId,
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            city: formData.city,
+            postal_code: formData.postalCode,
+            country: formData.country,
+          }])
+          .select('id')
+          .single()
+
+        if (!clientError && newClient) {
+          clientId = newClient.id
+        }
+      }
+    }
+
     // Prepare simplified document data (just names and sizes, not file objects)
     const simplifiedDocuments = formData.documents?.map((doc: any) => ({
       name: doc.name,
@@ -66,7 +103,7 @@ serve(async (req) => {
 
     // Create temporary submission in database with status 'pending_payment'
     const submissionData = {
-      client_id: userId,
+      client_id: clientId,
       status: 'pending_payment',
       appointment_date: formData.appointmentDate,
       appointment_time: formData.appointmentTime,
@@ -190,7 +227,7 @@ serve(async (req) => {
       customer_email: formData.email || user?.email,
       metadata: {
         submission_id: submission.id,
-        client_id: userId || 'guest',
+        client_id: clientId || 'guest',
         account_created: accountCreated ? 'true' : 'false',
       },
     })
