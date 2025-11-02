@@ -182,12 +182,11 @@ const SubmissionDetail = () => {
       console.log('📦 Selected options:', submission.data?.selectedOptions);
       console.log('📄 Documents count:', documentsCount);
 
-      // Create a new checkout session
+      // Create a new checkout session (same format as initial payment)
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           formData: submission.data,
-          amount: amount * 100, // Convert to cents for Stripe
-          submissionId: submission.id
+          amount: amount * 100 // Convert to cents for Stripe
         }
       });
 
