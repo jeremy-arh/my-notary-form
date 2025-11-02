@@ -23,21 +23,21 @@ const ClientLayout = ({ children }) => {
     <div className="flex min-h-screen bg-white">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-8 pb-0">
           {/* Logo */}
           <div className="mb-10 animate-fade-in flex flex-col items-center justify-center">
             <Logo width={150} height={150} />
           </div>
 
           {/* Menu Items */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 pb-8">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
+                  className={`flex items-center px-3 h-[50px] rounded-lg transition-all duration-300 ${
                     isActive
                       ? 'bg-black text-white shadow-lg'
                       : 'bg-white text-gray-700 hover:bg-gray-100 hover:shadow-md'
@@ -52,13 +52,13 @@ const ClientLayout = ({ children }) => {
         </div>
 
         {/* Logout Button - Fixed at bottom */}
-        <div className="p-8 border-t border-gray-200">
+        <div className="p-6 border-t border-gray-200">
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
           >
             <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
-            <span className="font-medium">Logout</span>
+            <span className="text-sm font-medium">Logout</span>
           </button>
         </div>
       </aside>
@@ -75,12 +75,12 @@ const ClientLayout = ({ children }) => {
       {isSidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setIsSidebarOpen(false)}>
           <aside className="w-80 bg-[#F3F4F6] h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex-1 overflow-y-auto p-8">
+            <div className="flex-1 overflow-y-auto p-8 pb-0">
               <div className="mb-10 flex flex-col items-center justify-center">
                 <Logo width={150} height={150} />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 pb-8">
                 {menuItems.map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
@@ -88,7 +88,7 @@ const ClientLayout = ({ children }) => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setIsSidebarOpen(false)}
-                      className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
+                      className={`flex items-center px-3 h-[50px] rounded-lg transition-all duration-300 ${
                         isActive
                           ? 'bg-black text-white shadow-lg'
                           : 'bg-white text-gray-700 hover:bg-gray-100 hover:shadow-md'
@@ -103,13 +103,13 @@ const ClientLayout = ({ children }) => {
             </div>
 
             {/* Logout Button - Fixed at bottom */}
-            <div className="p-8 border-t border-gray-200">
+            <div className="p-6 border-t border-gray-200">
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
-                <span className="font-medium">Logout</span>
+                <span className="text-sm font-medium">Logout</span>
               </button>
             </div>
           </aside>
