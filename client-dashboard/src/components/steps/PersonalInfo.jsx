@@ -244,10 +244,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 onChange={handlePhoneChange}
                 className="phone-input-integrated w-full flex"
                 countrySelectProps={{
-                  className: "px-3 py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none"
+                  className: "pl-4 pr-2 py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none"
                 }}
                 numberInputProps={{
-                  className: "flex-1 px-4 py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0"
+                  className: "flex-1 pl-2 pr-4 py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0"
                 }}
               />
             </div>
