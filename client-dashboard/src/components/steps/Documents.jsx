@@ -46,13 +46,32 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
     setCurrentServiceId(null);
   };
 
-  const handleFileUpload = (event) => {
+  const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
 
+    // Convert File objects to serializable format for localStorage
+    const convertedFiles = await Promise.all(
+      files.map(async (file) => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              lastModified: file.lastModified,
+              dataUrl: reader.result, // Store file content as Data URL
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      })
+    );
+
     const serviceDocuments = { ...(formData.serviceDocuments || {}) };
     const existingFiles = serviceDocuments[currentServiceId] || [];
-    serviceDocuments[currentServiceId] = [...existingFiles, ...files];
+    serviceDocuments[currentServiceId] = [...existingFiles, ...convertedFiles];
 
     updateFormData({ serviceDocuments });
     closeUploadModal();

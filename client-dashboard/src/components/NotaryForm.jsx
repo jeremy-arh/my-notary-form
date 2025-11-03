@@ -168,22 +168,20 @@ const NotaryForm = () => {
           console.log('❌ [PRE-FILL] Error:', error);
 
           if (!error && client) {
-            // Pre-fill form with user data - Always use client data if available
-            const updatedData = {
-              firstName: client.first_name || '',
-              lastName: client.last_name || '',
-              email: client.email || '',
-              phone: client.phone || '',
-              address: client.address || '',
-              city: client.city || '',
-              postalCode: client.postal_code || '',
-              country: client.country || ''
-            };
-            console.log('✅ [PRE-FILL] Updating form with:', updatedData);
+            // Pre-fill form with user data - Only fill empty fields to preserve localStorage data
+            console.log('✅ [PRE-FILL] Pre-filling empty fields with client data');
 
             setFormData(prev => ({
               ...prev,
-              ...updatedData
+              // Only override with client data if the field is empty in localStorage
+              firstName: prev.firstName || client.first_name || '',
+              lastName: prev.lastName || client.last_name || '',
+              email: prev.email || client.email || '',
+              phone: prev.phone || client.phone || '',
+              address: prev.address || client.address || '',
+              city: prev.city || client.city || '',
+              postalCode: prev.postalCode || client.postal_code || '',
+              country: prev.country || client.country || ''
             }));
           }
         }
@@ -255,6 +253,9 @@ const NotaryForm = () => {
           uploadedServiceDocuments[serviceId] = [];
 
           for (const file of files) {
+            // Convert serialized file back to Blob for upload
+            const blob = await fetch(file.dataUrl).then(r => r.blob());
+
             // Generate unique file name
             const timestamp = Date.now();
             const randomId = Math.random().toString(36).substring(7);
@@ -265,7 +266,7 @@ const NotaryForm = () => {
             // Upload file to Supabase Storage
             const { data: uploadData, error: uploadError } = await supabase.storage
               .from('submission-documents')
-              .upload(fileName, file);
+              .upload(fileName, blob);
 
             if (uploadError) {
               console.error('❌ Error uploading file:', uploadError);
