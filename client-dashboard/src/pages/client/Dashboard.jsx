@@ -10,11 +10,14 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [clientInfo, setClientInfo] = useState(null);
   const [retryingPaymentId, setRetryingPaymentId] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
     accepted: 0
   });
+
+  const ITEMS_PER_PAGE = 6;
 
   useEffect(() => {
     fetchClientData();
@@ -158,6 +161,13 @@ const Dashboard = () => {
 
       console.log('✅ Submission deleted successfully');
 
+      // Reset to page 1 if current page becomes empty after deletion
+      const remainingItems = submissions.length - 1;
+      const maxPage = Math.ceil(remainingItems / ITEMS_PER_PAGE);
+      if (currentPage > maxPage) {
+        setCurrentPage(Math.max(1, maxPage));
+      }
+
       // Refresh the submissions list
       fetchClientData();
     } catch (error) {
@@ -220,6 +230,17 @@ const Dashboard = () => {
       </ClientLayout>
     );
   }
+
+  // Pagination calculations
+  const totalPages = Math.ceil(submissions.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentSubmissions = submissions.slice(startIndex, endIndex);
+
+  const goToPage = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <ClientLayout>
@@ -303,7 +324,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {submissions.map((submission) => (
+                  {currentSubmissions.map((submission) => (
                     <tr key={submission.id} className="border-b border-gray-200 hover:bg-white transition-colors">
                       <td className="py-4 px-4 text-sm text-gray-900">
                         {formatDate(submission.created_at)}
@@ -366,6 +387,48 @@ const Dashboard = () => {
                   ))}
                 </tbody>
               </table>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    Showing {startIndex + 1} to {Math.min(endIndex, submissions.length)} of {submissions.length} requests
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Icon icon="heroicons:chevron-left" className="w-4 h-4" />
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => goToPage(page)}
+                          className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                            currentPage === page
+                              ? 'bg-black text-white'
+                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Icon icon="heroicons:chevron-right" className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
