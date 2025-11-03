@@ -21,16 +21,16 @@ const NotaryForm = () => {
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
-    // Documents
-    documents: [],
+    // Services (step 1)
+    selectedServices: [], // Array of service IDs
 
-    // Options
-    selectedOptions: [],
+    // Documents (step 2) - organized by service
+    serviceDocuments: {}, // { serviceId: [files] }
 
     // Appointment
     appointmentDate: '',
     appointmentTime: '',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timezone: 'UTC-5',
 
     // Personal Info
     firstName: '',
@@ -52,8 +52,8 @@ const NotaryForm = () => {
   const [completedSteps, setCompletedSteps] = useLocalStorage('notaryCompletedSteps', []);
 
   const steps = [
-    { id: 1, name: 'Documents', icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 2, name: 'Choose option', icon: 'heroicons:check-badge', path: '/form/choose-option' },
+    { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
+    { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
     { id: 3, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/form/book-appointment' },
     { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
     { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
@@ -62,11 +62,18 @@ const NotaryForm = () => {
   // Validation function to check if current step can proceed
   const canProceedFromCurrentStep = () => {
     switch (currentStep) {
-      case 1: // Documents
-        return formData.documents && formData.documents.length > 0;
+      case 1: // Choose Services
+        return formData.selectedServices && formData.selectedServices.length > 0;
 
-      case 2: // Choose option
-        return formData.selectedOptions && formData.selectedOptions.length > 0;
+      case 2: // Upload Documents
+        // Check that each selected service has at least one file
+        if (!formData.selectedServices || formData.selectedServices.length === 0) return false;
+        if (!formData.serviceDocuments) return false;
+
+        return formData.selectedServices.every(serviceId => {
+          const docs = formData.serviceDocuments[serviceId];
+          return docs && docs.length > 0;
+        });
 
       case 3: // Book an appointment
         return formData.appointmentDate && formData.appointmentTime;
@@ -109,9 +116,9 @@ const NotaryForm = () => {
 
   // Validate step access
   useEffect(() => {
-    // Redirect to /form/documents if at /form root
+    // Redirect to /form/choose-services if at /form root
     if (location.pathname === '/form' || location.pathname === '/form/') {
-      navigate('/form/documents', { replace: true });
+      navigate('/form/choose-services', { replace: true });
       return;
     }
 
@@ -566,9 +573,9 @@ const NotaryForm = () => {
         <div className="w-full h-[calc(100vh-4rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative">
           <Routes>
             <Route
-              path="documents"
+              path="choose-services"
               element={
-                <Documents
+                <ChooseOption
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}
@@ -576,9 +583,9 @@ const NotaryForm = () => {
               }
             />
             <Route
-              path="choose-option"
+              path="documents"
               element={
-                <ChooseOption
+                <Documents
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}
