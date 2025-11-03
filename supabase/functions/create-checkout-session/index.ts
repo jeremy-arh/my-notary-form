@@ -212,8 +212,13 @@ serve(async (req) => {
       servicesMap[service.service_id] = service
     })
 
+    // Get apostille service
+    const apostilleService = servicesMap['473fb677-4dd3-4766-8221-0250ea3440cd']
+    console.log('📋 [APOSTILLE] Apostille service:', apostilleService ? `${apostilleService.name} - $${apostilleService.base_price}` : 'Not found')
+
     // Calculate line items for Stripe from selected services and documents
     const lineItems = []
+    let totalApostilleCount = 0
 
     if (formData.selectedServices && formData.selectedServices.length > 0) {
       for (const serviceId of formData.selectedServices) {
@@ -224,6 +229,7 @@ serve(async (req) => {
           const documentCount = documentsForService.length
 
           if (documentCount > 0) {
+            // Add main service line item
             lineItems.push({
               price_data: {
                 currency: 'usd',
@@ -233,9 +239,17 @@ serve(async (req) => {
                 },
                 unit_amount: Math.round(service.base_price * 100), // Convert to cents
               },
-              quantity: documentCount, // One line item per document
+              quantity: documentCount,
             })
             console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = $${(service.base_price * documentCount).toFixed(2)}`)
+
+            // Count apostilles for this service
+            const apostilleCount = documentsForService.filter(doc => doc.hasApostille === true).length
+            totalApostilleCount += apostilleCount
+
+            if (apostilleCount > 0) {
+              console.log(`📋 [APOSTILLE] Service ${service.name} has ${apostilleCount} documents with apostille`)
+            }
           } else {
             console.warn(`⚠️ [SERVICES] No documents for service: ${serviceId}`)
           }
@@ -243,6 +257,22 @@ serve(async (req) => {
           console.warn(`⚠️ [SERVICES] Service not found: ${serviceId}`)
         }
       }
+    }
+
+    // Add apostille line item if any documents have apostille selected
+    if (totalApostilleCount > 0 && apostilleService) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `Apostille Service (${totalApostilleCount} document${totalApostilleCount > 1 ? 's' : ''})`,
+            description: apostilleService.short_description || apostilleService.description,
+          },
+          unit_amount: Math.round(apostilleService.base_price * 100),
+        },
+        quantity: totalApostilleCount,
+      })
+      console.log(`✅ [APOSTILLE] Added apostille: ${totalApostilleCount} documents × $${apostilleService.base_price} = $${(apostilleService.base_price * totalApostilleCount).toFixed(2)}`)
     }
 
     // Ensure we have at least one line item

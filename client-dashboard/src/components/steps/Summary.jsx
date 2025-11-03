@@ -6,10 +6,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [services, setServices] = useState([]);
   const [servicesMap, setServicesMap] = useState({});
+  const [apostilleService, setApostilleService] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchServices();
+    fetchApostilleService();
   }, []);
 
   const fetchServices = async () => {
@@ -35,6 +37,22 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       setServicesMap({});
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchApostilleService = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('service_id', '473fb677-4dd3-4766-8221-0250ea3440cd')
+        .single();
+
+      if (error) throw error;
+
+      setApostilleService(data);
+    } catch (error) {
+      console.error('Error fetching apostille service:', error);
     }
   };
 
@@ -109,7 +127,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900">{service?.name || serviceId}</h4>
                         <p className="text-xs text-gray-600 mt-1">
-                          {documents.length} document{documents.length > 1 ? 's' : ''} × ${service?.base_price.toFixed(2)} = ${(documents.length * (service?.base_price || 0)).toFixed(2)}
+                          {documents.length} document{documents.length > 1 ? 's' : ''} × ${service?.base_price.toFixed(2)}
+                          {(() => {
+                            const apostilleCount = documents.filter(d => d.hasApostille).length;
+                            if (apostilleCount > 0 && apostilleService) {
+                              return ` + ${apostilleCount} apostille${apostilleCount > 1 ? 's' : ''} × $${apostilleService.base_price.toFixed(2)}`;
+                            }
+                            return '';
+                          })()}
                         </p>
                       </div>
                     </div>
@@ -117,12 +142,20 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     {documents.length > 0 && (
                       <div className="ml-9 space-y-2">
                         {documents.map((doc, index) => (
-                          <div key={index} className="flex items-center p-2 bg-gray-50 rounded-lg">
-                            <Icon icon="heroicons:document" className="w-6 h-6 mr-2 text-gray-600" />
-                            <div>
-                              <p className="text-xs font-medium text-gray-900">{doc.name}</p>
-                              <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
+                          <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div className="flex items-center flex-1">
+                              <Icon icon="heroicons:document" className="w-6 h-6 mr-2 text-gray-600" />
+                              <div>
+                                <p className="text-xs font-medium text-gray-900">{doc.name}</p>
+                                <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
+                              </div>
                             </div>
+                            {doc.hasApostille && (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <Icon icon="heroicons:check-badge" className="w-3 h-3 mr-1" />
+                                Apostille
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -224,18 +257,32 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
                   const documents = formData.serviceDocuments?.[serviceId] || [];
                   const serviceTotal = documents.length * (service.base_price || 0);
+                  const apostilleCount = documents.filter(d => d.hasApostille).length;
+                  const apostilleTotal = apostilleCount * (apostilleService?.base_price || 0);
+                  const combinedTotal = serviceTotal + apostilleTotal;
 
                   return (
-                    <div
-                      key={serviceId}
-                      className={`flex justify-between items-center ${index === 0 ? 'pb-3 border-b border-gray-200' : ''}`}
-                    >
-                      <span className="text-sm text-gray-600">
-                        {service.name} ({documents.length} document{documents.length > 1 ? 's' : ''})
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900">
-                        ${serviceTotal.toFixed(2)}
-                      </span>
+                    <div key={serviceId}>
+                      <div
+                        className={`flex justify-between items-center ${index === 0 ? 'pb-3 border-b border-gray-200' : ''}`}
+                      >
+                        <span className="text-sm text-gray-600">
+                          {service.name} ({documents.length} document{documents.length > 1 ? 's' : ''})
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          ${serviceTotal.toFixed(2)}
+                        </span>
+                      </div>
+                      {apostilleCount > 0 && apostilleService && (
+                        <div className="flex justify-between items-center mt-2 ml-4">
+                          <span className="text-xs text-gray-500 italic">
+                            + Apostille ({apostilleCount} document{apostilleCount > 1 ? 's' : ''})
+                          </span>
+                          <span className="text-xs font-semibold text-gray-700">
+                            ${apostilleTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -248,13 +295,19 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               <span className="text-xl font-bold text-gray-900">
                 ${(() => {
                   let total = 0;
-                  // Calculate total from selected services × files
+                  // Calculate total from selected services × files + apostilles
                   if (formData.selectedServices) {
                     formData.selectedServices.forEach(serviceId => {
                       const service = servicesMap[serviceId];
                       const documents = formData.serviceDocuments?.[serviceId] || [];
                       if (service) {
+                        // Add service cost
                         total += documents.length * (service.base_price || 0);
+                        // Add apostille cost
+                        const apostilleCount = documents.filter(d => d.hasApostille).length;
+                        if (apostilleCount > 0 && apostilleService) {
+                          total += apostilleCount * apostilleService.base_price;
+                        }
                       }
                     });
                   }
