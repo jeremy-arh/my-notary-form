@@ -9,6 +9,7 @@ const Dashboard = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [clientInfo, setClientInfo] = useState(null);
+  const [retryingPaymentId, setRetryingPaymentId] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -135,6 +136,48 @@ const Dashboard = () => {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
+  const retryPayment = async (submission) => {
+    setRetryingPaymentId(submission.id);
+    try {
+      console.log('🔄 Retrying payment for submission:', submission.id);
+
+      const formData = {
+        firstName: submission.first_name,
+        lastName: submission.last_name,
+        email: submission.email,
+        phone: submission.phone,
+        address: submission.address,
+        city: submission.city,
+        postalCode: submission.postal_code,
+        country: submission.country,
+        notes: submission.notes,
+        appointmentDate: submission.appointment_date,
+        appointmentTime: submission.appointment_time,
+        timezone: submission.timezone,
+        selectedServices: submission.data?.selectedServices || [],
+        serviceDocuments: submission.data?.serviceDocuments || {},
+      };
+
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { formData }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL received from payment service');
+      }
+    } catch (error) {
+      console.error('❌ Error retrying payment:', error);
+      alert(`Failed to create payment session.\n\nError: ${error.message}\n\nPlease try again or contact support.`);
+    } finally {
+      setRetryingPaymentId(null);
+    }
+  };
+
   if (loading) {
     return (
       <ClientLayout>
@@ -214,8 +257,8 @@ const Dashboard = () => {
               </a>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full min-w-[800px]">
                 <thead>
                   <tr className="border-b border-gray-300">
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Date</th>
@@ -245,13 +288,37 @@ const Dashboard = () => {
                         {getPaymentStatusBadge(submission.data?.payment?.payment_status)}
                       </td>
                       <td className="py-4 px-4">
-                        <button
-                          onClick={() => navigate(`/submission/${submission.id}`)}
-                          className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
-                        >
-                          View Details
-                          <Icon icon="heroicons:arrow-right" className="w-4 h-4 ml-1" />
-                        </button>
+                        <div className="flex items-center gap-3">
+                          {submission.status === 'pending_payment' && (
+                            <button
+                              onClick={() => retryPayment(submission)}
+                              disabled={retryingPaymentId === submission.id}
+                              className="text-orange-600 hover:text-orange-700 font-medium text-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {retryingPaymentId === submission.id ? (
+                                <>
+                                  <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Processing...
+                                </>
+                              ) : (
+                                <>
+                                  <Icon icon="heroicons:arrow-path" className="w-4 h-4 mr-1" />
+                                  Retry Payment
+                                </>
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => navigate(`/submission/${submission.id}`)}
+                            className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
+                          >
+                            View Details
+                            <Icon icon="heroicons:arrow-right" className="w-4 h-4 ml-1" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

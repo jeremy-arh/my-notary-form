@@ -422,10 +422,10 @@ const SubmissionDetail = () => {
                   })}
                 </div>
 
-                {/* Grand Total */}
+                {/* Total */}
                 <div className="mt-4 pt-4 border-t-2 border-gray-300">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-gray-900">Grand Total:</span>
+                    <span className="text-lg font-bold text-gray-900">Total:</span>
                     <span className="text-2xl font-bold text-gray-900">
                       ${(() => {
                         let grandTotal = 0;
