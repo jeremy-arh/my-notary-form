@@ -257,9 +257,18 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
                   const documents = formData.serviceDocuments?.[serviceId] || [];
                   const serviceTotal = documents.length * (service.base_price || 0);
-                  const apostilleCount = documents.filter(d => d.hasApostille).length;
+                  const apostilleCount = documents.filter(d => d.hasApostille === true).length;
                   const apostilleTotal = apostilleCount * (apostilleService?.base_price || 0);
                   const combinedTotal = serviceTotal + apostilleTotal;
+
+                  // Debug logging
+                  console.log(`Summary - Service ${service.name}:`, {
+                    documentCount: documents.length,
+                    apostilleCount,
+                    serviceTotal,
+                    apostilleTotal,
+                    documents: documents.map(d => ({ name: d.name, hasApostille: d.hasApostille }))
+                  });
 
                   return (
                     <div key={serviceId}>
@@ -304,13 +313,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                         // Add service cost
                         total += documents.length * (service.base_price || 0);
                         // Add apostille cost
-                        const apostilleCount = documents.filter(d => d.hasApostille).length;
+                        const apostilleCount = documents.filter(d => d.hasApostille === true).length;
                         if (apostilleCount > 0 && apostilleService) {
                           total += apostilleCount * apostilleService.base_price;
                         }
                       }
                     });
                   }
+                  console.log('Summary Total:', total);
                   return total.toFixed(2);
                 })()}
               </span>

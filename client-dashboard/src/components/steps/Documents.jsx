@@ -115,7 +115,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
       // Add base service price
       total += service.base_price;
       // Add apostille price if selected
-      if (file.hasApostille && apostilleService) {
+      if (file.hasApostille === true && apostilleService) {
         total += apostilleService.base_price;
       }
     });
@@ -227,42 +227,44 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                               </button>
                             </div>
 
-                            {/* Apostille Option */}
-                            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                              <label className="flex items-center space-x-2 cursor-pointer group">
-                                {/* Custom Checkbox */}
-                                <div className="relative">
-                                  <input
-                                    type="checkbox"
-                                    checked={file.hasApostille || false}
-                                    onChange={() => toggleApostille(service.service_id, index)}
-                                    className="sr-only peer"
-                                  />
-                                  <div className="w-5 h-5 border-2 border-gray-300 rounded peer-checked:bg-black peer-checked:border-black transition-all flex items-center justify-center">
-                                    {file.hasApostille && (
-                                      <Icon icon="heroicons:check" className="w-3 h-3 text-white" />
-                                    )}
+                            {/* Apostille Option - Only show if service is not apostille itself */}
+                            {service.service_id !== '473fb677-4dd3-4766-8221-0250ea3440cd' && (
+                              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                                <label className="flex items-center space-x-2 cursor-pointer group">
+                                  {/* Custom Checkbox */}
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={file.hasApostille || false}
+                                      onChange={() => toggleApostille(service.service_id, index)}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-5 h-5 border-2 border-gray-300 rounded peer-checked:bg-black peer-checked:border-black transition-all flex items-center justify-center">
+                                      {file.hasApostille && (
+                                        <Icon icon="heroicons:check" className="w-3 h-3 text-white" />
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                                <span className="text-sm font-medium text-gray-700 group-hover:text-black transition-colors">
-                                  Add Apostille
-                                  {apostilleService && (
-                                    <span className="text-gray-500 font-normal ml-1">
-                                      (+${apostilleService.base_price.toFixed(2)})
-                                    </span>
-                                  )}
-                                </span>
-                              </label>
+                                  <span className="text-sm font-medium text-gray-700 group-hover:text-black transition-colors">
+                                    Add Apostille
+                                    {apostilleService && (
+                                      <span className="text-gray-500 font-normal ml-1">
+                                        (+${apostilleService.base_price.toFixed(2)})
+                                      </span>
+                                    )}
+                                  </span>
+                                </label>
 
-                              {/* Info Icon */}
-                              <button
-                                type="button"
-                                onClick={() => setShowApostilleInfo(true)}
-                                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-                              >
-                                <Icon icon="heroicons:information-circle" className="w-5 h-5 text-gray-400 hover:text-gray-600" />
-                              </button>
-                            </div>
+                                {/* Info Icon */}
+                                <button
+                                  type="button"
+                                  onClick={() => setShowApostilleInfo(true)}
+                                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                  <Icon icon="heroicons:information-circle" className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
