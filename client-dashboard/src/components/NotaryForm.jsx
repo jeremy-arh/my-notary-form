@@ -245,66 +245,65 @@ const NotaryForm = () => {
     try {
       console.log('Creating payment session for form data:', formData);
 
-      // Upload documents to Supabase Storage first
-      const uploadedFiles = [];
-      if (formData.documents && formData.documents.length > 0) {
+      // Upload documents to Supabase Storage, organized by service
+      const uploadedServiceDocuments = {};
+
+      if (formData.serviceDocuments && Object.keys(formData.serviceDocuments).length > 0) {
         console.log('📤 Uploading documents to storage...');
 
-        for (const doc of formData.documents) {
-          if (!doc.file) {
-            console.warn('⚠️ Document missing file object:', doc);
-            continue;
+        for (const [serviceId, files] of Object.entries(formData.serviceDocuments)) {
+          uploadedServiceDocuments[serviceId] = [];
+
+          for (const file of files) {
+            // Generate unique file name
+            const timestamp = Date.now();
+            const randomId = Math.random().toString(36).substring(7);
+            const fileName = `temp/${serviceId}/${timestamp}_${randomId}_${file.name}`;
+
+            console.log(`📤 Uploading for service ${serviceId}:`, fileName);
+
+            // Upload file to Supabase Storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('submission-documents')
+              .upload(fileName, file);
+
+            if (uploadError) {
+              console.error('❌ Error uploading file:', uploadError);
+              throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`);
+            }
+
+            console.log('✅ File uploaded:', fileName);
+
+            // Get public URL
+            const { data: urlData } = supabase.storage
+              .from('submission-documents')
+              .getPublicUrl(fileName);
+
+            uploadedServiceDocuments[serviceId].push({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              storage_path: fileName,
+              public_url: urlData.publicUrl
+            });
           }
-
-          // Generate unique file name
-          const timestamp = Date.now();
-          const randomId = Math.random().toString(36).substring(7);
-          const fileName = `temp/${timestamp}_${randomId}_${doc.name}`;
-
-          console.log('📤 Uploading:', fileName);
-
-          // Upload file to Supabase Storage
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('submission-documents')
-            .upload(fileName, doc.file);
-
-          if (uploadError) {
-            console.error('❌ Error uploading file:', uploadError);
-            throw new Error(`Failed to upload ${doc.name}: ${uploadError.message}`);
-          }
-
-          console.log('✅ File uploaded:', fileName);
-
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from('submission-documents')
-            .getPublicUrl(fileName);
-
-          uploadedFiles.push({
-            name: doc.name,
-            size: doc.size,
-            type: doc.type,
-            storage_path: fileName,
-            public_url: urlData.publicUrl
-          });
         }
 
-        console.log('✅ All files uploaded:', uploadedFiles.length);
+        console.log('✅ All files uploaded by service:', uploadedServiceDocuments);
       }
 
       // Prepare form data without File objects
       const submissionData = {
         ...formData,
-        uploadedFiles, // Add uploaded file paths
-        documents: undefined // Remove original documents with File objects
+        serviceDocuments: uploadedServiceDocuments, // Add uploaded file paths organized by service
       };
 
       // Call Supabase Edge Function to create Stripe checkout session
       // The Edge Function will fetch services from database and calculate the amount
       console.log('📤 Calling Edge Function with data:', {
-        selectedOptions: submissionData.selectedOptions,
+        selectedServices: submissionData.selectedServices,
         email: submissionData.email,
-        uploadedFiles: submissionData.uploadedFiles?.length
+        serviceDocumentsCount: Object.keys(uploadedServiceDocuments).length
       });
 
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
