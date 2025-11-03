@@ -180,7 +180,10 @@ const SubmissionDetail = () => {
       };
 
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: { formData }
+        body: {
+          formData,
+          submissionId: submission.id  // Pass existing submission ID for retry
+        }
       });
 
       if (error) throw error;
