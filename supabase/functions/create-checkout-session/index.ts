@@ -261,11 +261,21 @@ serve(async (req) => {
             console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = $${(service.base_price * documentCount).toFixed(2)}`)
 
             // Count options for this service
-            documentsForService.forEach(doc => {
+            console.log(`📋 [OPTIONS DEBUG] Checking documents for service ${service.name}:`)
+            documentsForService.forEach((doc, idx) => {
+              console.log(`   Document ${idx}: ${doc.name}`)
+              console.log(`   selectedOptions:`, doc.selectedOptions)
+              console.log(`   Has selectedOptions:`, !!doc.selectedOptions)
+              console.log(`   Is Array:`, Array.isArray(doc.selectedOptions))
+
               if (doc.selectedOptions && Array.isArray(doc.selectedOptions)) {
+                console.log(`   Options count:`, doc.selectedOptions.length)
                 doc.selectedOptions.forEach(optionId => {
+                  console.log(`   Adding option: ${optionId}`)
                   optionCounts[optionId] = (optionCounts[optionId] || 0) + 1
                 })
+              } else {
+                console.log(`   ⚠️ No selectedOptions or not an array`)
               }
             })
           } else {
@@ -278,9 +288,14 @@ serve(async (req) => {
     }
 
     // Add line items for options
+    console.log(`📋 [OPTIONS SUMMARY] Total option counts:`, optionCounts)
+    console.log(`📋 [OPTIONS SUMMARY] Number of different options:`, Object.keys(optionCounts).length)
+
     if (Object.keys(optionCounts).length > 0) {
       for (const [optionId, count] of Object.entries(optionCounts)) {
         const option = optionsMap[optionId]
+        console.log(`📋 [OPTIONS] Processing option ${optionId}:`, option ? option.name : 'NOT FOUND')
+
         if (option && option.additional_price) {
           lineItems.push({
             price_data: {
@@ -294,8 +309,12 @@ serve(async (req) => {
             quantity: count,
           })
           console.log(`✅ [OPTIONS] Added option: ${option.name} × ${count} documents = $${(option.additional_price * count).toFixed(2)}`)
+        } else {
+          console.warn(`⚠️ [OPTIONS] Option ${optionId} not found or has no price`)
         }
       }
+    } else {
+      console.log(`⚠️ [OPTIONS] No options selected`)
     }
 
     // Ensure we have at least one line item
