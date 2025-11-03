@@ -136,6 +136,31 @@ const Dashboard = () => {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
+  const deleteSubmission = async (submissionId) => {
+    if (!confirm('Are you sure you want to delete this submission? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      console.log('🗑️ Deleting submission:', submissionId);
+
+      const { error } = await supabase
+        .from('submission')
+        .delete()
+        .eq('id', submissionId);
+
+      if (error) throw error;
+
+      console.log('✅ Submission deleted successfully');
+
+      // Refresh the submissions list
+      fetchClientData();
+    } catch (error) {
+      console.error('❌ Error deleting submission:', error);
+      alert(`Failed to delete submission.\n\nError: ${error.message}\n\nPlease try again or contact support.`);
+    }
+  };
+
   const retryPayment = async (submission) => {
     setRetryingPaymentId(submission.id);
     try {
@@ -159,7 +184,10 @@ const Dashboard = () => {
       };
 
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: { formData }
+        body: {
+          formData,
+          submissionId: submission.id  // Pass existing submission ID for retry
+        }
       });
 
       if (error) throw error;
@@ -309,6 +337,15 @@ const Dashboard = () => {
                                   Retry Payment
                                 </>
                               )}
+                            </button>
+                          )}
+                          {submission.status === 'pending_payment' && (
+                            <button
+                              onClick={() => deleteSubmission(submission.id)}
+                              className="text-red-600 hover:text-red-700 font-medium text-sm flex items-center"
+                            >
+                              <Icon icon="heroicons:trash" className="w-4 h-4 mr-1" />
+                              Delete
                             </button>
                           )}
                           <button

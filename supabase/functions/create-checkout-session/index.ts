@@ -18,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { formData } = await req.json()
+    const { formData, submissionId } = await req.json()
 
     if (!formData) {
       throw new Error('Missing required field: formData')
@@ -40,11 +40,34 @@ serve(async (req) => {
       data: { user },
     } = await supabaseAnon.auth.getUser()
 
-    // Create user account if guest
-    let userId = user?.id || null
+    let submission
+    let clientId
     let accountCreated = false
 
-    if (!userId && formData.email) {
+    // Check if this is a retry payment (existing submission)
+    if (submissionId) {
+      console.log('🔄 [RETRY] Using existing submission:', submissionId)
+
+      const { data: existingSubmission, error: fetchError } = await supabase
+        .from('submission')
+        .select('*')
+        .eq('id', submissionId)
+        .single()
+
+      if (fetchError) {
+        console.error('❌ [RETRY] Error fetching submission:', fetchError)
+        throw new Error('Failed to fetch submission: ' + fetchError.message)
+      }
+
+      submission = existingSubmission
+      clientId = existingSubmission.client_id
+      console.log('✅ [RETRY] Using existing submission and client_id:', clientId)
+
+    } else {
+      // NEW SUBMISSION: Create user account if guest
+      let userId = user?.id || null
+
+      if (!userId && formData.email) {
       // Create account with password if provided, otherwise generate random password
       const password = formData.password || crypto.randomUUID()
 
@@ -81,14 +104,12 @@ serve(async (req) => {
         accountCreated = true
         console.log('✅ [AUTH] Created new account for:', formData.email, 'with auto-generated password:', !formData.password)
       }
-    }
+      }
 
-    // Get or create client record
-    let clientId = null
+      // Get or create client record
+      console.log('🔍 [CLIENT] userId:', userId, 'accountCreated:', accountCreated)
 
-    console.log('🔍 [CLIENT] userId:', userId, 'accountCreated:', accountCreated)
-
-    if (userId) {
+      if (userId) {
       // Try to get existing client
       const { data: existingClient, error: fetchError } = await supabase
         .from('client')
@@ -144,54 +165,56 @@ serve(async (req) => {
           clientId = newClient.id
           console.log('✅ [CLIENT] Created new client:', clientId)
         }
+        } else {
+          console.error('❌ [CLIENT] Unexpected error fetching client:', fetchError)
+        }
       } else {
-        console.error('❌ [CLIENT] Unexpected error fetching client:', fetchError)
+        console.warn('⚠️ [CLIENT] No userId - submission will have null client_id')
       }
-    } else {
-      console.warn('⚠️ [CLIENT] No userId - submission will have null client_id')
+
+      console.log('📋 [CLIENT] Final clientId for submission:', clientId)
+
+      // Service documents are already uploaded and converted to metadata in NotaryForm.jsx
+      console.log('📁 [FILES] Received service documents:', JSON.stringify(formData.serviceDocuments, null, 2))
+
+      // Create temporary submission in database with status 'pending_payment'
+      const submissionData = {
+        client_id: clientId,
+        status: 'pending_payment',
+        appointment_date: formData.appointmentDate,
+        appointment_time: formData.appointmentTime,
+        timezone: formData.timezone,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        postal_code: formData.postalCode,
+        country: formData.country,
+        notes: formData.notes || null,
+        data: {
+          selectedServices: formData.selectedServices,
+          serviceDocuments: formData.serviceDocuments, // Already converted
+        },
+      }
+
+      console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
+
+      const { data: newSubmission, error: submissionError } = await supabase
+        .from('submission')
+        .insert([submissionData])
+        .select()
+        .single()
+
+      if (submissionError) {
+        console.error('❌ [SUBMISSION] Error creating submission:', submissionError)
+        throw new Error('Failed to create submission: ' + submissionError.message)
+      }
+
+      submission = newSubmission
+      console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
     }
-
-    console.log('📋 [CLIENT] Final clientId for submission:', clientId)
-
-    // Service documents are already uploaded and converted to metadata in NotaryForm.jsx
-    console.log('📁 [FILES] Received service documents:', JSON.stringify(formData.serviceDocuments, null, 2))
-
-    // Create temporary submission in database with status 'pending_payment'
-    const submissionData = {
-      client_id: clientId,
-      status: 'pending_payment',
-      appointment_date: formData.appointmentDate,
-      appointment_time: formData.appointmentTime,
-      timezone: formData.timezone,
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      email: formData.email,
-      phone: formData.phone,
-      address: formData.address,
-      city: formData.city,
-      postal_code: formData.postalCode,
-      country: formData.country,
-      notes: formData.notes || null,
-      data: {
-        selectedServices: formData.selectedServices,
-        serviceDocuments: formData.serviceDocuments, // Already converted
-      },
-    }
-
-    console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
-
-    const { data: submission, error: submissionError } = await supabase
-      .from('submission')
-      .insert([submissionData])
-      .select()
-      .single()
-
-    if (submissionError) {
-      console.error('❌ [SUBMISSION] Error creating submission:', submissionError)
-      throw new Error('Failed to create submission: ' + submissionError.message)
-    }
-
-    console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
 
     // Fetch services from database to get pricing
     const { data: services, error: servicesError } = await supabase
