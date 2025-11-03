@@ -153,19 +153,8 @@ serve(async (req) => {
 
     console.log('📋 [CLIENT] Final clientId for submission:', clientId)
 
-    // Prepare service documents data (convert File objects to metadata)
-    const serviceDocumentsData = {}
-    if (formData.serviceDocuments) {
-      for (const [serviceId, files] of Object.entries(formData.serviceDocuments)) {
-        serviceDocumentsData[serviceId] = (files as any[]).map((file: any) => ({
-          name: file.name,
-          size: file.size,
-          type: file.type
-        }))
-      }
-    }
-
-    console.log('📁 [FILES] Service documents data:', serviceDocumentsData)
+    // Service documents are already uploaded and converted to metadata in NotaryForm.jsx
+    console.log('📁 [FILES] Received service documents:', JSON.stringify(formData.serviceDocuments, null, 2))
 
     // Create temporary submission in database with status 'pending_payment'
     const submissionData = {
@@ -185,7 +174,7 @@ serve(async (req) => {
       notes: formData.notes || null,
       data: {
         selectedServices: formData.selectedServices,
-        serviceDocuments: serviceDocumentsData,
+        serviceDocuments: formData.serviceDocuments, // Already converted
       },
     }
 
