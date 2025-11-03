@@ -286,7 +286,7 @@ const NotaryForm = () => {
               type: file.type,
               storage_path: fileName,
               public_url: urlData.publicUrl,
-              hasApostille: file.hasApostille || false  // Preserve apostille flag
+              selectedOptions: file.selectedOptions || []  // Preserve selected options
             });
           }
         }
@@ -306,13 +306,12 @@ const NotaryForm = () => {
       console.log('   selectedServices:', submissionData.selectedServices);
       console.log('   serviceDocuments:', submissionData.serviceDocuments);
 
-      // Log document count per service with apostille info
+      // Log document count per service with options info
       if (submissionData.serviceDocuments) {
         Object.entries(submissionData.serviceDocuments).forEach(([serviceId, docs]) => {
-          const apostilleCount = docs.filter(d => d.hasApostille === true).length;
-          console.log(`   Service ${serviceId}: ${docs.length} documents (${apostilleCount} with apostille)`);
+          console.log(`   Service ${serviceId}: ${docs.length} documents`);
           docs.forEach((doc, i) => {
-            console.log(`      - ${doc.name}: hasApostille=${doc.hasApostille}`);
+            console.log(`      - ${doc.name}: selectedOptions=${JSON.stringify(doc.selectedOptions)}`);
           });
         });
       }
