@@ -14,6 +14,7 @@ const SubmissionDetail = () => {
   const [servicesMap, setServicesMap] = useState({});
   const [optionsMap, setOptionsMap] = useState({});
   const [isRetryingPayment, setIsRetryingPayment] = useState(false);
+  const [activeTab, setActiveTab] = useState('services');
 
   useEffect(() => {
     fetchSubmissionDetail();
@@ -251,10 +252,54 @@ const SubmissionDetail = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Services with Documents */}
-            {selectedServices.length > 0 && (
+          {/* Left Column - Details with Tabs */}
+          <div className="lg:col-span-2">
+            {/* Tabs */}
+            <div className="flex space-x-6 mb-6 border-b border-gray-200">
+              <button
+                onClick={() => setActiveTab('services')}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'services'
+                    ? 'text-black'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Services & Documents
+                {activeTab === 'services' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('appointment')}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'appointment'
+                    ? 'text-black'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Appointment Details
+                {activeTab === 'appointment' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('payment')}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'payment'
+                    ? 'text-black'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Payment Information
+                {activeTab === 'payment' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Services & Documents Tab */}
+              {activeTab === 'services' && selectedServices.length > 0 && (
               <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                   <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
@@ -408,10 +453,11 @@ const SubmissionDetail = () => {
                   </div>
                 </div>
               </div>
-            )}
+              )}
 
-            {/* Appointment Info */}
-            <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+              {/* Appointment Details Tab */}
+              {activeTab === 'appointment' && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
               <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                 <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
                   <Icon icon="heroicons:calendar-days" className="w-5 h-5 text-gray-600" />
@@ -432,10 +478,11 @@ const SubmissionDetail = () => {
                   <span className="font-semibold text-gray-900">{submission.timezone}</span>
                 </div>
               </div>
-            </div>
+              </div>
+              )}
 
-            {/* Payment Info */}
-            {(submission.data?.payment || submission.status === 'pending_payment') && (
+              {/* Payment Information Tab */}
+              {activeTab === 'payment' && (submission.data?.payment || submission.status === 'pending_payment') && (
               <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                   <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
@@ -505,9 +552,9 @@ const SubmissionDetail = () => {
                   )}
                 </div>
               </div>
-            )}
+              )}
 
-            {/* Notary Info */}
+              {/* Notary Info - Always visible */}
             {submission.notary && (
               <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
@@ -547,6 +594,7 @@ const SubmissionDetail = () => {
                 <p className="text-gray-700 whitespace-pre-wrap">{submission.notes}</p>
               </div>
             )}
+            </div>
           </div>
 
           {/* Right Column - Chat */}
