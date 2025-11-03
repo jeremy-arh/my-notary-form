@@ -144,12 +144,17 @@ const Dashboard = () => {
     try {
       console.log('🗑️ Deleting submission:', submissionId);
 
-      const { data, error } = await supabase.functions.invoke('delete-submission', {
-        body: { submissionId }
-      });
+      // Direct deletion using RLS policy
+      const { error } = await supabase
+        .from('submission')
+        .delete()
+        .eq('id', submissionId)
+        .eq('status', 'pending_payment');
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        console.error('❌ Delete error:', error);
+        throw error;
+      }
 
       console.log('✅ Submission deleted successfully');
 
