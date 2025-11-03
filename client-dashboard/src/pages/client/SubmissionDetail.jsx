@@ -11,9 +11,8 @@ const SubmissionDetail = () => {
   const [submission, setSubmission] = useState(null);
   const [clientInfo, setClientInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [services, setServices] = useState([]);
-  const [options, setOptions] = useState([]);
-  const [documents, setDocuments] = useState([]);
+  const [servicesMap, setServicesMap] = useState({});
+  const [optionsMap, setOptionsMap] = useState({});
   const [isRetryingPayment, setIsRetryingPayment] = useState(false);
 
   useEffect(() => {
@@ -61,33 +60,31 @@ const SubmissionDetail = () => {
 
       setSubmission(submissionData);
 
-      // Get submission services
+      // Fetch all services to create a map
       const { data: servicesData } = await supabase
-        .from('submission_services')
-        .select(`
-          service:service_id(name, description, base_price)
-        `)
-        .eq('submission_id', id);
+        .from('services')
+        .select('*');
 
-      setServices(servicesData?.map(s => s.service) || []);
+      const sMap = {};
+      if (servicesData) {
+        servicesData.forEach(service => {
+          sMap[service.service_id] = service;
+        });
+      }
+      setServicesMap(sMap);
 
-      // Get submission options
+      // Fetch all options to create a map
       const { data: optionsData } = await supabase
-        .from('submission_options')
-        .select(`
-          option:option_id(name, description, additional_price)
-        `)
-        .eq('submission_id', id);
+        .from('options')
+        .select('*');
 
-      setOptions(optionsData?.map(o => o.option) || []);
-
-      // Get documents
-      const { data: documentsData } = await supabase
-        .from('submission_files')
-        .select('*')
-        .eq('submission_id', id);
-
-      setDocuments(documentsData || []);
+      const oMap = {};
+      if (optionsData) {
+        optionsData.forEach(option => {
+          oMap[option.option_id] = option;
+        });
+      }
+      setOptionsMap(oMap);
 
     } catch (error) {
       console.error('Error fetching submission detail:', error);
@@ -134,15 +131,13 @@ const SubmissionDetail = () => {
     );
   };
 
-  const downloadDocument = async (filePath, fileName) => {
+  const downloadDocument = async (publicUrl, fileName) => {
     try {
-      const { data, error } = await supabase.storage
-        .from('submission-documents')
-        .download(filePath);
+      // Download via public URL
+      const response = await fetch(publicUrl);
+      const blob = await response.blob();
 
-      if (error) throw error;
-
-      const url = URL.createObjectURL(data);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
@@ -165,11 +160,8 @@ const SubmissionDetail = () => {
     setIsRetryingPayment(true);
     try {
       console.log('🔄 Retrying payment for submission:', submission.id);
-      console.log('📋 Full submission:', submission);
 
-      // Reconstruct complete formData from submission (Edge Function needs ALL fields)
       const formData = {
-        // Personal info from submission columns
         firstName: submission.first_name,
         lastName: submission.last_name,
         email: submission.email,
@@ -179,59 +171,28 @@ const SubmissionDetail = () => {
         postalCode: submission.postal_code,
         country: submission.country,
         notes: submission.notes,
-        // Appointment info
         appointmentDate: submission.appointment_date,
         appointmentTime: submission.appointment_time,
         timezone: submission.timezone,
-        // From data column
-        selectedOptions: submission.data?.selectedOptions || [],
-        uploadedFiles: submission.data?.uploadedFiles || [],
+        selectedServices: submission.data?.selectedServices || [],
+        serviceDocuments: submission.data?.serviceDocuments || {},
       };
 
-      console.log('📋 Reconstructed formData:', formData);
-      console.log('📦 Selected options:', formData.selectedOptions);
-      console.log('📄 Documents count:', formData.uploadedFiles?.length || 0);
-
-      // Create a new checkout session
-      // The Edge Function will fetch services from database and calculate the amount
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
-          formData: formData
-        }
+        body: { formData }
       });
 
-      console.log('✅ Edge Function response:', data);
-
-      if (error) {
-        console.error('❌ Edge Function error:', error);
-        throw error;
-      }
-
-      if (data?.error) {
-        console.error('❌ Edge Function returned error:', data.error);
-        throw new Error(data.error);
-      }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       if (data?.url) {
-        console.log('🔗 Redirecting to Stripe Checkout:', data.url);
-        // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
         throw new Error('No checkout URL received from payment service');
       }
     } catch (error) {
       console.error('❌ Error retrying payment:', error);
-
-      // Show user-friendly error message
-      let errorMessage = 'Failed to create payment session.';
-
-      if (error.message) {
-        errorMessage += `\n\nError: ${error.message}`;
-      }
-
-      errorMessage += '\n\nPlease try again or contact support.';
-
-      alert(errorMessage);
+      alert(`Failed to create payment session.\n\nError: ${error.message}\n\nPlease try again or contact support.`);
     } finally {
       setIsRetryingPayment(false);
     }
@@ -264,6 +225,9 @@ const SubmissionDetail = () => {
     );
   }
 
+  const selectedServices = submission.data?.selectedServices || [];
+  const serviceDocuments = submission.data?.serviceDocuments || {};
+
   return (
     <ClientLayout>
       <div className="max-w-7xl mx-auto">
@@ -289,6 +253,163 @@ const SubmissionDetail = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Details */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Services with Documents */}
+            {selectedServices.length > 0 && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                    <Icon icon="heroicons:check-badge" className="w-5 h-5 text-gray-600" />
+                  </div>
+                  Services & Documents
+                </h2>
+                <div className="space-y-4">
+                  {selectedServices.map((serviceId) => {
+                    const service = servicesMap[serviceId];
+                    const documents = serviceDocuments[serviceId] || [];
+
+                    if (!service) return null;
+
+                    const serviceTotal = documents.length * (service.base_price || 0);
+
+                    return (
+                      <div key={serviceId} className="bg-white rounded-xl p-4 border border-gray-200">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 text-lg">{service.name}</h3>
+                            <p className="text-sm text-gray-600 mt-1">{service.description}</p>
+                            <p className="text-sm text-gray-700 mt-2">
+                              {documents.length} document{documents.length > 1 ? 's' : ''} × ${service.base_price.toFixed(2)} =
+                              <span className="font-bold text-gray-900"> ${serviceTotal.toFixed(2)}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Documents for this service */}
+                        {documents.length > 0 && (
+                          <div className="mt-4 space-y-2 pl-4 border-l-2 border-gray-200">
+                            {documents.map((doc, index) => {
+                              const docOptions = doc.selectedOptions || [];
+                              let optionsTotal = 0;
+
+                              return (
+                                <div key={index} className="bg-gray-50 rounded-lg p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center flex-1">
+                                      <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 mr-2 flex-shrink-0" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
+                                        <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
+                                      </div>
+                                    </div>
+                                    {doc.public_url && (
+                                      <button
+                                        onClick={() => downloadDocument(doc.public_url, doc.name)}
+                                        className="ml-3 text-black hover:text-gray-700 font-medium text-xs flex items-center flex-shrink-0"
+                                      >
+                                        <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-1" />
+                                        Download
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {/* Options for this document */}
+                                  {docOptions.length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200">
+                                      <p className="text-xs text-gray-600 mb-1">Options:</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {docOptions.map((optionId) => {
+                                          const option = optionsMap[optionId];
+                                          if (!option) return null;
+
+                                          optionsTotal += option.additional_price || 0;
+
+                                          return (
+                                            <span
+                                              key={optionId}
+                                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                            >
+                                              <Icon icon={option.icon || "heroicons:plus-circle"} className="w-3 h-3 mr-1" />
+                                              {option.name} (+${option.additional_price.toFixed(2)})
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                      {optionsTotal > 0 && (
+                                        <p className="text-xs text-gray-700 mt-1 font-semibold">
+                                          Options total: ${optionsTotal.toFixed(2)}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Calculate total with options */}
+                        {(() => {
+                          let totalWithOptions = serviceTotal;
+                          documents.forEach(doc => {
+                            if (doc.selectedOptions) {
+                              doc.selectedOptions.forEach(optionId => {
+                                const option = optionsMap[optionId];
+                                if (option) {
+                                  totalWithOptions += option.additional_price || 0;
+                                }
+                              });
+                            }
+                          });
+
+                          if (totalWithOptions > serviceTotal) {
+                            return (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-semibold text-gray-900">Total (with options):</span>
+                                  <span className="text-lg font-bold text-gray-900">${totalWithOptions.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Grand Total */}
+                <div className="mt-4 pt-4 border-t-2 border-gray-300">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold text-gray-900">Grand Total:</span>
+                    <span className="text-2xl font-bold text-gray-900">
+                      ${(() => {
+                        let grandTotal = 0;
+                        selectedServices.forEach(serviceId => {
+                          const service = servicesMap[serviceId];
+                          const documents = serviceDocuments[serviceId] || [];
+                          if (service) {
+                            grandTotal += documents.length * (service.base_price || 0);
+                            documents.forEach(doc => {
+                              if (doc.selectedOptions) {
+                                doc.selectedOptions.forEach(optionId => {
+                                  const option = optionsMap[optionId];
+                                  if (option) {
+                                    grandTotal += option.additional_price || 0;
+                                  }
+                                });
+                              }
+                            });
+                          }
+                        });
+                        return grandTotal.toFixed(2);
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Appointment Info */}
             <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
               <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
@@ -410,88 +531,6 @@ const SubmissionDetail = () => {
                       <span className="font-semibold text-gray-900">{submission.notary.phone}</span>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* Services */}
-            {services.length > 0 && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                    <Icon icon="heroicons:check-badge" className="w-5 h-5 text-gray-600" />
-                  </div>
-                  Services
-                </h2>
-                <div className="space-y-3">
-                  {services.map((service, idx) => (
-                    <div key={idx} className="bg-white rounded-xl p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-semibold text-gray-900">{service.name}</p>
-                          <p className="text-sm text-gray-600 mt-1">{service.description}</p>
-                        </div>
-                        <p className="font-bold text-gray-900 ml-4">${service.base_price}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Options */}
-            {options.length > 0 && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                    <Icon icon="heroicons:plus-circle" className="w-5 h-5 text-gray-600" />
-                  </div>
-                  Additional Options
-                </h2>
-                <div className="space-y-3">
-                  {options.map((option, idx) => (
-                    <div key={idx} className="bg-white rounded-xl p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-semibold text-gray-900">{option.name}</p>
-                          <p className="text-sm text-gray-600 mt-1">{option.description}</p>
-                        </div>
-                        <p className="font-bold text-gray-900 ml-4">+${option.additional_price}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Documents */}
-            {documents.length > 0 && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                    <Icon icon="heroicons:document" className="w-5 h-5 text-gray-600" />
-                  </div>
-                  Your Documents
-                </h2>
-                <div className="space-y-3">
-                  {documents.map((doc) => (
-                    <div key={doc.id} className="bg-white rounded-xl p-4 flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 mr-3" />
-                        <div>
-                          <p className="font-semibold text-gray-900">{doc.file_name}</p>
-                          <p className="text-sm text-gray-600">{(doc.file_size / 1024).toFixed(2)} KB</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => downloadDocument(doc.storage_path, doc.file_name)}
-                        className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
-                      >
-                        <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-1" />
-                        Download
-                      </button>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}
