@@ -144,12 +144,12 @@ const Dashboard = () => {
     try {
       console.log('🗑️ Deleting submission:', submissionId);
 
-      const { error } = await supabase
-        .from('submission')
-        .delete()
-        .eq('id', submissionId);
+      const { data, error } = await supabase.functions.invoke('delete-submission', {
+        body: { submissionId }
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       console.log('✅ Submission deleted successfully');
 
