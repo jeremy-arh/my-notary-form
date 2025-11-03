@@ -6,12 +6,13 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [services, setServices] = useState([]);
   const [servicesMap, setServicesMap] = useState({});
-  const [apostilleService, setApostilleService] = useState(null);
+  const [options, setOptions] = useState([]);
+  const [optionsMap, setOptionsMap] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchServices();
-    fetchApostilleService();
+    fetchOptions();
   }, []);
 
   const fetchServices = async () => {
@@ -40,19 +41,27 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     }
   };
 
-  const fetchApostilleService = async () => {
+  const fetchOptions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('services')
+      const { data, error} = await supabase
+        .from('options')
         .select('*')
-        .eq('service_id', '473fb677-4dd3-4766-8221-0250ea3440cd')
-        .single();
+        .eq('is_active', true);
 
       if (error) throw error;
 
-      setApostilleService(data);
+      setOptions(data || []);
+
+      // Create a map of option_id to option object
+      const map = {};
+      (data || []).forEach(option => {
+        map[option.option_id] = option;
+      });
+      setOptionsMap(map);
     } catch (error) {
-      console.error('Error fetching apostille service:', error);
+      console.error('Error fetching options:', error);
+      setOptions([]);
+      setOptionsMap({});
     }
   };
 
@@ -128,13 +137,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                         <h4 className="font-semibold text-gray-900">{service?.name || serviceId}</h4>
                         <p className="text-xs text-gray-600 mt-1">
                           {documents.length} document{documents.length > 1 ? 's' : ''} × ${service?.base_price.toFixed(2)}
-                          {(() => {
-                            const apostilleCount = documents.filter(d => d.hasApostille).length;
-                            if (apostilleCount > 0 && apostilleService) {
-                              return ` + ${apostilleCount} apostille${apostilleCount > 1 ? 's' : ''} × $${apostilleService.base_price.toFixed(2)}`;
-                            }
-                            return '';
-                          })()}
                         </p>
                       </div>
                     </div>
@@ -150,11 +152,18 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                 <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
                               </div>
                             </div>
-                            {doc.hasApostille && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                <Icon icon="heroicons:check-badge" className="w-3 h-3 mr-1" />
-                                Apostille
-                              </span>
+                            {doc.selectedOptions && doc.selectedOptions.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {doc.selectedOptions.map(optionId => {
+                                  const option = optionsMap[optionId];
+                                  return option ? (
+                                    <span key={optionId} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                      <Icon icon={option.icon || "heroicons:check-badge"} className="w-3 h-3 mr-1" />
+                                      {option.name}
+                                    </span>
+                                  ) : null;
+                                })}
+                              </div>
                             )}
                           </div>
                         ))}
@@ -257,17 +266,21 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
                   const documents = formData.serviceDocuments?.[serviceId] || [];
                   const serviceTotal = documents.length * (service.base_price || 0);
-                  const apostilleCount = documents.filter(d => d.hasApostille === true).length;
-                  const apostilleTotal = apostilleCount * (apostilleService?.base_price || 0);
-                  const combinedTotal = serviceTotal + apostilleTotal;
 
-                  // Debug logging
-                  console.log(`Summary - Service ${service.name}:`, {
-                    documentCount: documents.length,
-                    apostilleCount,
-                    serviceTotal,
-                    apostilleTotal,
-                    documents: documents.map(d => ({ name: d.name, hasApostille: d.hasApostille }))
+                  // Calculate options total for this service
+                  let optionsTotal = 0;
+                  const optionCounts = {}; // Track count per option
+
+                  documents.forEach(doc => {
+                    if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+                      doc.selectedOptions.forEach(optionId => {
+                        const option = optionsMap[optionId];
+                        if (option) {
+                          optionsTotal += option.additional_price || 0;
+                          optionCounts[optionId] = (optionCounts[optionId] || 0) + 1;
+                        }
+                      });
+                    }
                   });
 
                   return (
@@ -282,14 +295,24 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                           ${serviceTotal.toFixed(2)}
                         </span>
                       </div>
-                      {apostilleCount > 0 && apostilleService && (
-                        <div className="flex justify-between items-center mt-2 ml-4">
-                          <span className="text-xs text-gray-500 italic">
-                            + Apostille ({apostilleCount} document{apostilleCount > 1 ? 's' : ''})
-                          </span>
-                          <span className="text-xs font-semibold text-gray-700">
-                            ${apostilleTotal.toFixed(2)}
-                          </span>
+                      {/* Show options breakdown */}
+                      {Object.keys(optionCounts).length > 0 && (
+                        <div className="ml-4 mt-2 space-y-1">
+                          {Object.entries(optionCounts).map(([optionId, count]) => {
+                            const option = optionsMap[optionId];
+                            if (!option) return null;
+                            const optionTotal = count * (option.additional_price || 0);
+                            return (
+                              <div key={optionId} className="flex justify-between items-center">
+                                <span className="text-xs text-gray-500 italic">
+                                  + {option.name} ({count} document{count > 1 ? 's' : ''})
+                                </span>
+                                <span className="text-xs font-semibold text-gray-700">
+                                  ${optionTotal.toFixed(2)}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -304,7 +327,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               <span className="text-xl font-bold text-gray-900">
                 ${(() => {
                   let total = 0;
-                  // Calculate total from selected services × files + apostilles
+                  // Calculate total from selected services × files + options
                   if (formData.selectedServices) {
                     formData.selectedServices.forEach(serviceId => {
                       const service = servicesMap[serviceId];
@@ -312,15 +335,22 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       if (service) {
                         // Add service cost
                         total += documents.length * (service.base_price || 0);
-                        // Add apostille cost
-                        const apostilleCount = documents.filter(d => d.hasApostille === true).length;
-                        if (apostilleCount > 0 && apostilleService) {
-                          total += apostilleCount * apostilleService.base_price;
-                        }
+
+                        // Add options cost
+                        documents.forEach(doc => {
+                          if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+                            doc.selectedOptions.forEach(optionId => {
+                              const option = optionsMap[optionId];
+                              if (option) {
+                                total += option.additional_price || 0;
+                              }
+                            });
+                          }
+                        });
                       }
                     });
                   }
-                  console.log('Summary Total:', total);
+                  console.log('💰 Summary Total:', total);
                   return total.toFixed(2);
                 })()}
               </span>
@@ -370,17 +400,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           >
             {isSubmitting ? (
               <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                 Processing...
               </>
             ) : (
-              <>
-                <Icon icon="heroicons:credit-card" className="w-5 h-5 mr-2" />
-                Confirm & pay
-              </>
+              'Complete Payment'
             )}
           </button>
         </div>

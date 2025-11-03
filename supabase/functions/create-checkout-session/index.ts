@@ -212,13 +212,30 @@ serve(async (req) => {
       servicesMap[service.service_id] = service
     })
 
-    // Get apostille service
-    const apostilleService = servicesMap['473fb677-4dd3-4766-8221-0250ea3440cd']
-    console.log('📋 [APOSTILLE] Apostille service:', apostilleService ? `${apostilleService.name} - $${apostilleService.base_price}` : 'Not found')
+    // Fetch options from database
+    const { data: options, error: optionsError } = await supabase
+      .from('options')
+      .select('*')
+      .eq('is_active', true)
+
+    if (optionsError) {
+      console.error('❌ [OPTIONS] Error fetching options:', optionsError)
+      throw new Error('Failed to fetch options: ' + optionsError.message)
+    }
+
+    console.log('✅ [OPTIONS] Fetched options:', options?.length || 0)
+
+    // Create a map of option_id to option
+    const optionsMap = {}
+    if (options) {
+      options.forEach(option => {
+        optionsMap[option.option_id] = option
+      })
+    }
 
     // Calculate line items for Stripe from selected services and documents
     const lineItems = []
-    let totalApostilleCount = 0
+    const optionCounts = {} // Track total count per option across all services
 
     if (formData.selectedServices && formData.selectedServices.length > 0) {
       for (const serviceId of formData.selectedServices) {
@@ -243,13 +260,14 @@ serve(async (req) => {
             })
             console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = $${(service.base_price * documentCount).toFixed(2)}`)
 
-            // Count apostilles for this service
-            const apostilleCount = documentsForService.filter(doc => doc.hasApostille === true).length
-            totalApostilleCount += apostilleCount
-
-            if (apostilleCount > 0) {
-              console.log(`📋 [APOSTILLE] Service ${service.name} has ${apostilleCount} documents with apostille`)
-            }
+            // Count options for this service
+            documentsForService.forEach(doc => {
+              if (doc.selectedOptions && Array.isArray(doc.selectedOptions)) {
+                doc.selectedOptions.forEach(optionId => {
+                  optionCounts[optionId] = (optionCounts[optionId] || 0) + 1
+                })
+              }
+            })
           } else {
             console.warn(`⚠️ [SERVICES] No documents for service: ${serviceId}`)
           }
@@ -259,20 +277,25 @@ serve(async (req) => {
       }
     }
 
-    // Add apostille line item if any documents have apostille selected
-    if (totalApostilleCount > 0 && apostilleService) {
-      lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `Apostille Service (${totalApostilleCount} document${totalApostilleCount > 1 ? 's' : ''})`,
-            description: apostilleService.short_description || apostilleService.description,
-          },
-          unit_amount: Math.round(apostilleService.base_price * 100),
-        },
-        quantity: totalApostilleCount,
-      })
-      console.log(`✅ [APOSTILLE] Added apostille: ${totalApostilleCount} documents × $${apostilleService.base_price} = $${(apostilleService.base_price * totalApostilleCount).toFixed(2)}`)
+    // Add line items for options
+    if (Object.keys(optionCounts).length > 0) {
+      for (const [optionId, count] of Object.entries(optionCounts)) {
+        const option = optionsMap[optionId]
+        if (option && option.additional_price) {
+          lineItems.push({
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `${option.name} (${count} document${count > 1 ? 's' : ''})`,
+                description: option.description || '',
+              },
+              unit_amount: Math.round(option.additional_price * 100),
+            },
+            quantity: count,
+          })
+          console.log(`✅ [OPTIONS] Added option: ${option.name} × ${count} documents = $${(option.additional_price * count).toFixed(2)}`)
+        }
+      }
     }
 
     // Ensure we have at least one line item

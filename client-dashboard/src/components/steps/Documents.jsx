@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 
+const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
+
 const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [services, setServices] = useState([]);
-  const [apostilleService, setApostilleService] = useState(null);
+  const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showApostilleInfo, setShowApostilleInfo] = useState(false);
+  const [showOptionInfo, setShowOptionInfo] = useState(null);
 
   useEffect(() => {
     fetchSelectedServices();
-    fetchApostilleService();
+    fetchOptions();
   }, [formData.selectedServices]);
 
   const fetchSelectedServices = async () => {
@@ -37,20 +39,20 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
     }
   };
 
-  const fetchApostilleService = async () => {
+  const fetchOptions = async () => {
     try {
       const { data, error } = await supabase
-        .from('services')
+        .from('options')
         .select('*')
-        .eq('service_id', '473fb677-4dd3-4766-8221-0250ea3440cd')
-        .single();
+        .eq('is_active', true);
 
       if (error) throw error;
 
-      setApostilleService(data);
-      console.log('Apostille service:', data);
+      setOptions(data || []);
+      console.log('📋 Options loaded:', data);
     } catch (error) {
-      console.error('Error fetching apostille service:', error);
+      console.error('Error fetching options:', error);
+      setOptions([]);
     }
   };
 
@@ -69,8 +71,8 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
               size: file.size,
               type: file.type,
               lastModified: file.lastModified,
-              dataUrl: reader.result, // Store file content as Data URL
-              hasApostille: false, // Default to no apostille
+              dataUrl: reader.result,
+              selectedOptions: [], // Array of option_ids
             });
           };
           reader.readAsDataURL(file);
@@ -89,7 +91,6 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
     const serviceDocuments = { ...formData.serviceDocuments };
     serviceDocuments[serviceId] = serviceDocuments[serviceId].filter((_, index) => index !== fileIndex);
 
-    // If no files left for this service, remove the key
     if (serviceDocuments[serviceId].length === 0) {
       delete serviceDocuments[serviceId];
     }
@@ -97,9 +98,20 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
     updateFormData({ serviceDocuments });
   };
 
-  const toggleApostille = (serviceId, fileIndex) => {
+  const toggleOption = (serviceId, fileIndex, optionId) => {
     const serviceDocuments = { ...formData.serviceDocuments };
-    serviceDocuments[serviceId][fileIndex].hasApostille = !serviceDocuments[serviceId][fileIndex].hasApostille;
+    const file = serviceDocuments[serviceId][fileIndex];
+
+    if (!file.selectedOptions) {
+      file.selectedOptions = [];
+    }
+
+    if (file.selectedOptions.includes(optionId)) {
+      file.selectedOptions = file.selectedOptions.filter(id => id !== optionId);
+    } else {
+      file.selectedOptions = [...file.selectedOptions, optionId];
+    }
+
     updateFormData({ serviceDocuments });
   };
 
@@ -114,9 +126,15 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
     files.forEach(file => {
       // Add base service price
       total += service.base_price;
-      // Add apostille price if selected
-      if (file.hasApostille === true && apostilleService) {
-        total += apostilleService.base_price;
+
+      // Add options prices
+      if (file.selectedOptions && file.selectedOptions.length > 0) {
+        file.selectedOptions.forEach(optionId => {
+          const option = options.find(o => o.option_id === optionId);
+          if (option) {
+            total += option.additional_price || 0;
+          }
+        });
       }
     });
 
@@ -151,6 +169,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
               {services.map((service) => {
                 const fileCount = getFileCount(service.service_id);
                 const files = formData.serviceDocuments?.[service.service_id] || [];
+                const isApostilleService = service.service_id === APOSTILLE_SERVICE_ID;
 
                 return (
                   <div
@@ -227,42 +246,46 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                               </button>
                             </div>
 
-                            {/* Apostille Option - Only show if service is not apostille itself */}
-                            {service.service_id !== '473fb677-4dd3-4766-8221-0250ea3440cd' && (
-                              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                                <label className="flex items-center space-x-2 cursor-pointer group">
-                                  {/* Custom Checkbox */}
-                                  <div className="relative">
-                                    <input
-                                      type="checkbox"
-                                      checked={file.hasApostille || false}
-                                      onChange={() => toggleApostille(service.service_id, index)}
-                                      className="sr-only peer"
-                                    />
-                                    <div className="w-5 h-5 border-2 border-gray-300 rounded peer-checked:bg-black peer-checked:border-black transition-all flex items-center justify-center">
-                                      {file.hasApostille && (
-                                        <Icon icon="heroicons:check" className="w-3 h-3 text-white" />
-                                      )}
-                                    </div>
-                                  </div>
-                                  <span className="text-sm font-medium text-gray-700 group-hover:text-black transition-colors">
-                                    Add Apostille
-                                    {apostilleService && (
-                                      <span className="text-gray-500 font-normal ml-1">
-                                        (+${apostilleService.base_price.toFixed(2)})
+                            {/* Options - Only show if service is NOT apostille */}
+                            {!isApostilleService && options.length > 0 && (
+                              <div className="space-y-2 pt-3 border-t border-gray-100">
+                                {options.map((option) => (
+                                  <div key={option.option_id} className="flex items-center justify-between">
+                                    <label className="flex items-center space-x-2 cursor-pointer group flex-1">
+                                      {/* Custom Checkbox */}
+                                      <div className="relative">
+                                        <input
+                                          type="checkbox"
+                                          checked={file.selectedOptions?.includes(option.option_id) || false}
+                                          onChange={() => toggleOption(service.service_id, index, option.option_id)}
+                                          className="sr-only peer"
+                                        />
+                                        <div className="w-5 h-5 border-2 border-gray-300 rounded peer-checked:bg-black peer-checked:border-black transition-all flex items-center justify-center">
+                                          {file.selectedOptions?.includes(option.option_id) && (
+                                            <Icon icon="heroicons:check" className="w-3 h-3 text-white" />
+                                          )}
+                                        </div>
+                                      </div>
+                                      <span className="text-sm font-medium text-gray-700 group-hover:text-black transition-colors">
+                                        {option.name}
+                                        <span className="text-gray-500 font-normal ml-1">
+                                          (+${option.additional_price?.toFixed(2) || '0.00'})
+                                        </span>
                                       </span>
-                                    )}
-                                  </span>
-                                </label>
+                                    </label>
 
-                                {/* Info Icon */}
-                                <button
-                                  type="button"
-                                  onClick={() => setShowApostilleInfo(true)}
-                                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-                                >
-                                  <Icon icon="heroicons:information-circle" className="w-5 h-5 text-gray-400 hover:text-gray-600" />
-                                </button>
+                                    {/* Info Icon */}
+                                    {option.description && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowOptionInfo(option)}
+                                        className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                                      >
+                                        <Icon icon="heroicons:information-circle" className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -320,12 +343,12 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
         </div>
       </div>
 
-      {/* Apostille Info Popup */}
-      {showApostilleInfo && (
+      {/* Option Info Popup */}
+      {showOptionInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 relative animate-fade-in-up">
             <button
-              onClick={() => setShowApostilleInfo(false)}
+              onClick={() => setShowOptionInfo(null)}
               className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
             >
               <Icon icon="heroicons:x-mark" className="w-6 h-6 text-gray-600" />
@@ -333,37 +356,20 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
 
             <div className="flex items-start space-x-4 mb-4">
               <div className="p-3 bg-blue-100 rounded-xl">
-                <Icon icon="heroicons:information-circle" className="w-6 h-6 text-blue-600" />
+                <Icon icon={showOptionInfo.icon || "heroicons:information-circle"} className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">What is an Apostille?</h3>
+                <h3 className="text-xl font-bold text-gray-900">{showOptionInfo.name}</h3>
               </div>
             </div>
 
             <div className="space-y-4 text-gray-700">
-              <p>
-                An <strong>Apostille</strong> is a certification that authenticates the origin of a public document for use in another country that is part of the Hague Apostille Convention.
-              </p>
+              <p>{showOptionInfo.description}</p>
 
-              <p>
-                It verifies the signature, seal, or stamp on your document, making it legally recognized internationally without the need for further legalization.
-              </p>
-
-              <div className="bg-blue-50 rounded-xl p-4">
-                <p className="text-sm font-semibold text-blue-900 mb-2">Common documents requiring an Apostille:</p>
-                <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-                  <li>Birth, marriage, and death certificates</li>
-                  <li>Educational diplomas and transcripts</li>
-                  <li>Power of Attorney documents</li>
-                  <li>Corporate documents</li>
-                  <li>Court documents</li>
-                </ul>
-              </div>
-
-              {apostilleService && (
+              {showOptionInfo.additional_price && (
                 <div className="border-t border-gray-200 pt-4">
                   <p className="text-sm text-gray-600">
-                    <strong>Service Fee:</strong> ${apostilleService.base_price.toFixed(2)} per document
+                    <strong>Additional Fee:</strong> ${showOptionInfo.additional_price.toFixed(2)} per document
                   </p>
                 </div>
               )}
@@ -371,7 +377,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
 
             <div className="mt-6 flex justify-end">
               <button
-                onClick={() => setShowApostilleInfo(false)}
+                onClick={() => setShowOptionInfo(null)}
                 className="btn-glassy px-6 py-2 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
               >
                 Got it
