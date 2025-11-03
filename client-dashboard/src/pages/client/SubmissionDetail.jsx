@@ -321,7 +321,6 @@ const SubmissionDetail = () => {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-900 text-lg">{service.name}</h3>
-                            <p className="text-sm text-gray-600 mt-1">{service.description}</p>
                             <p className="text-sm text-gray-700 mt-2">
                               {documents.length} document{documents.length > 1 ? 's' : ''} × ${service.base_price.toFixed(2)} =
                               <span className="font-bold text-gray-900"> ${serviceTotal.toFixed(2)}</span>
