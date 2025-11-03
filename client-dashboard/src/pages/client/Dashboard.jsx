@@ -108,7 +108,7 @@ const Dashboard = () => {
     };
 
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[status] || styles.pending}`}>
+      <span className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold border ${styles[status] || styles.pending} whitespace-nowrap`}>
         {status?.charAt(0).toUpperCase() + status?.slice(1).replace('_', ' ')}
       </span>
     );
@@ -128,7 +128,7 @@ const Dashboard = () => {
     };
 
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[paymentStatus] || styles.unpaid}`}>
+      <span className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold border ${styles[paymentStatus] || styles.unpaid} whitespace-nowrap`}>
         {labels[paymentStatus] || 'Pending'}
       </span>
     );
@@ -244,18 +244,18 @@ const Dashboard = () => {
 
   return (
     <ClientLayout>
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
             Welcome back, {clientInfo?.first_name}!
           </h1>
-          <p className="text-gray-600">Manage your notary service requests</p>
+          <p className="text-sm sm:text-base text-gray-600">Manage your notary service requests</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
             <div className="flex items-center justify-between mb-2">
               <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
                 <Icon icon="heroicons:document-text" className="w-6 h-6 text-white" />
@@ -265,7 +265,7 @@ const Dashboard = () => {
             <p className="text-sm text-gray-600">Total Requests</p>
           </div>
 
-          <div className="bg-yellow-50 rounded-2xl p-6 border border-yellow-200">
+          <div className="bg-yellow-50 rounded-2xl p-4 sm:p-6 border border-yellow-200">
             <div className="flex items-center justify-between mb-2">
               <div className="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
                 <Icon icon="heroicons:clock" className="w-6 h-6 text-white" />
@@ -275,7 +275,7 @@ const Dashboard = () => {
             <p className="text-sm text-gray-600">Pending</p>
           </div>
 
-          <div className="bg-green-50 rounded-2xl p-6 border border-green-200">
+          <div className="bg-green-50 rounded-2xl p-4 sm:p-6 border border-green-200">
             <div className="flex items-center justify-between mb-2">
               <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
                 <Icon icon="heroicons:check-circle" className="w-6 h-6 text-white" />
@@ -287,12 +287,12 @@ const Dashboard = () => {
         </div>
 
         {/* Submissions Table */}
-        <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-900">Your Requests</h2>
+        <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Your Requests</h2>
             <a
               href="/form"
-              className="btn-glassy px-6 py-2 text-white text-sm font-semibold rounded-full transition-all hover:scale-105"
+              className="btn-glassy px-6 py-2 text-white text-sm font-semibold rounded-full transition-all hover:scale-105 text-center whitespace-nowrap"
             >
               <Icon icon="heroicons:plus" className="w-4 h-4 inline mr-1" />
               New Request
@@ -311,56 +311,61 @@ const Dashboard = () => {
               </a>
             </div>
           ) : (
-            <div className="overflow-x-auto -mx-6 px-6">
-              <table className="w-full min-w-[800px]">
+            <div className="overflow-x-auto -mx-4 sm:-mx-6">
+              <div className="inline-block min-w-full align-middle px-4 sm:px-6">
+                <table className="min-w-full w-full">
                 <thead>
                   <tr className="border-b border-gray-300">
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Date</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Appointment</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Notary</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Payment</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Actions</th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Date</th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Appointment</th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Notary</th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Status</th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Payment</th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentSubmissions.map((submission) => (
                     <tr key={submission.id} className="border-b border-gray-200 hover:bg-white transition-colors">
-                      <td className="py-4 px-4 text-sm text-gray-900">
+                      <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-900 whitespace-nowrap">
                         {formatDate(submission.created_at)}
                       </td>
-                      <td className="py-4 px-4 text-sm text-gray-900">
-                        {formatDate(submission.appointment_date)} at {submission.appointment_time}
+                      <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-900 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span>{formatDate(submission.appointment_date)}</span>
+                          <span className="text-gray-500">{submission.appointment_time}</span>
+                        </div>
                       </td>
-                      <td className="py-4 px-4 text-sm text-gray-600">
-                        {submission.notary?.name || 'Not assigned yet'}
+                      <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-600">
+                        <span className="line-clamp-2">{submission.notary?.name || 'Not assigned'}</span>
                       </td>
-                      <td className="py-4 px-4">
+                      <td className="py-3 sm:py-4 px-2 sm:px-4">
                         {getStatusBadge(submission.status)}
                       </td>
-                      <td className="py-4 px-4">
+                      <td className="py-3 sm:py-4 px-2 sm:px-4">
                         {getPaymentStatusBadge(submission.data?.payment?.payment_status)}
                       </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
+                      <td className="py-3 sm:py-4 px-2 sm:px-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
                           {submission.status === 'pending_payment' && (
                             <button
                               onClick={() => retryPayment(submission)}
                               disabled={retryingPaymentId === submission.id}
-                              className="text-orange-600 hover:text-orange-700 font-medium text-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="text-orange-600 hover:text-orange-700 font-medium text-xs sm:text-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                             >
                               {retryingPaymentId === submission.id ? (
                                 <>
-                                  <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <svg className="animate-spin h-3 w-3 sm:h-4 sm:w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                   </svg>
-                                  Processing...
+                                  <span className="hidden sm:inline">Processing...</span>
+                                  <span className="sm:hidden">...</span>
                                 </>
                               ) : (
                                 <>
-                                  <Icon icon="heroicons:arrow-path" className="w-4 h-4 mr-1" />
-                                  Retry Payment
+                                  <Icon icon="heroicons:arrow-path" className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                                  <span className="hidden sm:inline ml-1">Retry Payment</span>
                                 </>
                               )}
                             </button>
@@ -368,18 +373,19 @@ const Dashboard = () => {
                           {submission.status === 'pending_payment' && (
                             <button
                               onClick={() => deleteSubmission(submission.id)}
-                              className="text-red-600 hover:text-red-700 font-medium text-sm flex items-center"
+                              className="text-red-600 hover:text-red-700 font-medium text-xs sm:text-sm flex items-center whitespace-nowrap"
                             >
-                              <Icon icon="heroicons:trash" className="w-4 h-4 mr-1" />
-                              Delete
+                              <Icon icon="heroicons:trash" className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                              <span className="hidden sm:inline ml-1">Delete</span>
                             </button>
                           )}
                           <button
                             onClick={() => navigate(`/submission/${submission.id}`)}
-                            className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
+                            className="text-black hover:text-gray-700 font-medium text-xs sm:text-sm flex items-center whitespace-nowrap"
                           >
-                            View Details
-                            <Icon icon="heroicons:arrow-right" className="w-4 h-4 ml-1" />
+                            <span className="hidden sm:inline">View Details</span>
+                            <span className="sm:hidden">View</span>
+                            <Icon icon="heroicons:arrow-right" className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
                           </button>
                         </div>
                       </td>
@@ -387,44 +393,59 @@ const Dashboard = () => {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {/* Pagination Controls */}
               {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-xs sm:text-sm text-gray-600 order-2 sm:order-1">
                     Showing {startIndex + 1} to {Math.min(endIndex, submissions.length)} of {submissions.length} requests
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 order-1 sm:order-2">
                     <button
                       onClick={() => goToPage(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="px-3 sm:px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium text-xs sm:text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      <Icon icon="heroicons:chevron-left" className="w-4 h-4" />
+                      <Icon icon="heroicons:chevron-left" className="w-3 h-3 sm:w-4 sm:h-4" />
                     </button>
 
                     <div className="flex items-center gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => goToPage(page)}
-                          className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                            currentPage === page
-                              ? 'bg-black text-white'
-                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter(page => {
+                          // On mobile, show only current page and adjacent pages
+                          if (totalPages <= 5) return true;
+                          return page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+                        })
+                        .map((page, index, array) => {
+                          // Add ellipsis if there's a gap
+                          const showEllipsisBefore = index > 0 && page - array[index - 1] > 1;
+                          return (
+                            <div key={page} className="flex items-center gap-1">
+                              {showEllipsisBefore && (
+                                <span className="px-2 text-gray-400">...</span>
+                              )}
+                              <button
+                                onClick={() => goToPage(page)}
+                                className={`px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors ${
+                                  currentPage === page
+                                    ? 'bg-black text-white'
+                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </div>
+                          );
+                        })}
                     </div>
 
                     <button
                       onClick={() => goToPage(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="px-3 sm:px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium text-xs sm:text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      <Icon icon="heroicons:chevron-right" className="w-4 h-4" />
+                      <Icon icon="heroicons:chevron-right" className="w-3 h-3 sm:w-4 sm:h-4" />
                     </button>
                   </div>
                 </div>
