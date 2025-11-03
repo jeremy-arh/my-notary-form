@@ -236,7 +236,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               errors.phone ? 'border-red-500' : 'border-gray-200'
             } rounded-xl overflow-hidden transition-all focus-within:ring-2 ${
               errors.phone ? 'focus-within:ring-red-500' : 'focus-within:ring-black'
-            } focus-within:border-black`}>
+            } focus-within:border-black pl-4 pr-4`}>
               <PhoneInput
                 international
                 defaultCountry="US"
@@ -244,10 +244,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 onChange={handlePhoneChange}
                 className="phone-input-integrated w-full flex"
                 countrySelectProps={{
-                  className: "pl-4 pr-2 py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none"
+                  className: "pr-2 py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none"
                 }}
                 numberInputProps={{
-                  className: "flex-1 pl-2 pr-4 py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0"
+                  className: "flex-1 pl-2 py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0"
                 }}
               />
             </div>
