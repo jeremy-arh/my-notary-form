@@ -153,14 +153,19 @@ serve(async (req) => {
 
     console.log('📋 [CLIENT] Final clientId for submission:', clientId)
 
-    // Use uploaded files if available, otherwise fall back to simplified document data
-    const documentsData = formData.uploadedFiles || formData.documents?.map((doc: any) => ({
-      name: doc.name,
-      size: doc.size,
-      type: doc.type
-    })) || []
+    // Prepare service documents data (convert File objects to metadata)
+    const serviceDocumentsData = {}
+    if (formData.serviceDocuments) {
+      for (const [serviceId, files] of Object.entries(formData.serviceDocuments)) {
+        serviceDocumentsData[serviceId] = (files as any[]).map((file: any) => ({
+          name: file.name,
+          size: file.size,
+          type: file.type
+        }))
+      }
+    }
 
-    console.log('📁 [FILES] Documents data to store:', documentsData)
+    console.log('📁 [FILES] Service documents data:', serviceDocumentsData)
 
     // Create temporary submission in database with status 'pending_payment'
     const submissionData = {
@@ -179,8 +184,8 @@ serve(async (req) => {
       country: formData.country,
       notes: formData.notes || null,
       data: {
-        selectedOptions: formData.selectedOptions,
-        uploadedFiles: documentsData, // Store uploaded file paths
+        selectedServices: formData.selectedServices,
+        serviceDocuments: serviceDocumentsData,
       },
     }
 
@@ -218,25 +223,33 @@ serve(async (req) => {
       servicesMap[service.service_id] = service
     })
 
-    // Calculate line items for Stripe from selected services
+    // Calculate line items for Stripe from selected services and documents
     const lineItems = []
 
-    if (formData.selectedOptions && formData.selectedOptions.length > 0) {
-      for (const serviceId of formData.selectedOptions) {
+    if (formData.selectedServices && formData.selectedServices.length > 0) {
+      for (const serviceId of formData.selectedServices) {
         const service = servicesMap[serviceId]
         if (service) {
-          lineItems.push({
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: service.name,
-                description: service.short_description || service.description,
+          // Get document count for this service
+          const documentsForService = formData.serviceDocuments?.[serviceId] || []
+          const documentCount = documentsForService.length
+
+          if (documentCount > 0) {
+            lineItems.push({
+              price_data: {
+                currency: 'usd',
+                product_data: {
+                  name: `${service.name} (${documentCount} document${documentCount > 1 ? 's' : ''})`,
+                  description: service.short_description || service.description,
+                },
+                unit_amount: Math.round(service.base_price * 100), // Convert to cents
               },
-              unit_amount: Math.round(service.base_price * 100), // Convert to cents
-            },
-            quantity: 1,
-          })
-          console.log(`✅ [SERVICES] Added service: ${service.name} - $${service.base_price}`)
+              quantity: documentCount, // One line item per document
+            })
+            console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = $${(service.base_price * documentCount).toFixed(2)}`)
+          } else {
+            console.warn(`⚠️ [SERVICES] No documents for service: ${serviceId}`)
+          }
         } else {
           console.warn(`⚠️ [SERVICES] Service not found: ${serviceId}`)
         }
@@ -245,8 +258,8 @@ serve(async (req) => {
 
     // Ensure we have at least one line item
     if (lineItems.length === 0) {
-      console.error('❌ [SERVICES] No valid services selected')
-      throw new Error('No valid services selected')
+      console.error('❌ [SERVICES] No valid services with documents selected')
+      throw new Error('No valid services with documents selected')
     }
 
     // Create Stripe Checkout Session with minimal metadata
