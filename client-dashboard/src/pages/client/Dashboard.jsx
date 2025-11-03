@@ -244,7 +244,7 @@ const Dashboard = () => {
 
   return (
     <ClientLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
@@ -311,9 +311,10 @@ const Dashboard = () => {
               </a>
             </div>
           ) : (
+            <>
             <div className="overflow-x-auto -mx-4 sm:-mx-6">
-              <div className="inline-block min-w-full align-middle px-4 sm:px-6">
-                <table className="min-w-full w-full">
+              <div className="inline-block min-w-full px-4 sm:px-6">
+                <table className="w-full" style={{ minWidth: '900px' }}>
                 <thead>
                   <tr className="border-b border-gray-300">
                     <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Date</th>
@@ -331,13 +332,13 @@ const Dashboard = () => {
                         {formatDate(submission.created_at)}
                       </td>
                       <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-900 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span>{formatDate(submission.appointment_date)}</span>
-                          <span className="text-gray-500">{submission.appointment_time}</span>
+                        <div>
+                          <div>{formatDate(submission.appointment_date)}</div>
+                          <div className="text-gray-500 text-[10px] sm:text-xs">{submission.appointment_time}</div>
                         </div>
                       </td>
-                      <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-600">
-                        <span className="line-clamp-2">{submission.notary?.name || 'Not assigned'}</span>
+                      <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+                        <div className="max-w-[120px] truncate">{submission.notary?.name || 'Not assigned'}</div>
                       </td>
                       <td className="py-3 sm:py-4 px-2 sm:px-4">
                         {getStatusBadge(submission.status)}
@@ -345,47 +346,40 @@ const Dashboard = () => {
                       <td className="py-3 sm:py-4 px-2 sm:px-4">
                         {getPaymentStatusBadge(submission.data?.payment?.payment_status)}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 sm:px-4">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+                      <td className="py-3 sm:py-4 px-2 sm:px-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
                           {submission.status === 'pending_payment' && (
-                            <button
-                              onClick={() => retryPayment(submission)}
-                              disabled={retryingPaymentId === submission.id}
-                              className="text-orange-600 hover:text-orange-700 font-medium text-xs sm:text-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                            >
-                              {retryingPaymentId === submission.id ? (
-                                <>
-                                  <svg className="animate-spin h-3 w-3 sm:h-4 sm:w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <>
+                              <button
+                                onClick={() => retryPayment(submission)}
+                                disabled={retryingPaymentId === submission.id}
+                                className="text-orange-600 hover:text-orange-700 font-medium text-xs flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Retry Payment"
+                              >
+                                {retryingPaymentId === submission.id ? (
+                                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                   </svg>
-                                  <span className="hidden sm:inline">Processing...</span>
-                                  <span className="sm:hidden">...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Icon icon="heroicons:arrow-path" className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
-                                  <span className="hidden sm:inline ml-1">Retry Payment</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                          {submission.status === 'pending_payment' && (
-                            <button
-                              onClick={() => deleteSubmission(submission.id)}
-                              className="text-red-600 hover:text-red-700 font-medium text-xs sm:text-sm flex items-center whitespace-nowrap"
-                            >
-                              <Icon icon="heroicons:trash" className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
-                              <span className="hidden sm:inline ml-1">Delete</span>
-                            </button>
+                                ) : (
+                                  <Icon icon="heroicons:arrow-path" className="w-4 h-4" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => deleteSubmission(submission.id)}
+                                className="text-red-600 hover:text-red-700 font-medium text-xs flex items-center"
+                                title="Delete"
+                              >
+                                <Icon icon="heroicons:trash" className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={() => navigate(`/submission/${submission.id}`)}
-                            className="text-black hover:text-gray-700 font-medium text-xs sm:text-sm flex items-center whitespace-nowrap"
+                            className="text-black hover:text-gray-700 font-medium text-xs flex items-center"
+                            title="View Details"
                           >
-                            <span className="hidden sm:inline">View Details</span>
-                            <span className="sm:hidden">View</span>
-                            <Icon icon="heroicons:arrow-right" className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                            <Icon icon="heroicons:eye" className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -394,6 +388,7 @@ const Dashboard = () => {
                 </tbody>
               </table>
               </div>
+            </div>
 
               {/* Pagination Controls */}
               {totalPages > 1 && (
@@ -450,7 +445,7 @@ const Dashboard = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>
