@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { Logo } from '../../../shared/assets';
+import Logo from '../assets/Logo';
 import { supabase } from '../lib/supabase';
 
 const PaymentSuccess = () => {

@@ -146,7 +146,7 @@ const Profile = () => {
 
   return (
     <ClientLayout>
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto overflow-x-hidden">
         {/* Tabs */}
         <div className="flex space-x-6 mb-8 border-b border-gray-200">
           <button
@@ -331,46 +331,46 @@ const Profile = () => {
 
         {/* Invoices Tab */}
         {activeTab === 'invoices' && (
-          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-4 sm:p-6 overflow-hidden">
             {invoices.length === 0 ? (
               <div className="text-center py-12">
                 <Icon icon="heroicons:document-text" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">No invoices available yet</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <table className="w-full" style={{ minWidth: '600px' }}>
                   <thead>
                     <tr className="border-b border-gray-300">
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Date</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Amount</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Status</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">Actions</th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Date</th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Amount</th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Status</th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {invoices.map((invoice) => (
                       <tr key={invoice.id} className="border-b border-gray-200 hover:bg-white transition-colors">
-                        <td className="py-4 px-4 text-sm text-gray-900">
+                        <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-900 whitespace-nowrap">
                           {formatDate(invoice.data.payment.paid_at || invoice.created_at)}
                         </td>
-                        <td className="py-4 px-4 text-sm text-gray-900">
+                        <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-900 whitespace-nowrap">
                           ${((invoice.data.payment.amount_paid || 0) / 100).toFixed(2)} {(invoice.data.payment.currency || 'usd').toUpperCase()}
                         </td>
-                        <td className="py-4 px-4">
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-green-100 text-green-800 border-green-200">
+                        <td className="py-3 sm:py-4 px-2 sm:px-4 whitespace-nowrap">
+                          <span className="px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold border bg-green-100 text-green-800 border-green-200">
                             {invoice.data.payment.payment_status === 'paid' ? 'Paid' : invoice.data.payment.payment_status}
                           </span>
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-3 sm:py-4 px-2 sm:px-4 whitespace-nowrap">
                           <a
                             href={invoice.data.payment.invoice_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-black hover:text-gray-700 font-medium text-sm flex items-center"
+                            className="text-black hover:text-gray-700 font-medium text-xs sm:text-sm flex items-center"
                           >
-                            <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-1" />
-                            Download
+                            <Icon icon="heroicons:arrow-down-tray" className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                            <span className="hidden sm:inline">Download</span>
                           </a>
                         </td>
                       </tr>

@@ -1,14 +1,25 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import Home from './components/Home'
 import Login from './pages/client/Login'
 import ResetPassword from './pages/client/ResetPassword'
 import PaymentSuccess from './pages/PaymentSuccess'
 import PaymentFailed from './pages/PaymentFailed'
-import Dashboard from './pages/client/Dashboard'
-import SubmissionDetail from './pages/client/SubmissionDetail'
-import Profile from './pages/client/Profile'
 import PrivateRoute from './components/PrivateRoute'
 import NotaryForm from './components/NotaryForm'
+
+// Lazy load heavy components for better performance
+const Dashboard = lazy(() => import('./pages/client/Dashboard'))
+const SubmissionDetail = lazy(() => import('./pages/client/SubmissionDetail'))
+const Messages = lazy(() => import('./pages/client/Messages'))
+const Profile = lazy(() => import('./pages/client/Profile'))
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+  </div>
+)
 
 function App() {
   return (
@@ -32,7 +43,9 @@ function App() {
           path="/dashboard"
           element={
             <PrivateRoute>
-              <Dashboard />
+              <Suspense fallback={<LoadingSpinner />}>
+                <Dashboard />
+              </Suspense>
             </PrivateRoute>
           }
         />
@@ -40,7 +53,19 @@ function App() {
           path="/submission/:id"
           element={
             <PrivateRoute>
-              <SubmissionDetail />
+              <Suspense fallback={<LoadingSpinner />}>
+                <SubmissionDetail />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <Messages />
+              </Suspense>
             </PrivateRoute>
           }
         />
@@ -48,7 +73,9 @@ function App() {
           path="/profile"
           element={
             <PrivateRoute>
-              <Profile />
+              <Suspense fallback={<LoadingSpinner />}>
+                <Profile />
+              </Suspense>
             </PrivateRoute>
           }
         />

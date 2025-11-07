@@ -302,6 +302,17 @@ select {
   align-items: center;
 }
 
+/* Prevent horizontal scrolling */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Ensure all containers respect viewport width */
+* {
+  box-sizing: border-box;
+}
+
 /* Responsive Typography */
 @media (max-width: 768px) {
   html {

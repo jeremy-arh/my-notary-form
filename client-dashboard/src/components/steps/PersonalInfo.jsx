@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { supabase } from '../../lib/supabase';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false }) => {
   const [errors, setErrors] = useState({});
@@ -115,8 +116,22 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       newErrors.country = 'Country is required';
     }
 
+    if (!formData.timezone?.trim()) {
+      newErrors.timezone = 'Timezone is required';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleAddressSelect = (addressData) => {
+    updateFormData({
+      address: addressData.address || '',
+      city: addressData.city || '',
+      postalCode: addressData.postal_code || '',
+      country: addressData.country || '',
+      timezone: addressData.timezone || ''
+    });
   };
 
   const handleNext = () => {
@@ -341,16 +356,15 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             <Icon icon="heroicons:map-pin" className="w-4 h-4 mr-2 text-gray-400" />
             Street Address <span className="text-red-500 ml-1">*</span>
           </label>
-          <input
-            type="text"
-            id="address"
-            value={formData.address || ''}
-            onChange={(e) => handleChange('address', e.target.value)}
-            className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
-              errors.address ? 'border-red-500' : 'border-gray-200'
-            }`}
-            placeholder="123 Main Street"
-          />
+          <div className={errors.address ? 'border-2 border-red-500 rounded-xl' : ''}>
+            <AddressAutocomplete
+              value={formData.address || ''}
+              onChange={(value) => handleChange('address', value)}
+              onAddressSelect={handleAddressSelect}
+              placeholder="Start typing an address..."
+              className={errors.address ? 'border-red-500' : ''}
+            />
+          </div>
           {errors.address && (
             <p className="mt-1 text-sm text-red-600 flex items-center">
               <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
@@ -370,11 +384,11 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               type="text"
               id="city"
               value={formData.city || ''}
-              onChange={(e) => handleChange('city', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+              disabled
+              className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
                 errors.city ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="New York"
+              placeholder="Auto-filled from address"
             />
             {errors.city && (
               <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -392,11 +406,11 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               type="text"
               id="postalCode"
               value={formData.postalCode || ''}
-              onChange={(e) => handleChange('postalCode', e.target.value.toUpperCase())}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+              disabled
+              className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
                 errors.postalCode ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="10001"
+              placeholder="Auto-filled from address"
             />
             {errors.postalCode && (
               <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -415,11 +429,11 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               type="text"
               id="country"
               value={formData.country || ''}
-              onChange={(e) => handleChange('country', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+              disabled
+              className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
                 errors.country ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="United States"
+              placeholder="Auto-filled from address"
             />
             {errors.country && (
               <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -428,6 +442,30 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               </p>
             )}
           </div>
+        </div>
+
+        {/* Timezone */}
+        <div>
+          <label htmlFor="timezone" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
+            <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-400" />
+            Timezone <span className="text-red-500 ml-1">*</span>
+          </label>
+          <input
+            type="text"
+            id="timezone"
+            value={formData.timezone || ''}
+            disabled
+            className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
+              errors.timezone ? 'border-red-500' : 'border-gray-200'
+            }`}
+            placeholder="Auto-filled from address (precise timezone)"
+          />
+          {errors.timezone && (
+            <p className="mt-1 text-sm text-red-600 flex items-center">
+              <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
+              {errors.timezone}
+            </p>
+          )}
         </div>
 
         {/* Additional Notes */}

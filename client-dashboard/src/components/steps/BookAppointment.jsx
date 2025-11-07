@@ -4,6 +4,10 @@ import { Icon } from '@iconify/react';
 const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [selectedDate, setSelectedDate] = useState(formData.appointmentDate || '');
   const [selectedTime, setSelectedTime] = useState(formData.appointmentTime || '');
+  const [isDetectingTimezone, setIsDetectingTimezone] = useState(true);
+  const [timezoneSearchTerm, setTimezoneSearchTerm] = useState('');
+  const [isTimezoneDropdownOpen, setIsTimezoneDropdownOpen] = useState(false);
+  const timezoneDropdownRef = useRef(null);
 
   // Get default timezone - if formData has a UTC value, use it; otherwise default to UTC-5 (Eastern Time)
   const getDefaultTimezone = () => {
@@ -16,55 +20,263 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [timezone, setTimezone] = useState(getDefaultTimezone());
   const timeSlotsRef = useRef(null);
 
-  // Save default timezone to formData on mount if not already set
+  // Detect user timezone on mount
   useEffect(() => {
-    if (!formData.timezone || !formData.timezone.startsWith('UTC')) {
-      updateFormData({ timezone: 'UTC-5' });
-    }
+    const detectTimezone = async () => {
+      try {
+        setIsDetectingTimezone(true);
+        
+        // ALWAYS use browser's timezone first (most reliable and accurate)
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log('🌍 Browser timezone detected:', browserTimezone);
+        
+        if (browserTimezone) {
+          const utcOffset = convertIANAToUTCOffset(browserTimezone);
+          console.log('📍 Converted to UTC offset:', utcOffset, 'from IANA:', browserTimezone);
+          
+          if (utcOffset) {
+            // Always update, even if formData already has a timezone (to fix incorrect detections)
+            setTimezone(utcOffset);
+            updateFormData({ timezone: utcOffset });
+            setIsDetectingTimezone(false);
+            return;
+          }
+        }
+        
+        // Fallback: try IP-based detection only if browser timezone failed
+        try {
+          const response = await fetch('https://ipapi.co/json/');
+          const data = await response.json();
+          console.log('🌍 IP-based timezone detected:', data.timezone);
+          
+          if (data.timezone) {
+            const utcOffset = convertIANAToUTCOffset(data.timezone);
+            console.log('📍 Converted to UTC offset:', utcOffset);
+            if (utcOffset) {
+              setTimezone(utcOffset);
+              updateFormData({ timezone: utcOffset });
+            }
+          }
+        } catch (ipError) {
+          console.error('Error detecting timezone from IP:', ipError);
+        }
+      } catch (error) {
+        console.error('Error detecting timezone:', error);
+      } finally {
+        setIsDetectingTimezone(false);
+      }
+    };
+
+    detectTimezone();
   }, []);
+
+  // Convert IANA timezone identifier to UTC offset format
+  const convertIANAToUTCOffset = (ianaTimezone) => {
+    if (!ianaTimezone) {
+      console.error('No timezone provided');
+      return 'UTC+0';
+    }
+    
+    try {
+      // First, try the approximate mapping (fastest and most reliable for common timezones)
+      const approximate = getApproximateUTCOffset(ianaTimezone);
+      if (approximate) {
+        console.log(`✅ Found timezone mapping: ${ianaTimezone} -> ${approximate}`);
+        return approximate;
+      }
+      
+      // If not found in mapping, calculate dynamically
+      const now = new Date();
+      
+      // Get the time in the target timezone
+      const tzString = now.toLocaleString('en-US', { 
+        timeZone: ianaTimezone,
+        timeZoneName: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      // Get the time in UTC
+      const utcString = now.toLocaleString('en-US', { 
+        timeZone: 'UTC',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      // Parse times (format: "HH:MM")
+      const tzMatch = tzString.match(/(\d{1,2}):(\d{2})/);
+      const utcMatch = utcString.match(/(\d{1,2}):(\d{2})/);
+      
+      if (tzMatch && utcMatch) {
+        const tzHour = parseInt(tzMatch[1]);
+        const tzMin = parseInt(tzMatch[2]);
+        const utcHour = parseInt(utcMatch[1]);
+        const utcMin = parseInt(utcMatch[2]);
+        
+        // Calculate offset in minutes
+        const tzTotalMin = tzHour * 60 + tzMin;
+        const utcTotalMin = utcHour * 60 + utcMin;
+        let offsetMin = tzTotalMin - utcTotalMin;
+        
+        // Handle day wrap-around (if difference is more than 12 hours, assume opposite direction)
+        if (offsetMin > 720) offsetMin -= 1440;
+        if (offsetMin < -720) offsetMin += 1440;
+        
+        const offsetHours = offsetMin / 60;
+        const sign = offsetHours >= 0 ? '+' : '-';
+        const absHours = Math.abs(offsetHours);
+        const hours = Math.floor(absHours);
+        const minutes = Math.round((absHours - hours) * 60);
+        
+        if (hours === 0 && minutes === 0) {
+          return 'UTC+0';
+        } else if (minutes === 0) {
+          return `UTC${sign}${hours}`;
+        } else if (minutes === 30) {
+          return `UTC${sign}${hours}:30`;
+        } else if (minutes === 45) {
+          return `UTC${sign}${hours}:45`;
+        } else if (minutes === 15) {
+          return `UTC${sign}${hours}:15`;
+        }
+      }
+      
+      // Final fallback
+      return approximate || 'UTC+0';
+    } catch (error) {
+      console.error('Error converting IANA timezone:', error, 'for timezone:', ianaTimezone);
+      // Fallback to approximate mapping
+      return getApproximateUTCOffset(ianaTimezone) || 'UTC+0';
+    }
+  };
+
+  // Get approximate UTC offset from IANA timezone (fallback)
+  const getApproximateUTCOffset = (ianaTimezone) => {
+    // Common timezone mappings
+    const timezoneMap = {
+      // Americas
+      'America/New_York': 'UTC-5',
+      'America/Chicago': 'UTC-6',
+      'America/Denver': 'UTC-7',
+      'America/Los_Angeles': 'UTC-8',
+      'America/Phoenix': 'UTC-7',
+      'America/Anchorage': 'UTC-9',
+      'Pacific/Honolulu': 'UTC-10',
+      'America/Toronto': 'UTC-5',
+      'America/Mexico_City': 'UTC-6',
+      'America/Sao_Paulo': 'UTC-3',
+      'America/Buenos_Aires': 'UTC-3',
+      // Europe
+      'Europe/London': 'UTC+0',
+      'Europe/Paris': 'UTC+1',
+      'Europe/Berlin': 'UTC+1',
+      'Europe/Rome': 'UTC+1',
+      'Europe/Madrid': 'UTC+1',
+      'Europe/Amsterdam': 'UTC+1',
+      'Europe/Brussels': 'UTC+1',
+      'Europe/Zurich': 'UTC+1',
+      'Europe/Vienna': 'UTC+1',
+      'Europe/Stockholm': 'UTC+1',
+      'Europe/Oslo': 'UTC+1',
+      'Europe/Copenhagen': 'UTC+1',
+      'Europe/Helsinki': 'UTC+2',
+      'Europe/Warsaw': 'UTC+1',
+      'Europe/Prague': 'UTC+1',
+      'Europe/Athens': 'UTC+2',
+      'Europe/Dublin': 'UTC+0',
+      'Europe/Luxembourg': 'UTC+1',
+      'Europe/Istanbul': 'UTC+3',
+      'Europe/Moscow': 'UTC+3',
+      // Asia
+      'Asia/Tokyo': 'UTC+9',
+      'Asia/Seoul': 'UTC+9',
+      'Asia/Shanghai': 'UTC+8',
+      'Asia/Beijing': 'UTC+8',
+      'Asia/Singapore': 'UTC+8',
+      'Asia/Manila': 'UTC+8',
+      'Asia/Hong_Kong': 'UTC+8',
+      'Asia/Dubai': 'UTC+4',
+      'Asia/Riyadh': 'UTC+3',
+      'Asia/Jerusalem': 'UTC+2',
+      'Asia/Kolkata': 'UTC+5:30',
+      'Asia/Mumbai': 'UTC+5:30',
+      'Asia/Dhaka': 'UTC+6',
+      'Asia/Bangkok': 'UTC+7',
+      'Asia/Jakarta': 'UTC+7',
+      'Asia/Ho_Chi_Minh': 'UTC+7',
+      // Oceania
+      'Australia/Sydney': 'UTC+10',
+      'Australia/Melbourne': 'UTC+10',
+      'Australia/Adelaide': 'UTC+9:30',
+      'Pacific/Auckland': 'UTC+12',
+      // Africa
+      'Africa/Cairo': 'UTC+2',
+      'Africa/Johannesburg': 'UTC+2',
+      'Africa/Lagos': 'UTC+1',
+      'Africa/Nairobi': 'UTC+3',
+    };
+    
+    // Direct lookup
+    if (timezoneMap[ianaTimezone]) {
+      return timezoneMap[ianaTimezone];
+    }
+    
+    // Try partial match (e.g., "America/New_York" matches "America/")
+    for (const [key, value] of Object.entries(timezoneMap)) {
+      if (ianaTimezone.includes(key.split('/')[0])) {
+        return value;
+      }
+    }
+    
+    // Default fallback
+    return 'UTC+0';
+  };
 
   // Always use 12-hour format (AM/PM) in English
   const use12HourFormat = true;
 
-  // All UTC timezones from UTC-12 to UTC+14
+  // All UTC timezones from UTC-12 to UTC+14 with comprehensive labels
+  // Based on https://www.donneesmondiales.com/fuseaux-horaires/
   const timezones = [
-    { value: 'UTC-12', label: 'UTC-12:00', offset: -12 },
-    { value: 'UTC-11', label: 'UTC-11:00', offset: -11 },
-    { value: 'UTC-10', label: 'UTC-10:00 (Hawaii)', offset: -10 },
-    { value: 'UTC-9', label: 'UTC-09:00 (Alaska)', offset: -9 },
-    { value: 'UTC-8', label: 'UTC-08:00 (Pacific Time)', offset: -8 },
-    { value: 'UTC-7', label: 'UTC-07:00 (Mountain Time)', offset: -7 },
-    { value: 'UTC-6', label: 'UTC-06:00 (Central Time)', offset: -6 },
-    { value: 'UTC-5', label: 'UTC-05:00 (Eastern Time)', offset: -5 },
-    { value: 'UTC-4', label: 'UTC-04:00 (Atlantic Time)', offset: -4 },
-    { value: 'UTC-3:30', label: 'UTC-03:30 (Newfoundland)', offset: -3.5 },
-    { value: 'UTC-3', label: 'UTC-03:00', offset: -3 },
-    { value: 'UTC-2', label: 'UTC-02:00', offset: -2 },
-    { value: 'UTC-1', label: 'UTC-01:00', offset: -1 },
-    { value: 'UTC+0', label: 'UTC+00:00 (GMT/London)', offset: 0 },
-    { value: 'UTC+1', label: 'UTC+01:00 (Paris/Berlin)', offset: 1 },
-    { value: 'UTC+2', label: 'UTC+02:00 (Cairo/Athens)', offset: 2 },
-    { value: 'UTC+3', label: 'UTC+03:00 (Moscow)', offset: 3 },
-    { value: 'UTC+3:30', label: 'UTC+03:30 (Tehran)', offset: 3.5 },
-    { value: 'UTC+4', label: 'UTC+04:00 (Dubai)', offset: 4 },
-    { value: 'UTC+4:30', label: 'UTC+04:30 (Kabul)', offset: 4.5 },
-    { value: 'UTC+5', label: 'UTC+05:00 (Pakistan)', offset: 5 },
-    { value: 'UTC+5:30', label: 'UTC+05:30 (India)', offset: 5.5 },
-    { value: 'UTC+5:45', label: 'UTC+05:45 (Nepal)', offset: 5.75 },
-    { value: 'UTC+6', label: 'UTC+06:00 (Bangladesh)', offset: 6 },
-    { value: 'UTC+6:30', label: 'UTC+06:30 (Myanmar)', offset: 6.5 },
-    { value: 'UTC+7', label: 'UTC+07:00 (Bangkok)', offset: 7 },
-    { value: 'UTC+8', label: 'UTC+08:00 (Singapore/Beijing)', offset: 8 },
-    { value: 'UTC+8:45', label: 'UTC+08:45 (Eucla)', offset: 8.75 },
-    { value: 'UTC+9', label: 'UTC+09:00 (Tokyo/Seoul)', offset: 9 },
-    { value: 'UTC+9:30', label: 'UTC+09:30 (Adelaide)', offset: 9.5 },
-    { value: 'UTC+10', label: 'UTC+10:00 (Sydney)', offset: 10 },
-    { value: 'UTC+10:30', label: 'UTC+10:30 (Lord Howe)', offset: 10.5 },
-    { value: 'UTC+11', label: 'UTC+11:00', offset: 11 },
-    { value: 'UTC+12', label: 'UTC+12:00 (Auckland)', offset: 12 },
-    { value: 'UTC+12:45', label: 'UTC+12:45 (Chatham)', offset: 12.75 },
-    { value: 'UTC+13', label: 'UTC+13:00', offset: 13 },
-    { value: 'UTC+14', label: 'UTC+14:00', offset: 14 },
+    { value: 'UTC-12', label: 'Baker Island Time (UTC-12)', offset: -12 },
+    { value: 'UTC-11', label: 'Hawaii-Aleutian Standard Time - Hawaii, Midway (UTC-11)', offset: -11 },
+    { value: 'UTC-10', label: 'Hawaii Standard Time - Honolulu (UTC-10)', offset: -10 },
+    { value: 'UTC-9', label: 'Alaska Standard Time - Anchorage, Juneau (UTC-9)', offset: -9 },
+    { value: 'UTC-8', label: 'Pacific Standard Time - Los Angeles, San Francisco, Vancouver, Tijuana (UTC-8)', offset: -8 },
+    { value: 'UTC-7', label: 'Mountain Standard Time - Denver, Phoenix, Calgary, Chihuahua (UTC-7)', offset: -7 },
+    { value: 'UTC-6', label: 'Central Standard Time - Chicago, Dallas, Mexico City, Guatemala, San Salvador, Tegucigalpa, Managua, San José, Belize (UTC-6)', offset: -6 },
+    { value: 'UTC-5', label: 'Eastern Standard Time - New York, Miami, Toronto, Havana, Bogotá, Lima, Quito, Panama, Kingston, Port-au-Prince (UTC-5)', offset: -5 },
+    { value: 'UTC-4', label: 'Atlantic Standard Time - Caracas, La Paz, Santiago, Puerto Rico, Santo Domingo, Port of Spain, Bridgetown, Castries, Roseau, St. George\'s, Kingstown, Basseterre, St. John\'s (Antigua), Charlotte Amalie, Road Town, The Valley, Oranjestad, Willemstad, Kralendijk, Philipsburg, Marigot, Gustavia, Pointe-à-Pitre, Fort-de-France, Roseau, Basseterre, Castries, Kingstown, St. George\'s, Bridgetown, Port of Spain, San Juan, Charlotte Amalie, Road Town, The Valley, Oranjestad, Willemstad, Kralendijk, Philipsburg, Marigot, Gustavia (UTC-4)', offset: -4 },
+    { value: 'UTC-3:30', label: 'Newfoundland Standard Time - St. John\'s (UTC-3:30)', offset: -3.5 },
+    { value: 'UTC-3', label: 'Brasília Time - São Paulo, Rio de Janeiro, Buenos Aires, Montevideo, Cayenne, Fortaleza, Recife, Salvador, Brasília (UTC-3)', offset: -3 },
+    { value: 'UTC-2', label: 'Mid-Atlantic Time - Fernando de Noronha (UTC-2)', offset: -2 },
+    { value: 'UTC-1', label: 'Azores Time - Ponta Delgada, Praia (UTC-1)', offset: -1 },
+    { value: 'UTC+0', label: 'Greenwich Mean Time (GMT) - London, Dublin, Lisbon, Reykjavik, Accra, Casablanca, Monrovia, Dakar, Abidjan, Conakry, Bamako, Ouagadougou, Freetown, Lome, Cotonou, Niamey, Nouakchott, Banjul, Bissau, São Tomé, Praia (UTC+0)', offset: 0 },
+    { value: 'UTC+1', label: 'Central European Time (CET) - Paris, Berlin, Rome, Madrid, Amsterdam, Brussels, Vienna, Stockholm, Warsaw, Prague, Budapest, Copenhagen, Oslo, Luxembourg, Algiers, Tunis, Lagos (UTC+1)', offset: 1 },
+    { value: 'UTC+2', label: 'Eastern European Time (EET) - Athens, Helsinki, Bucharest, Sofia, Cairo, Jerusalem, Beirut, Damascus, Amman, Nicosia, Tallinn, Riga, Vilnius, Kiev, Harare, Lusaka, Maputo, Nairobi, Tripoli, Khartoum (UTC+2)', offset: 2 },
+    { value: 'UTC+3', label: 'Moscow Time - Moscow, Istanbul, Riyadh, Kuwait, Baghdad, Doha, Manama, Muscat, Addis Ababa, Minsk, Kaliningrad (UTC+3)', offset: 3 },
+    { value: 'UTC+3:30', label: 'Iran Standard Time - Tehran (UTC+3:30)', offset: 3.5 },
+    { value: 'UTC+4', label: 'Gulf Standard Time - Dubai, Abu Dhabi, Muscat, Baku, Tbilisi, Yerevan, Samara, Port Louis, Victoria, Réunion, Mauritius (UTC+4)', offset: 4 },
+    { value: 'UTC+4:30', label: 'Afghanistan Time - Kabul (UTC+4:30)', offset: 4.5 },
+    { value: 'UTC+5', label: 'Pakistan Standard Time - Karachi, Lahore, Islamabad, Tashkent, Dushanbe, Ashgabat, Almaty (UTC+5)', offset: 5 },
+    { value: 'UTC+5:30', label: 'India Standard Time - Mumbai, New Delhi, Kolkata, Chennai, Bangalore, Hyderabad, Pune, Ahmedabad, Jaipur, Lucknow (UTC+5:30)', offset: 5.5 },
+    { value: 'UTC+5:45', label: 'Nepal Time - Kathmandu (UTC+5:45)', offset: 5.75 },
+    { value: 'UTC+6', label: 'Bangladesh Standard Time - Dhaka, Chittagong, Khulna, Almaty, Shymkent (UTC+6)', offset: 6 },
+    { value: 'UTC+6:30', label: 'Myanmar Time - Yangon, Mandalay, Naypyidaw (UTC+6:30)', offset: 6.5 },
+    { value: 'UTC+7', label: 'Indochina Time - Bangkok, Jakarta, Hanoi, Ho Chi Minh City, Phnom Penh, Vientiane, Kuala Lumpur, Bandung, Surabaya (UTC+7)', offset: 7 },
+    { value: 'UTC+8', label: 'China Standard Time - Beijing, Shanghai, Guangzhou, Shenzhen, Hong Kong, Macau, Taipei, Manila, Kuala Lumpur, Singapore, Perth, Ulaanbaatar (UTC+8)', offset: 8 },
+    { value: 'UTC+8:45', label: 'Australian Central Western Time - Eucla, Border Village, Mundrabilla, Madura, Cocklebiddy, Norseman (UTC+8:45)', offset: 8.75 },
+    { value: 'UTC+9', label: 'Japan Standard Time - Tokyo, Seoul, Pyongyang, Osaka, Kyoto, Yokohama, Nagoya, Sapporo, Fukuoka, Yakutsk, Vladivostok (UTC+9)', offset: 9 },
+    { value: 'UTC+9:30', label: 'Australian Central Standard Time - Adelaide, Darwin, Alice Springs, Broken Hill (UTC+9:30)', offset: 9.5 },
+    { value: 'UTC+10', label: 'Australian Eastern Standard Time - Sydney, Melbourne, Brisbane, Canberra, Gold Coast, Hobart, Port Moresby (UTC+10)', offset: 10 },
+    { value: 'UTC+10:30', label: 'Lord Howe Standard Time - Lord Howe Island (UTC+10:30)', offset: 10.5 },
+    { value: 'UTC+11', label: 'Solomon Islands Time - Nouméa, Port Vila, Honiara, Nadi, Suva, Magadan, Petropavlovsk-Kamchatsky (UTC+11)', offset: 11 },
+    { value: 'UTC+12', label: 'New Zealand Standard Time - Auckland, Wellington, Christchurch, Hamilton, Suva, Nadi, Petropavlovsk-Kamchatsky, Anadyr (UTC+12)', offset: 12 },
+    { value: 'UTC+12:45', label: 'Chatham Standard Time - Chatham Islands (UTC+12:45)', offset: 12.75 },
+    { value: 'UTC+13', label: 'Tonga Time - Nuku\'alofa, Apia, Fakaofo, Atafu, Nukunonu (UTC+13)', offset: 13 },
+    { value: 'UTC+14', label: 'Line Islands Time - Kiritimati, Tabuaeran, Teraina (UTC+14)', offset: 14 },
   ];
 
   // Generate time slots - Base hours are 9 AM to 5 PM Eastern Time (UTC-5)
@@ -191,7 +403,30 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const handleTimezoneChange = (tz) => {
     setTimezone(tz);
     updateFormData({ timezone: tz });
+    setIsTimezoneDropdownOpen(false);
+    setTimezoneSearchTerm('');
   };
+
+  // Filter timezones based on search term
+  const filteredTimezones = timezones.filter(tz =>
+    tz.label.toLowerCase().includes(timezoneSearchTerm.toLowerCase()) ||
+    tz.value.toLowerCase().includes(timezoneSearchTerm.toLowerCase())
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (timezoneDropdownRef.current && !timezoneDropdownRef.current.contains(event.target)) {
+        setIsTimezoneDropdownOpen(false);
+        setTimezoneSearchTerm('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const isToday = (date) => {
     const today = new Date();
@@ -241,18 +476,80 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         <label className="block text-sm font-semibold text-gray-900 mb-3 flex items-center">
           <Icon icon="heroicons:globe-alt" className="w-5 h-5 mr-2 text-gray-600" />
           Your Timezone
+          {isDetectingTimezone && (
+            <span className="ml-2 text-xs text-gray-500 flex items-center">
+              <Icon icon="heroicons:arrow-path" className="w-4 h-4 mr-1 animate-spin" />
+              Detecting...
+            </span>
+          )}
         </label>
-        <select
-          value={timezone}
-          onChange={(e) => handleTimezoneChange(e.target.value)}
-          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-        >
-          {timezones.map((tz) => (
-            <option key={tz.value} value={tz.value}>
-              {tz.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative" ref={timezoneDropdownRef}>
+          <div
+            onClick={() => !isDetectingTimezone && setIsTimezoneDropdownOpen(!isTimezoneDropdownOpen)}
+            className={`w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer flex items-center justify-between transition-all ${
+              isDetectingTimezone ? 'opacity-50 cursor-wait' : 'hover:border-gray-300'
+            } ${isTimezoneDropdownOpen ? 'ring-2 ring-black border-black' : ''}`}
+          >
+            <span className="text-gray-900">
+              {timezones.find(tz => tz.value === timezone)?.label || timezone}
+            </span>
+            <Icon 
+              icon={isTimezoneDropdownOpen ? "heroicons:chevron-up" : "heroicons:chevron-down"} 
+              className="w-5 h-5 text-gray-500"
+            />
+          </div>
+          
+          {isTimezoneDropdownOpen && !isDetectingTimezone && (
+            <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-96 overflow-hidden">
+              {/* Search Input */}
+              <div className="p-3 border-b border-gray-200 sticky top-0 bg-white">
+                <div className="relative">
+                  <Icon icon="heroicons:magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={timezoneSearchTerm}
+                    onChange={(e) => setTimezoneSearchTerm(e.target.value)}
+                    placeholder="Search timezone..."
+                    className="w-full pl-10 pr-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              
+              {/* Timezone List */}
+              <div className="max-h-80 overflow-y-auto">
+                {filteredTimezones.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500 text-sm">
+                    No timezone found matching "{timezoneSearchTerm}"
+                  </div>
+                ) : (
+                  filteredTimezones.map((tz) => (
+                    <button
+                      key={tz.value}
+                      type="button"
+                      onClick={() => handleTimezoneChange(tz.value)}
+                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                        timezone === tz.value ? 'bg-gray-100 font-semibold' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-900">{tz.label}</span>
+                        {timezone === tz.value && (
+                          <Icon icon="heroicons:check" className="w-5 h-5 text-black" />
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        {!isDetectingTimezone && (
+          <p className="mt-2 text-xs text-gray-500">
+            Your timezone has been automatically detected. You can change it if needed.
+          </p>
+        )}
       </div>
 
       {/* Calendar and Time Slots Row */}
@@ -331,14 +628,14 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
               Please select a date first to choose a time slot
             </p>
           )}
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
             {timeSlots.map((slot) => (
               <button
                 key={slot.value}
                 type="button"
                 onClick={() => selectedDate && handleTimeClick(slot.value)}
                 disabled={!selectedDate}
-                className={`py-2 px-2 rounded-lg text-xs font-medium transition-all ${
+                className={`py-2 px-2 rounded-lg text-xs font-medium transition-all w-full ${
                   !selectedDate
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : selectedTime === slot.value

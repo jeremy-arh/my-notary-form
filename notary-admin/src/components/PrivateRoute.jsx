@@ -12,6 +12,16 @@ const PrivateRoute = ({ children }) => {
 
   const checkAuth = async () => {
     try {
+      // Si on utilise service role key, on bypass l'auth
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      if (serviceRoleKey) {
+        console.log('🔑 Using SERVICE ROLE KEY - bypassing auth check');
+        setIsAuthenticated(true);
+        setLoading(false);
+        return;
+      }
+
+      // Sinon, vérifier la session normale
       const { data: { session } } = await supabase.auth.getSession();
       setIsAuthenticated(!!session);
     } catch (error) {

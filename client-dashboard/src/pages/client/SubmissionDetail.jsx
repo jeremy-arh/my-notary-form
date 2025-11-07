@@ -100,14 +100,28 @@ const SubmissionDetail = () => {
     const styles = {
       pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       pending_payment: 'bg-orange-100 text-orange-800 border-orange-200',
+      confirmed: 'bg-green-100 text-green-800 border-green-200',
+      in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
+      completed: 'bg-purple-100 text-purple-800 border-purple-200',
+      cancelled: 'bg-red-100 text-red-800 border-red-200',
       accepted: 'bg-green-100 text-green-800 border-green-200',
-      rejected: 'bg-red-100 text-red-800 border-red-200',
-      completed: 'bg-blue-100 text-blue-800 border-blue-200'
+      rejected: 'bg-red-100 text-red-800 border-red-200'
+    };
+
+    const labels = {
+      pending: 'Pending',
+      pending_payment: 'Pending Payment',
+      confirmed: 'Confirmed',
+      in_progress: 'In Progress',
+      completed: 'Completed',
+      cancelled: 'Cancelled',
+      accepted: 'Accepted',
+      rejected: 'Rejected'
     };
 
     return (
       <span className={`px-4 py-2 rounded-full text-sm font-semibold border ${styles[status] || styles.pending}`}>
-        {status?.charAt(0).toUpperCase() + status?.slice(1).replace('_', ' ')}
+        {labels[status] || status?.charAt(0).toUpperCase() + status?.slice(1).replace('_', ' ')}
       </span>
     );
   };
@@ -234,34 +248,36 @@ const SubmissionDetail = () => {
 
   return (
     <ClientLayout>
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-0 overflow-x-hidden">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <button
             onClick={() => navigate('/dashboard')}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+            className="flex items-center text-sm sm:text-base text-gray-600 hover:text-gray-900 mb-3 sm:mb-4"
           >
-            <Icon icon="heroicons:arrow-left" className="w-5 h-5 mr-2" />
+            <Icon icon="heroicons:arrow-left" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
             Back to Dashboard
           </button>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Request Details</h1>
-              <p className="text-gray-600">Submitted on {formatDate(submission.created_at)}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Request Details</h1>
+              <p className="text-xs sm:text-base text-gray-600">Submitted on {formatDate(submission.created_at)}</p>
             </div>
-            {getStatusBadge(submission.status)}
+            <div className="flex-shrink-0">
+              {getStatusBadge(submission.status)}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {/* Left Column - Details with Tabs */}
           <div className="lg:col-span-2">
             {/* Tabs */}
-            <div className="flex space-x-6 mb-6 border-b border-gray-200">
+            <div className="flex space-x-4 sm:space-x-6 mb-4 sm:mb-6 border-b border-gray-200 overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0" style={{ WebkitOverflowScrolling: 'touch' }}>
               <button
                 onClick={() => setActiveTab('services')}
-                className={`pb-3 text-sm font-medium transition-colors relative ${
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
                   activeTab === 'services'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
@@ -274,7 +290,7 @@ const SubmissionDetail = () => {
               </button>
               <button
                 onClick={() => setActiveTab('appointment')}
-                className={`pb-3 text-sm font-medium transition-colors relative ${
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
                   activeTab === 'appointment'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
@@ -287,7 +303,7 @@ const SubmissionDetail = () => {
               </button>
               <button
                 onClick={() => setActiveTab('payment')}
-                className={`pb-3 text-sm font-medium transition-colors relative ${
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
                   activeTab === 'payment'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
@@ -300,17 +316,17 @@ const SubmissionDetail = () => {
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Services & Documents Tab */}
               {activeTab === 'services' && selectedServices.length > 0 && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                    <Icon icon="heroicons:check-badge" className="w-5 h-5 text-gray-600" />
+              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                    <Icon icon="heroicons:check-badge" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                   </div>
-                  Services & Documents
+                  <span className="text-base sm:text-xl">Services & Documents</span>
                 </h2>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {selectedServices.map((serviceId) => {
                     const service = servicesMap[serviceId];
                     const documents = serviceDocuments[serviceId] || [];
@@ -320,11 +336,11 @@ const SubmissionDetail = () => {
                     const serviceTotal = documents.length * (service.base_price || 0);
 
                     return (
-                      <div key={serviceId} className="bg-white rounded-xl p-4 border border-gray-200">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-gray-900 text-lg">{service.name}</h3>
-                            <p className="text-sm text-gray-700 mt-2">
+                      <div key={serviceId} className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200">
+                        <div className="flex items-start justify-between mb-2 sm:mb-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-base sm:text-lg text-gray-900">{service.name}</h3>
+                            <p className="text-xs sm:text-sm text-gray-700 mt-1 sm:mt-2">
                               {documents.length} document{documents.length > 1 ? 's' : ''} × ${service.base_price.toFixed(2)} =
                               <span className="font-bold text-gray-900"> ${serviceTotal.toFixed(2)}</span>
                             </p>
@@ -333,28 +349,28 @@ const SubmissionDetail = () => {
 
                         {/* Documents for this service */}
                         {documents.length > 0 && (
-                          <div className="mt-4 space-y-2 pl-4 border-l-2 border-gray-200">
+                          <div className="mt-3 sm:mt-4 space-y-2 pl-3 sm:pl-4 border-l-2 border-gray-200">
                             {documents.map((doc, index) => {
                               const docOptions = doc.selectedOptions || [];
                               let optionsTotal = 0;
 
                               return (
-                                <div key={index} className="bg-gray-50 rounded-lg p-3">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center flex-1">
-                                      <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 mr-2 flex-shrink-0" />
+                                <div key={index} className="bg-gray-50 rounded-lg p-2 sm:p-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center flex-1 min-w-0">
+                                      <Icon icon="heroicons:document-text" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 mr-2 flex-shrink-0" />
                                       <div className="min-w-0 flex-1">
-                                        <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
-                                        <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
+                                        <p className="font-medium text-xs sm:text-sm text-gray-900 truncate">{doc.name}</p>
+                                        <p className="text-[10px] sm:text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
                                       </div>
                                     </div>
                                     {doc.public_url && (
                                       <button
                                         onClick={() => downloadDocument(doc.public_url, doc.name)}
-                                        className="ml-3 text-black hover:text-gray-700 font-medium text-xs flex items-center flex-shrink-0"
+                                        className="ml-2 text-black hover:text-gray-700 font-medium text-[10px] sm:text-xs flex items-center flex-shrink-0"
                                       >
-                                        <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-1" />
-                                        Download
+                                        <Icon icon="heroicons:arrow-down-tray" className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                                        <span className="hidden sm:inline">Download</span>
                                       </button>
                                     )}
                                   </div>
@@ -362,7 +378,7 @@ const SubmissionDetail = () => {
                                   {/* Options for this document */}
                                   {docOptions.length > 0 && (
                                     <div className="mt-2 pt-2 border-t border-gray-200">
-                                      <p className="text-xs text-gray-600 mb-1">Options:</p>
+                                      <p className="text-[10px] sm:text-xs text-gray-600 mb-1">Options:</p>
                                       <div className="flex flex-wrap gap-1">
                                         {docOptions.map((optionId) => {
                                           const option = optionsMap[optionId];
@@ -373,16 +389,17 @@ const SubmissionDetail = () => {
                                           return (
                                             <span
                                               key={optionId}
-                                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                              className="inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-800"
                                             >
-                                              <Icon icon={option.icon || "heroicons:plus-circle"} className="w-3 h-3 mr-1" />
-                                              {option.name} (+${option.additional_price.toFixed(2)})
+                                              <Icon icon={option.icon || "heroicons:plus-circle"} className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
+                                              <span className="truncate max-w-[80px] sm:max-w-none">{option.name}</span>
+                                              <span className="hidden sm:inline ml-1">(+${option.additional_price.toFixed(2)})</span>
                                             </span>
                                           );
                                         })}
                                       </div>
                                       {optionsTotal > 0 && (
-                                        <p className="text-xs text-gray-700 mt-1 font-semibold">
+                                        <p className="text-[10px] sm:text-xs text-gray-700 mt-1 font-semibold">
                                           Options total: ${optionsTotal.toFixed(2)}
                                         </p>
                                       )}
@@ -412,8 +429,8 @@ const SubmissionDetail = () => {
                             return (
                               <div className="mt-3 pt-3 border-t border-gray-200">
                                 <div className="flex justify-between items-center">
-                                  <span className="text-sm font-semibold text-gray-900">Total (with options):</span>
-                                  <span className="text-lg font-bold text-gray-900">${totalWithOptions.toFixed(2)}</span>
+                                  <span className="text-xs sm:text-sm font-semibold text-gray-900">Total (with options):</span>
+                                  <span className="text-base sm:text-lg font-bold text-gray-900">${totalWithOptions.toFixed(2)}</span>
                                 </div>
                               </div>
                             );
@@ -428,8 +445,8 @@ const SubmissionDetail = () => {
                 {/* Total */}
                 <div className="mt-4 pt-4 border-t-2 border-gray-300">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-gray-900">Total:</span>
-                    <span className="text-2xl font-bold text-gray-900">
+                    <span className="text-base sm:text-lg font-bold text-gray-900">Total:</span>
+                    <span className="text-xl sm:text-2xl font-bold text-gray-900">
                       ${(() => {
                         let grandTotal = 0;
                         selectedServices.forEach(serviceId => {
@@ -459,25 +476,25 @@ const SubmissionDetail = () => {
 
               {/* Appointment Details Tab */}
               {activeTab === 'appointment' && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                  <Icon icon="heroicons:calendar-days" className="w-5 h-5 text-gray-600" />
+              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                  <Icon icon="heroicons:calendar-days" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                 </div>
-                Appointment Details
+                <span className="text-base sm:text-xl">Appointment Details</span>
               </h2>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Date:</span>
-                  <span className="font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                  <span className="text-sm sm:text-base text-gray-600">Date:</span>
+                  <span className="text-sm sm:text-base font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Time:</span>
-                  <span className="font-semibold text-gray-900">{submission.appointment_time}</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                  <span className="text-sm sm:text-base text-gray-600">Time:</span>
+                  <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.appointment_time}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Timezone:</span>
-                  <span className="font-semibold text-gray-900">{submission.timezone}</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                  <span className="text-sm sm:text-base text-gray-600">Timezone:</span>
+                  <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.timezone}</span>
                 </div>
               </div>
               </div>
@@ -485,30 +502,32 @@ const SubmissionDetail = () => {
 
               {/* Payment Information Tab */}
               {activeTab === 'payment' && (submission.data?.payment || submission.status === 'pending_payment') && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                    <Icon icon="heroicons:credit-card" className="w-5 h-5 text-gray-600" />
+              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                    <Icon icon="heroicons:credit-card" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                   </div>
-                  Payment Information
+                  <span className="text-base sm:text-xl">Payment Information</span>
                 </h2>
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {submission.data?.payment && (
                     <>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">Status:</span>
-                        {getPaymentStatusBadge(submission.data.payment.payment_status)}
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0">
+                        <span className="text-sm sm:text-base text-gray-600">Status:</span>
+                        <div className="flex-shrink-0">
+                          {getPaymentStatusBadge(submission.data.payment.payment_status)}
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Amount:</span>
-                        <span className="font-semibold text-gray-900">
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                        <span className="text-sm sm:text-base text-gray-600">Amount:</span>
+                        <span className="text-sm sm:text-base font-semibold text-gray-900">
                           ${((submission.data.payment.amount_paid || 0) / 100).toFixed(2)} {(submission.data.payment.currency || 'usd').toUpperCase()}
                         </span>
                       </div>
                       {submission.data.payment.paid_at && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Paid on:</span>
-                          <span className="font-semibold text-gray-900">
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                          <span className="text-sm sm:text-base text-gray-600">Paid on:</span>
+                          <span className="text-sm sm:text-base font-semibold text-gray-900">
                             {formatDate(submission.data.payment.paid_at)}
                           </span>
                         </div>
@@ -519,9 +538,9 @@ const SubmissionDetail = () => {
                             href={submission.data.payment.invoice_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-full flex items-center justify-center bg-white text-black hover:bg-gray-100 font-medium text-sm py-3 px-4 rounded-lg transition-colors"
+                            className="w-full flex items-center justify-center bg-white text-black hover:bg-gray-100 font-medium text-xs sm:text-sm py-2 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors"
                           >
-                            <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 mr-2" />
+                            <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                             Download Invoice
                           </a>
                         </div>
@@ -533,11 +552,11 @@ const SubmissionDetail = () => {
                       <button
                         onClick={retryPayment}
                         disabled={isRetryingPayment}
-                        className="w-full flex items-center justify-center bg-black text-white hover:bg-gray-800 font-medium text-sm py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full flex items-center justify-center bg-black text-white hover:bg-gray-800 font-medium text-xs sm:text-sm py-2 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isRetryingPayment ? (
                           <>
-                            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -545,7 +564,7 @@ const SubmissionDetail = () => {
                           </>
                         ) : (
                           <>
-                            <Icon icon="heroicons:arrow-path" className="w-5 h-5 mr-2" />
+                            <Icon icon="heroicons:arrow-path" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                             Retry Payment
                           </>
                         )}
@@ -558,26 +577,26 @@ const SubmissionDetail = () => {
 
               {/* Notary Info - Always visible */}
             {submission.notary && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                    <Icon icon="heroicons:user" className="w-5 h-5 text-gray-600" />
+              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                    <Icon icon="heroicons:user" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                   </div>
-                  Assigned Notary
+                  <span className="text-base sm:text-xl">Assigned Notary</span>
                 </h2>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Name:</span>
-                    <span className="font-semibold text-gray-900">{submission.notary.name}</span>
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                    <span className="text-sm sm:text-base text-gray-600">Name:</span>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.notary.name}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Email:</span>
-                    <span className="font-semibold text-gray-900">{submission.notary.email}</span>
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                    <span className="text-sm sm:text-base text-gray-600">Email:</span>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900 break-all">{submission.notary.email}</span>
                   </div>
                   {submission.notary.phone && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Phone:</span>
-                      <span className="font-semibold text-gray-900">{submission.notary.phone}</span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                      <span className="text-sm sm:text-base text-gray-600">Phone:</span>
+                      <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.notary.phone}</span>
                     </div>
                   )}
                 </div>
@@ -586,14 +605,14 @@ const SubmissionDetail = () => {
 
             {/* Notes */}
             {submission.notes && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                    <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600" />
+              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                    <Icon icon="heroicons:document-text" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                   </div>
-                  Additional Notes
+                  <span className="text-base sm:text-xl">Additional Notes</span>
                 </h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{submission.notes}</p>
+                <p className="text-sm sm:text-base text-gray-700 whitespace-pre-wrap">{submission.notes}</p>
               </div>
             )}
             </div>
@@ -601,20 +620,14 @@ const SubmissionDetail = () => {
 
           {/* Right Column - Chat */}
           <div className="lg:col-span-1">
-            <div className="sticky top-8">
-              {submission.notary ? (
-                <Chat
-                  submissionId={submission.id}
-                  currentUserType="client"
-                  currentUserId={clientInfo?.id}
-                  recipientName={submission.notary.name}
-                />
-              ) : (
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200 text-center">
-                  <Icon icon="heroicons:chat-bubble-left-right" className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600 text-sm">Messaging will be available once a notary is assigned to your request.</p>
-                </div>
-              )}
+            <div className="sticky top-4 sm:top-8">
+              {/* Chat is available if there's a notary OR if there are messages from admin */}
+              <Chat
+                submissionId={submission.id}
+                currentUserType="client"
+                currentUserId={clientInfo?.id}
+                recipientName={submission.notary?.name || 'Support'}
+              />
             </div>
           </div>
         </div>

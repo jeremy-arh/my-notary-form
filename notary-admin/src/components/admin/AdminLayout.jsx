@@ -2,22 +2,30 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
-import { Logo } from '../../../../shared/assets';
+import Logo from '../../assets/Logo';
+import Notifications from './Notifications';
 
 const AdminLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [adminInfo, setAdminInfo] = useState(null);
 
   const menuItems = [
     { path: '/dashboard', name: 'Dashboard', icon: 'heroicons:chart-bar' },
+    { path: '/users', name: 'Users', icon: 'heroicons:users' },
     { path: '/submissions', name: 'Submissions', icon: 'heroicons:document-text' },
+    { path: '/notary', name: 'Notaries', icon: 'heroicons:user-group' },
+    { path: '/stripe', name: 'Stripe Payments', icon: 'heroicons:credit-card' },
+    { path: '/cashflow', name: 'Trésorerie', icon: 'heroicons:banknotes' },
+    { path: '/cms', name: 'CMS', icon: 'heroicons:document-duplicate' },
     { path: '/messages', name: 'Messages', icon: 'heroicons:chat-bubble-left-right', badge: unreadCount },
     { path: '/profile', name: 'Profile', icon: 'heroicons:user' }
   ];
 
   useEffect(() => {
+    fetchAdminInfo();
     fetchUnreadCount();
 
     // Subscribe to message changes
@@ -37,38 +45,109 @@ const AdminLayout = ({ children }) => {
     };
   }, []);
 
+  const fetchAdminInfo = async () => {
+    try {
+      let userId = null;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
+      } catch (error) {
+        // Silently handle
+      }
+
+      if (userId) {
+        const { data: admin } = await supabase
+          .from('admin_user')
+          .select('id, user_id')
+          .eq('user_id', userId)
+          .single();
+
+        if (admin) {
+          setAdminInfo(admin);
+        }
+      } else {
+        // Get first admin as fallback
+        const { data: admin } = await supabase
+          .from('admin_user')
+          .select('id')
+          .limit(1)
+          .single();
+
+        if (admin) {
+          setAdminInfo(admin);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching admin info:', error);
+    }
+  };
+
   const fetchUnreadCount = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // Try to get user (may fail with service role key)
+      let userId = null;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
+      } catch (error) {
+        // Silently handle - service role key doesn't have user session
+      }
 
-      const { data: notary } = await supabase
-        .from('notary')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
+      // Check if user is admin
+      let isAdmin = false;
+      if (userId) {
+        const { data: admin } = await supabase
+          .from('admin_user')
+          .select('id')
+          .eq('user_id', userId)
+          .single();
+        isAdmin = !!admin;
+      } else {
+        // If no user, assume admin (service role key)
+        isAdmin = true;
+      }
 
-      if (!notary) return;
+      if (isAdmin) {
+        // Count all unread messages (not from admin)
+        const { data: messages } = await supabase
+          .from('message')
+          .select('message_id')
+          .eq('read', false)
+          .neq('sender_type', 'admin');
 
-      // Count unread messages in submissions assigned to this notary
-      const { data: messages } = await supabase
-        .from('message')
-        .select('message_id, submission_id')
-        .eq('read', false)
-        .neq('sender_type', 'notary');
+        setUnreadCount(messages?.length || 0);
+      } else {
+        // Check if notary
+        if (!userId) return;
 
-      if (!messages) return;
+        const { data: notary } = await supabase
+          .from('notary')
+          .select('id')
+          .eq('user_id', userId)
+          .single();
 
-      // Filter messages for submissions assigned to this notary
-      const { data: submissions } = await supabase
-        .from('submission')
-        .select('id')
-        .eq('assigned_notary_id', notary.id);
+        if (!notary) return;
 
-      const submissionIds = submissions?.map(s => s.id) || [];
-      const unread = messages.filter(m => submissionIds.includes(m.submission_id));
+        // Count unread messages in submissions assigned to this notary
+        const { data: messages } = await supabase
+          .from('message')
+          .select('message_id, submission_id')
+          .eq('read', false)
+          .neq('sender_type', 'notary');
 
-      setUnreadCount(unread.length);
+        if (!messages) return;
+
+        // Filter messages for submissions assigned to this notary
+        const { data: submissions } = await supabase
+          .from('submission')
+          .select('id')
+          .eq('assigned_notary_id', notary.id);
+
+        const submissionIds = submissions?.map(s => s.id) || [];
+        const unread = messages.filter(m => submissionIds.includes(m.submission_id));
+
+        setUnreadCount(unread.length);
+      }
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
@@ -82,30 +161,30 @@ const AdminLayout = ({ children }) => {
   return (
     <div className="flex min-h-screen bg-white">
       {/* Sidebar */}
-      <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen overflow-y-auto">
-        <div className="p-8">
+      <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
+        <div className="flex-1 overflow-y-auto p-8 pb-0">
           {/* Logo */}
-          <div className="mb-10 animate-fade-in flex items-center justify-center">
+          <div className="mb-10 animate-fade-in flex flex-col items-center justify-center">
             <Logo width={150} height={150} />
           </div>
 
           {/* Menu Items */}
-          <div className="space-y-2">
+          <div className="space-y-1.5 pb-8">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center justify-between p-4 rounded-xl transition-all duration-300 ${
+                  className={`flex items-center justify-between px-3 h-[50px] rounded-lg transition-all duration-300 ${
                     isActive
                       ? 'bg-black text-white shadow-lg'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 hover:shadow-md'
                   }`}
                 >
                   <div className="flex items-center">
-                    <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
-                    <span className="font-medium">{item.name}</span>
+                    <Icon icon={item.icon} className={`w-5 h-5 mr-2 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                    <span className="text-sm font-medium">{item.name}</span>
                   </div>
                   {item.badge > 0 && (
                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${
@@ -118,14 +197,16 @@ const AdminLayout = ({ children }) => {
               );
             })}
           </div>
+        </div>
 
-          {/* Logout Button */}
+        {/* Logout Button - Fixed at bottom */}
+        <div className="p-6 border-t border-gray-200">
           <button
             onClick={handleLogout}
-            className="mt-8 w-full flex items-center justify-center p-4 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all"
+            className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
           >
-            <Icon icon="heroicons:arrow-right-on-rectangle" className="w-6 h-6 mr-2" />
-            Logout
+            <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+            <span className="text-sm font-medium">Logout</span>
           </button>
         </div>
       </aside>
@@ -147,7 +228,7 @@ const AdminLayout = ({ children }) => {
                 <Logo width={150} height={150} />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5 pb-8">
                 {menuItems.map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
@@ -155,15 +236,15 @@ const AdminLayout = ({ children }) => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setIsSidebarOpen(false)}
-                      className={`flex items-center justify-between p-4 rounded-xl transition-all duration-300 ${
+                      className={`flex items-center justify-between px-3 h-[50px] rounded-lg transition-all duration-300 ${
                         isActive
                           ? 'bg-black text-white shadow-lg'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 hover:shadow-md'
                       }`}
                     >
                       <div className="flex items-center">
-                        <Icon icon={item.icon} className={`w-6 h-6 mr-3 ${isActive ? 'text-white' : 'text-gray-600'}`} />
-                        <span className="font-medium">{item.name}</span>
+                        <Icon icon={item.icon} className={`w-5 h-5 mr-2 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                        <span className="text-sm font-medium">{item.name}</span>
                       </div>
                       {item.badge > 0 && (
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
@@ -177,13 +258,15 @@ const AdminLayout = ({ children }) => {
                 })}
               </div>
 
-              <button
-                onClick={handleLogout}
-                className="mt-8 w-full flex items-center justify-center p-4 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all"
-              >
-                <Icon icon="heroicons:arrow-right-on-rectangle" className="w-6 h-6 mr-2" />
-                Logout
-              </button>
+              <div className="p-6 border-t border-gray-200">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+                  <span className="text-sm font-medium">Logout</span>
+                </button>
+              </div>
             </div>
           </aside>
         </div>
@@ -191,6 +274,13 @@ const AdminLayout = ({ children }) => {
 
       {/* Main Content */}
       <main className="flex-1 lg:ml-80 min-h-screen bg-white">
+        {/* Top Navigation Bar */}
+        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-end">
+          {adminInfo && (
+            <Notifications userId={adminInfo.id} userType="admin" />
+          )}
+        </div>
+        
         <div className="p-6 md:p-8">
           {children}
         </div>

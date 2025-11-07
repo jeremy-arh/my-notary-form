@@ -103,11 +103,30 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
 
   const getStatusColor = (status) => {
     const colors = {
-      pending: 'bg-gray-200 text-gray-700',
-      accepted: 'bg-gray-200 text-gray-700',
-      rejected: 'bg-gray-200 text-gray-700'
+      pending: 'bg-yellow-100 text-yellow-800',
+      pending_payment: 'bg-orange-100 text-orange-800',
+      confirmed: 'bg-green-100 text-green-800',
+      in_progress: 'bg-blue-100 text-blue-800',
+      completed: 'bg-purple-100 text-purple-800',
+      cancelled: 'bg-red-100 text-red-800',
+      accepted: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800'
     };
     return colors[status] || colors.pending;
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      pending: 'Pending',
+      pending_payment: 'Pending Payment',
+      confirmed: 'Confirmed',
+      in_progress: 'In Progress',
+      completed: 'Completed',
+      cancelled: 'Cancelled',
+      accepted: 'Accepted',
+      rejected: 'Rejected'
+    };
+    return labels[status] || status?.charAt(0).toUpperCase() + status?.slice(1).replace('_', ' ');
   };
 
   return (
@@ -155,7 +174,7 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Status</h3>
                   <span className={`px-4 py-2 rounded-full text-sm font-semibold ${getStatusColor(submission.status)}`}>
-                    {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
+                    {getStatusLabel(submission.status)}
                   </span>
                 </div>
                 <div className="flex gap-3">

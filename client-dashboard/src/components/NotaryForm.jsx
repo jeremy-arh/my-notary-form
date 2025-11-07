@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom'
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { Logo } from '../../../shared/assets';
+import Logo from '../assets/Logo';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -181,7 +181,8 @@ const NotaryForm = () => {
               address: prev.address || client.address || '',
               city: prev.city || client.city || '',
               postalCode: prev.postalCode || client.postal_code || '',
-              country: prev.country || client.country || ''
+              country: prev.country || client.country || '',
+              timezone: prev.timezone || client.timezone || prev.timezone || 'UTC-5'
             }));
           }
         }

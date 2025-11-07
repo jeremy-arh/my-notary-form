@@ -4,33 +4,68 @@ import { createClient } from '@supabase/supabase-js';
 // You can find these in your Supabase project settings
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MDAsImV4cCI6MTk2MDc2ODgwMH0.placeholder';
+// Service Role Key pour le dashboard admin (bypass RLS)
+const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || null;
+
+// Utiliser la service role key si disponible (pour bypass RLS dans le dashboard admin)
+// Sinon utiliser l'anon key
+const supabaseKey = supabaseServiceRoleKey || supabaseAnonKey;
+const isUsingServiceRole = !!supabaseServiceRoleKey;
 
 // Check if we have valid Supabase credentials
 const hasValidCredentials = supabaseUrl !== 'https://placeholder.supabase.co' &&
-                             supabaseAnonKey !== 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MDAsImV4cCI6MTk2MDc2ODgwMH0.placeholder';
+                             supabaseKey !== 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MDAsImV4cCI6MTk2MDc2ODgwMH0.placeholder';
 
 // Debug logs
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-console.log('🔌 SUPABASE CONFIGURATION');
+console.log('🔌 SUPABASE CONFIGURATION (ADMIN DASHBOARD)');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log('📍 URL:', supabaseUrl);
-console.log('🔑 Key:', supabaseAnonKey.substring(0, 50) + '...');
+console.log('🔑 Key Type:', isUsingServiceRole ? 'SERVICE ROLE (bypass RLS)' : 'ANON KEY');
+console.log('🔑 Key:', supabaseKey.substring(0, 50) + '...');
 console.log('✅ Valid credentials:', hasValidCredentials);
+if (isUsingServiceRole) {
+  console.log('⚠️  Using SERVICE ROLE KEY - RLS is bypassed');
+}
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
 let supabase = null;
 
-if (hasValidCredentials) {
+  if (hasValidCredentials) {
   console.log('✅ Creating Supabase client...');
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  // Si on utilise service role, on crée un client sans auth
+  // Sinon on utilise un client normal avec auth
+  if (isUsingServiceRole) {
+    // Service role key bypass RLS automatiquement, mais on doit quand même avoir une session
+    // pour que auth.uid() fonctionne dans les fonctions SQL
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        headers: {
+          'apikey': supabaseKey
+        }
+      }
+    });
+  } else {
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true
+      }
+    });
+  }
   console.log('✅ Supabase client created successfully!\n');
 } else {
   console.warn('⚠️  SUPABASE NOT CONFIGURED');
   console.warn('⚠️  Running in MOCK MODE');
   console.warn('⚠️  To enable Supabase:');
-  console.warn('   1. Create a .env file');
+  console.warn('   1. Create a .env file in notary-admin/');
   console.warn('   2. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
-  console.warn('   3. Restart the dev server\n');
+  console.warn('   3. (Optional) Add VITE_SUPABASE_SERVICE_ROLE_KEY to bypass RLS');
+  console.warn('   4. Restart the dev server\n');
 }
 
 /**

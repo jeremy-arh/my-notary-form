@@ -1,19 +1,264 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { Line, Pie } from 'react-chartjs-2';
+import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
+import '../../lib/chartConfig'; // Register Chart.js components
+import { defaultChartOptions } from '../../lib/chartConfig';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
     totalSubmissions: 0,
     pendingSubmissions: 0,
-    acceptedSubmissions: 0,
-    rejectedSubmissions: 0,
+    confirmedSubmissions: 0,
+    inProgressSubmissions: 0,
+    completedSubmissions: 0,
+    cancelledSubmissions: 0,
+    totalUsers: 0,
     totalRevenue: 0,
-    monthlyRevenue: 0
+    monthlyRevenue: 0,
+    averageOrderValue: 0
   });
+  const [chartData, setChartData] = useState([]);
+  const [statusDistribution, setStatusDistribution] = useState([]);
   const [recentSubmissions, setRecentSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Status colors matching the badge colors
+  const STATUS_COLORS = {
+    'Pending': '#FCD34D',      // yellow-300
+    'Confirmed': '#34D399',    // green-400
+    'In Progress': '#60A5FA',  // blue-400
+    'Completed': '#A78BFA',    // purple-400
+    'Cancelled': '#F87171'     // red-400
+  };
+  
+  // Prepare line chart data
+  const lineChartData = {
+    labels: chartData.map(item => item.date),
+    datasets: [
+      {
+        label: 'Submissions',
+        data: chartData.map(item => item.submissions),
+        borderColor: '#3B82F6', // blue-500
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        pointBackgroundColor: '#3B82F6',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.4,
+        fill: true,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Revenue ($)',
+        data: chartData.map(item => item.revenue),
+        borderColor: '#10B981', // green-500
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        pointBackgroundColor: '#10B981',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.4,
+        fill: true,
+        yAxisID: 'y1'
+      }
+    ]
+  };
+
+  const lineChartOptions = {
+    ...defaultChartOptions,
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      ...defaultChartOptions.plugins,
+      legend: {
+        ...defaultChartOptions.plugins.legend,
+        display: true,
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+            weight: '600'
+          }
+        }
+      },
+      tooltip: {
+        ...defaultChartOptions.plugins.tooltip,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 12,
+        titleFont: {
+          size: 14,
+          weight: 'bold'
+        },
+        bodyFont: {
+          size: 13
+        },
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        displayColors: true,
+        callbacks: {
+          label: function(context) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.parsed.y !== null) {
+              if (label.includes('Revenue')) {
+                label += '$' + context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              } else {
+                label += context.parsed.y;
+              }
+            }
+            return label;
+          }
+        }
+      }
+    },
+    scales: {
+      ...defaultChartOptions.scales,
+      x: {
+        ...defaultChartOptions.scales.x,
+        grid: {
+          display: false
+        },
+        ticks: {
+          maxRotation: 45,
+          minRotation: 45
+        }
+      },
+      y: {
+        ...defaultChartOptions.scales.y,
+        position: 'left',
+        title: {
+          display: true,
+          text: 'Submissions',
+          font: {
+            size: 12,
+            weight: '600'
+          },
+          color: '#3B82F6'
+        },
+        grid: {
+          color: 'rgba(59, 130, 246, 0.1)'
+        },
+        ticks: {
+          color: '#3B82F6'
+        }
+      },
+      y1: {
+        ...defaultChartOptions.scales.y,
+        position: 'right',
+        title: {
+          display: true,
+          text: 'Revenue ($)',
+          font: {
+            size: 12,
+            weight: '600'
+          },
+          color: '#10B981'
+        },
+        grid: {
+          drawOnChartArea: false
+        },
+        ticks: {
+          color: '#10B981',
+          callback: function(value) {
+            return '$' + value.toLocaleString();
+          }
+        }
+      }
+    }
+  };
+
+  // Prepare pie chart data
+  const pieChartData = {
+    labels: statusDistribution.map(item => item.name),
+    datasets: [
+      {
+        data: statusDistribution.map(item => item.value),
+        backgroundColor: statusDistribution.map(item => STATUS_COLORS[item.name] || '#9CA3AF'),
+        borderWidth: 3,
+        borderColor: '#ffffff',
+        hoverBorderWidth: 4,
+        hoverOffset: 8
+      }
+    ]
+  };
+
+  const pieChartOptions = {
+    ...defaultChartOptions,
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      ...defaultChartOptions.plugins,
+      legend: {
+        ...defaultChartOptions.plugins.legend,
+        position: 'bottom',
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+            weight: '600'
+          },
+          generateLabels: function(chart) {
+            const data = chart.data;
+            if (data.labels.length && data.datasets.length) {
+              const dataset = data.datasets[0];
+              const total = dataset.data.reduce((a, b) => a + b, 0);
+              return data.labels.map((label, i) => {
+                const value = dataset.data[i];
+                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                return {
+                  text: `${label}: ${value} (${percentage}%)`,
+                  fillStyle: dataset.backgroundColor[i],
+                  strokeStyle: dataset.borderColor,
+                  lineWidth: dataset.borderWidth,
+                  hidden: false,
+                  index: i
+                };
+              });
+            }
+            return [];
+          }
+        }
+      },
+      tooltip: {
+        ...defaultChartOptions.plugins.tooltip,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 12,
+        titleFont: {
+          size: 14,
+          weight: 'bold'
+        },
+        bodyFont: {
+          size: 13
+        },
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        displayColors: true,
+        callbacks: {
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `${label}: ${value} (${percentage}%)`;
+          }
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -21,40 +266,105 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch all submissions
-      const { data: submissions, error } = await supabase
+      // Fetch submissions
+      const { data: submissions, error: subError } = await supabase
         .from('submission')
-        .select('*')
+        .select('*, data')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (subError) throw subError;
+
+      // Fetch users
+      const { data: clients, error: clientError } = await supabase
+        .from('client')
+        .select('id');
+
+      const totalUsers = clients?.length || 0;
 
       if (submissions) {
         // Calculate stats
         const pending = submissions.filter(s => s.status === 'pending').length;
-        const accepted = submissions.filter(s => s.status === 'accepted').length;
-        const rejected = submissions.filter(s => s.status === 'rejected').length;
+        const confirmed = submissions.filter(s => s.status === 'confirmed').length;
+        const completed = submissions.filter(s => s.status === 'completed').length;
+        const cancelled = submissions.filter(s => s.status === 'cancelled').length;
 
-        // Calculate revenue (simple calculation based on base fee)
-        const totalRev = accepted * 75; // Base fee
-
-        // Calculate monthly revenue
+        // Calculate revenue from payment data
+        let totalRev = 0;
+        let monthlyRev = 0;
         const currentMonth = new Date().getMonth();
-        const monthlyRev = submissions
-          .filter(s => {
-            const submissionMonth = new Date(s.created_at).getMonth();
-            return submissionMonth === currentMonth && s.status === 'accepted';
-          })
-          .length * 75;
+        const currentYear = new Date().getFullYear();
+
+        submissions.forEach(sub => {
+          const payment = sub.data?.payment;
+          if (payment && payment.amount_paid) {
+            const amount = payment.amount_paid / 100; // Convert from cents
+            totalRev += amount;
+            
+            const subDate = new Date(sub.created_at);
+            if (subDate.getMonth() === currentMonth && subDate.getFullYear() === currentYear) {
+              monthlyRev += amount;
+            }
+          } else if (sub.total_price) {
+            totalRev += parseFloat(sub.total_price);
+            const subDate = new Date(sub.created_at);
+            if (subDate.getMonth() === currentMonth && subDate.getFullYear() === currentYear) {
+              monthlyRev += parseFloat(sub.total_price);
+            }
+          }
+        });
+
+        const avgOrderValue = submissions.length > 0 ? totalRev / submissions.length : 0;
 
         setStats({
           totalSubmissions: submissions.length,
           pendingSubmissions: pending,
-          acceptedSubmissions: accepted,
-          rejectedSubmissions: rejected,
+          confirmedSubmissions: confirmed,
+          completedSubmissions: completed,
+          cancelledSubmissions: cancelled,
+          totalUsers,
           totalRevenue: totalRev,
-          monthlyRevenue: monthlyRev
+          monthlyRevenue: monthlyRev,
+          averageOrderValue: avgOrderValue
         });
+
+        // Prepare chart data (last 30 days)
+        const last30Days = eachDayOfInterval({
+          start: subDays(new Date(), 29),
+          end: new Date()
+        });
+
+        const chartDataMap = last30Days.map(date => {
+          const daySubmissions = submissions.filter(sub => {
+            const subDate = new Date(sub.created_at);
+            return format(subDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
+          });
+
+          let dayRevenue = 0;
+          daySubmissions.forEach(sub => {
+            const payment = sub.data?.payment;
+            if (payment && payment.amount_paid) {
+              dayRevenue += payment.amount_paid / 100;
+            } else if (sub.total_price) {
+              dayRevenue += parseFloat(sub.total_price);
+            }
+          });
+
+          return {
+            date: format(date, 'MMM dd'),
+            submissions: daySubmissions.length,
+            revenue: dayRevenue
+          };
+        });
+
+        setChartData(chartDataMap);
+
+        // Status distribution
+        setStatusDistribution([
+          { name: 'Pending', value: pending },
+          { name: 'Confirmed', value: confirmed },
+          { name: 'Completed', value: completed },
+          { name: 'Cancelled', value: cancelled }
+        ]);
 
         setRecentSubmissions(submissions.slice(0, 5));
       }
@@ -74,47 +384,54 @@ const Dashboard = () => {
       iconColor: 'text-gray-600'
     },
     {
+      title: 'Total Users',
+      value: stats.totalUsers,
+      icon: 'heroicons:users',
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
+    },
+    {
       title: 'Pending',
       value: stats.pendingSubmissions,
       icon: 'heroicons:clock',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
+      color: 'bg-yellow-100',
+      iconColor: 'text-yellow-600'
     },
     {
-      title: 'Accepted',
-      value: stats.acceptedSubmissions,
+      title: 'Completed',
+      value: stats.completedSubmissions,
       icon: 'heroicons:check-circle',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
-    },
-    {
-      title: 'Rejected',
-      value: stats.rejectedSubmissions,
-      icon: 'heroicons:x-circle',
-      color: 'bg-gray-100',
-      iconColor: 'text-gray-600'
+      color: 'bg-green-100',
+      iconColor: 'text-green-600'
     }
   ];
 
   const revenueCards = [
     {
       title: 'Total Revenue',
-      value: `$${stats.totalRevenue.toLocaleString()}`,
+      value: `$${stats.totalRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: 'heroicons:currency-dollar',
       color: 'bg-gray-100',
       iconColor: 'text-gray-600'
     },
     {
       title: 'Monthly Revenue',
-      value: `$${stats.monthlyRevenue.toLocaleString()}`,
+      value: `$${stats.monthlyRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: 'heroicons:chart-bar',
+      color: 'bg-gray-100',
+      iconColor: 'text-gray-600'
+    },
+    {
+      title: 'Average Order Value',
+      value: `$${stats.averageOrderValue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: 'heroicons:calculator',
       color: 'bg-gray-100',
       iconColor: 'text-gray-600'
     }
   ];
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -123,14 +440,28 @@ const Dashboard = () => {
 
   const getStatusBadge = (status) => {
     const badges = {
-      pending: 'bg-gray-200 text-gray-700',
-      accepted: 'bg-gray-200 text-gray-700',
-      rejected: 'bg-gray-200 text-gray-700'
+      pending: 'bg-yellow-100 text-yellow-800',
+      pending_payment: 'bg-orange-100 text-orange-800',
+      confirmed: 'bg-green-100 text-green-800',
+      completed: 'bg-purple-100 text-purple-800',
+      cancelled: 'bg-red-100 text-red-800',
+      accepted: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800'
+    };
+
+    const labels = {
+      pending: 'Pending',
+      pending_payment: 'Pending Payment',
+      confirmed: 'Confirmed',
+      completed: 'Completed',
+      cancelled: 'Cancelled',
+      accepted: 'Accepted',
+      rejected: 'Rejected'
     };
 
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badges[status] || badges.pending}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {labels[status] || status?.charAt(0).toUpperCase() + status?.slice(1).replace('_', ' ')}
       </span>
     );
   };
@@ -151,7 +482,7 @@ const Dashboard = () => {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome back! Here's your overview.</p>
+          <p className="text-gray-600 mt-2">Vue d'ensemble complète de votre activité</p>
         </div>
 
         {/* Stats Grid */}
@@ -173,7 +504,7 @@ const Dashboard = () => {
         </div>
 
         {/* Revenue Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {revenueCards.map((card, index) => (
             <div
               key={index}
@@ -192,12 +523,31 @@ const Dashboard = () => {
           ))}
         </div>
 
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Submissions & Revenue Chart */}
+          <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-6">Submissions & Revenue (30 derniers jours)</h2>
+            <div style={{ height: '300px' }}>
+              <Line data={lineChartData} options={lineChartOptions} />
+            </div>
+          </div>
+
+          {/* Status Distribution */}
+          <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-6">Distribution des statuts</h2>
+            <div style={{ height: '300px' }}>
+              <Pie data={pieChartData} options={pieChartOptions} />
+            </div>
+          </div>
+        </div>
+
         {/* Recent Submissions */}
         <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Submissions</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Soumissions récentes</h2>
           <div className="space-y-3">
             {recentSubmissions.length === 0 ? (
-              <p className="text-gray-600 text-center py-8">No submissions yet</p>
+              <p className="text-gray-600 text-center py-8">Aucune soumission</p>
             ) : (
               recentSubmissions.map((submission) => (
                 <div

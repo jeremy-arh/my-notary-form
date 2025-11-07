@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
+import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -10,17 +12,33 @@ import { supabase } from '../lib/supabase';
  * @param {string} currentUserId - ID of the current user
  * @param {string} recipientName - Name of the person you're chatting with (optional)
  */
-const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) => {
+const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, isFullscreen = false }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
   const messagesEndRef = useRef(null);
   const chatChannel = useRef(null);
+  const fileInputRef = useRef(null);
+  const emojiButtonRef = useRef(null);
 
   useEffect(() => {
     fetchMessages();
     subscribeToMessages();
+
+    // Close emoji picker when clicking outside
+    const handleClickOutside = (event) => {
+      if (emojiButtonRef.current && !emojiButtonRef.current.contains(event.target)) {
+        const emojiPicker = document.querySelector('.emoji-picker-container');
+        if (emojiPicker && !emojiPicker.contains(event.target)) {
+          setShowEmojiPicker(false);
+        }
+      }
+    };
 
     return () => {
       if (chatChannel.current) {
@@ -28,6 +46,25 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
       }
     };
   }, [submissionId]);
+
+  useEffect(() => {
+    // Close emoji picker when clicking outside
+    const handleClickOutside = (event) => {
+      if (emojiButtonRef.current && !emojiButtonRef.current.contains(event.target)) {
+        const emojiPicker = document.querySelector('.emoji-picker-container');
+        if (emojiPicker && !emojiPicker.contains(event.target)) {
+          setShowEmojiPicker(false);
+        }
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showEmojiPicker]);
 
   useEffect(() => {
     scrollToBottom();
@@ -93,9 +130,63 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
     }
   };
 
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    setUploadingFiles(true);
+
+    try {
+      const uploadedAttachments = [];
+
+      for (const file of files) {
+        // Generate unique file name
+        const timestamp = Date.now();
+        const fileName = `messages/${submissionId}/${timestamp}_${file.name}`;
+
+        // Upload file to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('submission-documents')
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Error uploading file:', uploadError);
+          continue;
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('submission-documents')
+          .getPublicUrl(fileName);
+
+        uploadedAttachments.push({
+          name: file.name,
+          url: urlData.publicUrl,
+          type: file.type,
+          size: file.size
+        });
+      }
+
+      setAttachments((prev) => [...prev, ...uploadedAttachments]);
+    } catch (error) {
+      console.error('Error handling files:', error);
+      alert('Failed to upload files. Please try again.');
+    } finally {
+      setUploadingFiles(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || sending) return;
+    if ((!newMessage.trim() && attachments.length === 0) || sending) return;
 
     setSending(true);
 
@@ -104,11 +195,14 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
         submission_id: submissionId,
         sender_type: currentUserType,
         sender_id: currentUserId,
-        content: newMessage.trim()
+        content: newMessage.trim() || '(File attachment)',
+        attachments: attachments.length > 0 ? attachments : null
       });
 
       if (error) throw error;
       setNewMessage('');
+      setAttachments([]);
+      setShowEmojiPicker(false);
     } catch (error) {
       console.error('Error sending message:', error);
       alert('Failed to send message. Please try again.');
@@ -118,33 +212,109 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
   };
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
-    const now = new Date();
-    const diffInMs = now - date;
-    const diffInMins = Math.floor(diffInMs / 60000);
-    const diffInHours = Math.floor(diffInMs / 3600000);
-    const diffInDays = Math.floor(diffInMs / 86400000);
-
-    if (diffInMins < 1) return 'Just now';
-    if (diffInMins < 60) return `${diffInMins}m ago`;
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const getSenderLabel = (senderType) => {
-    const labels = {
-      client: 'You',
-      notary: recipientName || 'Notary',
-      admin: 'Admin'
-    };
-
     if (senderType === currentUserType) {
       return 'You';
     }
 
-    return labels[senderType] || senderType;
+    if (senderType === 'notary') {
+      return 'Notary';
+    }
+
+    if (senderType === 'admin') {
+      return 'Admin';
+    }
+
+    if (senderType === 'client') {
+      // Show client name for client messages
+      if (clientFirstName && clientLastName) {
+        return `${clientFirstName} ${clientLastName}`;
+      }
+      return 'Client';
+    }
+
+    return senderType;
+  };
+
+  // Function to detect and render links
+  const renderContentWithLinks = (content) => {
+    if (!content) return null;
+
+    // URL regex pattern
+    const urlPattern = /(https?:\/\/[^\s]+)/g;
+    const parts = content.split(urlPattern);
+
+    return parts.map((part, index) => {
+      if (urlPattern.test(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-blue-400 hover:text-blue-300 break-all"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const onEmojiClick = (emojiData) => {
+    setNewMessage((prev) => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+  };
+
+  const handleEmojiButtonClick = () => {
+    if (emojiButtonRef.current) {
+      const rect = emojiButtonRef.current.getBoundingClientRect();
+      const pickerHeight = 435;
+      const pickerWidth = 352;
+      const margin = 8;
+      
+      // Calculate position above the button
+      let top = rect.top - pickerHeight - margin;
+      let left = rect.right - pickerWidth;
+      
+      // If not enough space above, show below instead
+      if (top < 0) {
+        top = rect.bottom + margin;
+      }
+      
+      // Ensure it doesn't go off the right edge
+      if (left + pickerWidth > window.innerWidth) {
+        left = window.innerWidth - pickerWidth - margin;
+      }
+      
+      // Ensure it doesn't go off the left edge
+      if (left < 0) {
+        left = margin;
+      }
+      
+      setEmojiPickerPosition({ top, left });
+    }
+    setShowEmojiPicker(!showEmojiPicker);
   };
 
   if (loading) {
@@ -155,25 +325,31 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
     );
   }
 
+  const containerClass = isFullscreen 
+    ? "flex flex-col h-full bg-white overflow-hidden"
+    : "flex flex-col h-full min-h-[500px] max-h-[600px] lg:h-[500px] bg-white rounded-2xl border border-gray-200 overflow-hidden";
+
   return (
-    <div className="flex flex-col h-[500px] bg-white rounded-2xl border border-gray-200 overflow-hidden">
+    <div className={containerClass}>
       {/* Chat Header */}
-      <div className="bg-[#F3F4F6] px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center">
-          <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mr-3">
-            <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">
-              {recipientName ? `Chat with ${recipientName}` : 'Messages'}
-            </h3>
-            <p className="text-xs text-gray-600">{messages.length} messages</p>
+      {!isFullscreen && (
+        <div className="bg-[#F3F4F6] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-800 rounded-full flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+              <Icon icon="heroicons:chat-bubble-left-right" className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">
+                {recipientName ? `Chat with ${recipientName}` : 'Messages'}
+              </h3>
+              <p className="text-xs text-gray-600">{messages.length} messages</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className={`flex-1 overflow-y-auto space-y-3 sm:space-y-4 ${isFullscreen ? 'p-4 sm:p-6' : 'p-3 sm:p-6'}`}>
         {messages.length === 0 ? (
           <div className="text-center py-8">
             <Icon icon="heroicons:chat-bubble-left-right" className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -183,6 +359,19 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
         ) : (
           messages.map((message) => {
             const isOwnMessage = message.sender_type === currentUserType;
+            const isNotary = message.sender_type === 'notary';
+            const isAdmin = message.sender_type === 'admin';
+            const messageAttachments = message.attachments || [];
+
+            // Determine message bubble color
+            let bubbleClass = 'bg-[#F3F4F6] text-gray-900'; // Default for client
+            if (isOwnMessage) {
+              bubbleClass = 'bg-black text-white'; // Black for own messages
+            } else if (isNotary) {
+              bubbleClass = 'bg-indigo-600 text-white'; // Distinct color for notary
+            } else if (isAdmin) {
+              bubbleClass = 'bg-gray-800 text-white'; // Dark gray for admin
+            }
 
             return (
               <div
@@ -190,29 +379,81 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
                 className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[70%] ${
-                    isOwnMessage
-                      ? 'bg-black text-white'
-                      : 'bg-[#F3F4F6] text-gray-900'
-                  } rounded-2xl px-4 py-3`}
+                  className={`max-w-[70%] ${bubbleClass} rounded-2xl px-4 py-3`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <p
                       className={`text-xs font-semibold ${
-                        isOwnMessage ? 'text-gray-300' : 'text-gray-600'
+                        isOwnMessage ? 'text-gray-300' : 
+                        isNotary ? 'text-indigo-100' : 
+                        isAdmin ? 'text-gray-300' : 
+                        'text-gray-600'
                       }`}
                     >
                       {getSenderLabel(message.sender_type)}
                     </p>
                     <p
                       className={`text-xs ml-3 ${
-                        isOwnMessage ? 'text-gray-400' : 'text-gray-500'
+                        isOwnMessage ? 'text-gray-400' : 
+                        isNotary ? 'text-indigo-200' : 
+                        isAdmin ? 'text-gray-400' : 
+                        'text-gray-500'
                       }`}
                     >
                       {formatTime(message.created_at)}
                     </p>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                  
+                  {/* Message content with links */}
+                  {message.content && message.content !== '(File attachment)' && (
+                    <p className={`text-sm whitespace-pre-wrap break-words ${
+                      isOwnMessage || isNotary || isAdmin ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {renderContentWithLinks(message.content)}
+                    </p>
+                  )}
+
+                  {/* Attachments */}
+                  {messageAttachments.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      {messageAttachments.map((attachment, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-center gap-2 p-2 rounded-lg ${
+                            isOwnMessage ? 'bg-gray-800' : 
+                            isNotary ? 'bg-indigo-700' : 
+                            isAdmin ? 'bg-gray-700' : 
+                            'bg-white'
+                          }`}
+                        >
+                          <Icon
+                            icon="heroicons:paper-clip"
+                            className={`w-4 h-4 ${
+                              isOwnMessage || isNotary || isAdmin ? 'text-gray-300' : 'text-gray-600'
+                            }`}
+                          />
+                          <a
+                            href={attachment.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`text-xs flex-1 truncate hover:underline ${
+                              isOwnMessage ? 'text-blue-300' : 
+                              isNotary ? 'text-indigo-200' : 
+                              isAdmin ? 'text-blue-300' : 
+                              'text-blue-600'
+                            }`}
+                          >
+                            {attachment.name}
+                          </a>
+                          <span className={`text-xs ${
+                            isOwnMessage || isNotary || isAdmin ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            {formatFileSize(attachment.size)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -221,27 +462,107 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName }) =
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Attachments Preview */}
+      {attachments.length > 0 && (
+        <div className={`py-2 bg-gray-50 border-t border-gray-200 flex-shrink-0 ${isFullscreen ? 'px-4 sm:px-6' : 'px-3 sm:px-6'}`}>
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((attachment, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-white rounded-lg border border-gray-200"
+              >
+                <Icon icon="heroicons:paper-clip" className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                <span className="text-xs text-gray-700 truncate max-w-[100px] sm:max-w-[150px]">
+                  {attachment.name}
+                </span>
+                <button
+                  onClick={() => removeAttachment(index)}
+                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                >
+                  <Icon icon="heroicons:x-mark" className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input */}
-      <form onSubmit={sendMessage} className="bg-[#F3F4F6] px-6 py-4 border-t border-gray-200">
-        <div className="flex items-center space-x-3">
+      <form onSubmit={sendMessage} className={`bg-[#F3F4F6] border-t border-gray-200 flex-shrink-0 ${isFullscreen ? 'px-4 sm:px-6 py-4' : 'px-3 sm:px-6 py-3 sm:py-4'}`}>
+        <div className="flex items-center gap-2">
+          {/* File attachment button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingFiles || sending}
+            className="p-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50 flex-shrink-0"
+            title="Attach file"
+          >
+            {uploadingFiles ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+            ) : (
+              <Icon icon="heroicons:paper-clip" className="w-5 h-5" />
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          {/* Emoji picker button */}
+          <button
+            ref={emojiButtonRef}
+            type="button"
+            onClick={handleEmojiButtonClick}
+            className="p-2 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
+            title="Add emoji"
+          >
+            <Icon icon="heroicons:face-smile" className="w-5 h-5" />
+          </button>
+          
+          {/* Emoji picker portal */}
+          {showEmojiPicker && createPortal(
+            <div
+              className="emoji-picker-container fixed z-[9999] shadow-2xl rounded-lg overflow-hidden bg-white"
+              style={{
+                top: `${emojiPickerPosition.top}px`,
+                left: `${emojiPickerPosition.left}px`,
+                width: '352px',
+                height: '435px'
+              }}
+            >
+              <EmojiPicker 
+                onEmojiClick={onEmojiClick}
+                width={352}
+                height={435}
+                previewConfig={{ showPreview: false }}
+                skinTonesDisabled
+              />
+            </div>,
+            document.body
+          )}
+
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
+            className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base"
             disabled={sending}
           />
           <button
             type="submit"
-            disabled={!newMessage.trim() || sending}
-            className="btn-glassy px-6 py-3 text-white font-semibold rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            disabled={(!newMessage.trim() && attachments.length === 0) || sending}
+            className="btn-glassy px-4 sm:px-6 py-2 sm:py-3 text-white text-sm sm:text-base font-semibold rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center flex-shrink-0"
           >
             {sending ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
             ) : (
               <>
-                <Icon icon="heroicons:paper-airplane" className="w-5 h-5" />
+                <Icon icon="heroicons:paper-airplane" className="w-4 h-4 sm:w-5 sm:h-5" />
               </>
             )}
           </button>

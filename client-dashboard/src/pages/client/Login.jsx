@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
-import { Logo } from '../../../../shared/assets';
+import Logo from '../../assets/Logo';
 
 const Login = () => {
   const navigate = useNavigate();
