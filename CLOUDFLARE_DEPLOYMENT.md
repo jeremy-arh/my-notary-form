@@ -72,16 +72,18 @@ Pour chaque application, créez un projet séparé :
    - **Project name** : `notary-client-dashboard`
    - **Production branch** : `main` (ou votre branche principale)
    - **Framework preset** : `Vite`
-   - **Build command** : `cd client-dashboard && npm run build`
-   - **Build output directory** : `client-dashboard/dist`
-   - **Root directory** : `/` (racine du repo)
+   - **Build command** : `npm run build`
+   - **Build output directory** : `dist` ⚠️ **Important : juste `dist`, pas `client-dashboard/dist`**
+   - **Root directory (advanced)** → **Path** : `client-dashboard` ⚠️ **C'EST LA CLÉ !**
 
 ##### 3.2. Admin Dashboard
 
 Répétez les étapes pour l'admin dashboard :
 - **Project name** : `notary-admin-dashboard`
-- **Build command** : `cd notary-admin && npm run build`
-- **Build output directory** : `notary-admin/dist`
+- **Framework preset** : `Vite`
+- **Build command** : `npm run build`
+- **Build output directory** : `dist` ⚠️ **Important : juste `dist`, pas `notary-admin/dist`**
+- **Root directory (advanced)** → **Path** : `notary-admin` ⚠️ **C'EST LA CLÉ !**
 
 ##### 3.3. Formulaire Principal (optionnel)
 

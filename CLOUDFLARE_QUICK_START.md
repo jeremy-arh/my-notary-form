@@ -10,11 +10,11 @@ Guide rapide pour déployer les trois applications sur Cloudflare Pages.
 
 ## 🏗️ Structure des Déploiements
 
-| Application | Dossier | Sous-domaine | Build Command | Output Directory |
-|------------|---------|--------------|---------------|------------------|
-| Client Dashboard | `client-dashboard/` | `client.votredomaine.com` | `cd client-dashboard && npm run build` | `client-dashboard/dist` |
-| Admin Dashboard | `notary-admin/` | `admin.votredomaine.com` | `cd notary-admin && npm run build` | `notary-admin/dist` |
-| Formulaire Principal | `/` (racine) | `app.votredomaine.com` | `npm run build` | `dist` |
+| Application | Dossier | Sous-domaine | Root Directory | Build Command | Output Directory |
+|------------|---------|--------------|----------------|---------------|------------------|
+| Client Dashboard | `client-dashboard/` | `client.votredomaine.com` | `client-dashboard` | `npm run build` | `dist` |
+| Admin Dashboard | `notary-admin/` | `admin.votredomaine.com` | `notary-admin` | `npm run build` | `dist` |
+| Formulaire Principal | `/` (racine) | `app.votredomaine.com` | `/` (vide) | `npm run build` | `dist` |
 
 ## ⚡ Déploiement en 5 Étapes
 
@@ -32,16 +32,16 @@ Pour chaque projet, configurez :
 #### Client Dashboard
 - **Project name**: `notary-client-dashboard`
 - **Framework preset**: `Vite`
-- **Build command**: `cd client-dashboard && npm run build`
-- **Build output directory**: `client-dashboard/dist`
-- **Root directory**: `/`
+- **Build command**: `npm run build`
+- **Build output directory**: `dist` ⚠️ **Important : juste `dist`, pas `client-dashboard/dist`**
+- **Root directory (advanced)** → **Path**: `client-dashboard` ⚠️ **C'EST LA CLÉ !**
 
 #### Admin Dashboard
 - **Project name**: `notary-admin-dashboard`
 - **Framework preset**: `Vite`
-- **Build command**: `cd notary-admin && npm run build`
-- **Build output directory**: `notary-admin/dist`
-- **Root directory**: `/`
+- **Build command**: `npm run build`
+- **Build output directory**: `dist` ⚠️ **Important : juste `dist`, pas `notary-admin/dist`**
+- **Root directory (advanced)** → **Path**: `notary-admin` ⚠️ **C'EST LA CLÉ !**
 
 #### Formulaire Principal
 - **Project name**: `notary-main-form`
