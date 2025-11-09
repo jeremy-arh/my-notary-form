@@ -89,6 +89,18 @@ Cloudflare Pages cherche `wrangler.toml` à la racine du repo, pas dans les sous
 1. Allez dans votre projet Cloudflare Pages
 2. **Settings** > **Builds & deployments**
 3. Modifiez la configuration selon l'Option 1 ci-dessus
-4. Cliquez sur **Save and Deploy**
-5. Vérifiez les logs pour confirmer que le build fonctionne
+4. **IMPORTANT** : Vérifiez que **Production branch** est configuré sur `main` (pas sur une branche de feature)
+5. Cliquez sur **Save and Deploy**
+6. Vérifiez les logs pour confirmer que le build fonctionne
+
+## ⚠️ Erreur "an internal error occurred"
+
+Si vous rencontrez cette erreur après avoir configuré le Root Directory :
+
+1. **Vérifiez la branche de production** : Elle doit être `main` (ou votre branche principale)
+2. **Vérifiez le Root Directory** : Il doit être exactement `client-dashboard` (sans slash, sans espaces)
+3. **Réessayez le déploiement** : Parfois c'est une erreur temporaire
+4. **Créez un nouveau déploiement** : Deployments > Create deployment > Sélectionnez `main`
+
+Pour plus de détails, consultez `CLOUDFLARE_TROUBLESHOOTING.md`
 
