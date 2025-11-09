@@ -105,13 +105,26 @@ VITE_SUPABASE_URL = https://votre-projet.supabase.co
 VITE_SUPABASE_ANON_KEY = votre_anon_key_ici
 ```
 
-**⚠️ Important** : Ces variables doivent commencer par `VITE_` pour être accessibles dans Vite.
+**⚠️ Important** : 
+- Ces variables doivent commencer par `VITE_` pour être accessibles dans Vite
+- Les variables sont intégrées au moment du BUILD, pas au runtime
+- **VOUS DEVEZ REDÉPLOYER après avoir ajouté les variables**
 
 Pour trouver vos credentials Supabase :
 - URL : Dashboard Supabase > Settings > API > Project URL
 - Anon Key : Dashboard Supabase > Settings > API > Project API keys > `anon` `public`
 
 #### Étape 5 : Déployer
+
+**⚠️ CRUCIAL** : Après avoir ajouté les variables d'environnement, vous DEVEZ redéployer :
+
+1. Allez dans **Deployments**
+2. Cliquez sur **Create deployment** ou **Retry deployment**
+3. Sélectionnez la branche `main`
+4. Cliquez sur **Deploy**
+5. Attendez que le build se termine (les variables seront intégrées pendant le build)
+
+**Note** : Si vous ne redéployez pas après avoir ajouté les variables, elles ne seront pas disponibles dans l'application déployée.
 
 1. Cloudflare Pages va automatiquement builder et déployer après chaque push
 2. Le premier déploiement peut prendre 5-10 minutes
