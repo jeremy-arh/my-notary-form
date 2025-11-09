@@ -59,13 +59,22 @@ VITE_SUPABASE_URL = https://votre-projet.supabase.co
 VITE_SUPABASE_ANON_KEY = votre_anon_key_ici
 ```
 
-⚠️ **Important** : Ajoutez ces variables pour **Production**, **Preview** et **Branch previews**.
+⚠️ **Important** : 
+- Ajoutez ces variables pour **Production**, **Preview** et **Branch previews**
+- Les variables sont intégrées au moment du BUILD
+- **VOUS DEVEZ REDÉPLOYER après avoir ajouté les variables**
 
 ### 4. Déployer
 
-1. Cliquez sur **Save and Deploy**
+1. Après avoir ajouté les variables, **redéployez immédiatement** :
+   - Allez dans **Deployments**
+   - Cliquez sur **Create deployment** ou **Retry deployment**
+   - Sélectionnez la branche `main`
+   - Cliquez sur **Deploy**
 2. Attendez que le build se termine (5-10 minutes pour le premier)
 3. Votre site sera disponible sur `https://votre-projet.pages.dev`
+
+**⚠️ CRUCIAL** : Si vous ne redéployez pas après avoir ajouté les variables, elles ne seront PAS disponibles dans l'application déployée. Les variables Vite sont intégrées au BUILD, pas au runtime.
 
 ### 5. Configurer les Sous-domaines
 
