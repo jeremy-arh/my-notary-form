@@ -289,11 +289,14 @@ Edit individual step components in `src/components/steps/`.
 3. Add environment variables in Vercel settings
 4. Deploy
 
-### Deploy to Netlify
+### Deploy to Cloudflare Pages
 
-1. Build the project: `npm run build`
-2. Deploy `dist` folder to Netlify
-3. Add environment variables in site settings
+1. See `CLOUDFLARE_DEPLOYMENT.md` for complete deployment instructions
+2. Each dashboard will be deployed on a separate subdomain:
+   - Client Dashboard: `client.votredomaine.com`
+   - Admin Dashboard: `admin.votredomaine.com`
+3. Configure environment variables in Cloudflare Pages settings
+4. Deploy via Git integration or Wrangler CLI
 
 ## Troubleshooting
 

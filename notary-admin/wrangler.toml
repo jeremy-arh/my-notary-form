@@ -1,0 +1,24 @@
+# Cloudflare Pages configuration for Notary Admin Dashboard
+# Ce dashboard sera déployé sur un sous-domaine (ex: admin.votredomaine.com)
+
+name = "notary-admin-dashboard"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
+
+[env.production]
+name = "notary-admin-dashboard"
+
+# Configuration pour le build
+[build]
+command = "npm run build"
+cwd = "."
+
+# Variables d'environnement (à définir dans Cloudflare Dashboard)
+# VITE_SUPABASE_URL
+# VITE_SUPABASE_ANON_KEY
+
+# Headers de sécurité (configurés via _headers ou dans Cloudflare Dashboard)
+# Les headers peuvent également être configurés dans le dashboard Cloudflare
+# sous Pages > Settings > Custom headers
+
+# Routes et redirects sont gérés par le fichier public/_redirects

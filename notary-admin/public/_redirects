@@ -1,6 +1,6 @@
-# Netlify redirects for client-side routing
+# Cloudflare Pages redirects for client-side routing
 # This ensures that all routes are handled by React Router
+# Cloudflare Pages supports the same _redirects format as Netlify
 
 # Redirect all requests to index.html
 /*    /index.html   200
-
