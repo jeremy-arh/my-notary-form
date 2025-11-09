@@ -82,7 +82,14 @@ Success: Output directory "dist" found.
 
 ## ⚠️ Note sur wrangler.toml
 
-Cloudflare Pages cherche `wrangler.toml` à la racine du repo, pas dans les sous-dossiers. Les fichiers `wrangler.toml` dans `client-dashboard/` et `notary-admin/` sont pour référence/documentation, mais la configuration se fait principalement via l'interface web de Cloudflare Pages.
+**IMPORTANT** : Les fichiers `wrangler.toml` ne sont **PAS nécessaires** pour Cloudflare Pages et peuvent causer des erreurs. Cloudflare Pages utilise uniquement la configuration de l'interface web. 
+
+Si vous avez des fichiers `wrangler.toml` dans votre repository, supprimez-les car :
+- Cloudflare Pages lit le `wrangler.toml` à la racine
+- La section `[build]` n'est pas supportée pour les projets Pages
+- Cela cause l'erreur : "Configuration file for Pages projects does not support 'build'"
+
+La configuration se fait **uniquement** via l'interface web de Cloudflare Pages (Settings > Builds & deployments).
 
 ## 🚀 Prochaines Étapes
 
