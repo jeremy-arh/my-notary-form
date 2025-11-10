@@ -219,19 +219,75 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
     }
 
     setSending(true);
+    const messageContent = newMessage.trim() || '(File attachment)';
 
     try {
       const { data, error } = await supabase.from('message').insert({
         submission_id: submissionId,
         sender_type: currentUserType,
         sender_id: currentUserId,
-        content: newMessage.trim() || '(File attachment)',
+        content: messageContent,
         attachments: attachments.length > 0 ? attachments : null
       }).select();
 
       if (error) {
         console.error('Error details:', error);
         throw error;
+      }
+
+      // Send email notification to recipient (client or notary)
+      try {
+        // Get submission info
+        const { data: submissionData, error: subError } = await supabase
+          .from('submission')
+          .select('id, client_id, assigned_notary_id, first_name, last_name')
+          .eq('id', submissionId)
+          .single();
+
+        if (!subError && submissionData) {
+          // Determine recipient (client or notary)
+          let recipientEmail = null;
+          let recipientName = null;
+          let recipientType = null;
+
+          // Admin messages notify both client and notary (for now, we'll notify client)
+          if (submissionData.client_id) {
+            const { data: clientData, error: clientError } = await supabase
+              .from('client')
+              .select('email, first_name, last_name')
+              .eq('id', submissionData.client_id)
+              .single();
+
+            if (!clientError && clientData && clientData.email) {
+              recipientEmail = clientData.email;
+              recipientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
+              recipientType = 'client';
+            }
+          }
+
+          if (recipientEmail) {
+            const submissionNumber = submissionId.substring(0, 8);
+            const messagePreview = messageContent.length > 100 
+              ? messageContent.substring(0, 100) + '...' 
+              : messageContent;
+
+            const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
+            await sendTransactionalEmail(supabase, {
+              email_type: 'message_received',
+              recipient_email: recipientEmail,
+              recipient_name: recipientName,
+              recipient_type: recipientType,
+              data: {
+                submission_id: submissionId,
+                submission_number: submissionNumber,
+                message_preview: messagePreview
+              }
+            });
+          }
+        }
+      } catch (emailError) {
+        console.error('Error sending message email notification:', emailError);
+        // Don't block message sending if email fails
       }
       
       setNewMessage('');
