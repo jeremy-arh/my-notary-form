@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
+import { handleNotificationNavigation } from '../utils/notificationNavigation';
 
 const Notifications = ({ notaryId }) => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -204,6 +207,8 @@ const Notifications = ({ notaryId }) => {
                       if (!notification.is_read) {
                         markAsRead(notification.id);
                       }
+                      // Handle navigation using utility function
+                      handleNotificationNavigation(notification, navigate, () => setIsOpen(false));
                     }}
                     className={`p-4 sm:p-6 hover:bg-gray-50 cursor-pointer transition-colors ${
                       !notification.is_read ? 'bg-blue-50' : ''

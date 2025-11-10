@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import { handleNotificationNavigation } from '../../utils/notificationNavigation';
 
 const Notifications = ({ userId, userType = 'admin' }) => {
   const navigate = useNavigate();
@@ -198,27 +199,8 @@ const Notifications = ({ userId, userType = 'admin' }) => {
                         if (!notification.is_read) {
                           markAsRead(notification.id);
                         }
-                        // Handle navigation based on action_data
-                        if (notification.action_data) {
-                          try {
-                            const actionData = typeof notification.action_data === 'string' 
-                              ? JSON.parse(notification.action_data) 
-                              : notification.action_data;
-                            
-                            if (actionData.submission_id) {
-                              // Navigate to submission detail with notarized tab if it's a file notification
-                              if (notification.action_type === 'notarized_file_uploaded' || 
-                                  (notification.type === 'success' && notification.message?.toLowerCase().includes('notarized'))) {
-                                navigate(`/submission/${actionData.submission_id}?tab=notarized`);
-                              } else {
-                                navigate(`/submission/${actionData.submission_id}`);
-                              }
-                              setIsOpen(false);
-                            }
-                          } catch (e) {
-                            console.error('Error parsing action_data:', e);
-                          }
-                        }
+                        // Handle navigation using utility function
+                        handleNotificationNavigation(notification, navigate, () => setIsOpen(false));
                       }}
                       className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
                         !notification.is_read ? 'bg-blue-50' : ''
