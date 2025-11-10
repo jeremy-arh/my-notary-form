@@ -37,29 +37,43 @@ Dans le dashboard Supabase, allez dans **Edge Functions** > **Settings** > **Sec
 - `SUPABASE_URL` : URL de votre projet Supabase (déjà configurée)
 - `SUPABASE_SERVICE_ROLE_KEY` : Clé de service Supabase (déjà configurée)
 
-### 3. Configurer le cron job pour les rappels ⚠️ IMPORTANT
+### 3. Configurer le cron job Supabase pour les rappels ✅
 
-**Supabase ne supporte PAS nativement les cron jobs pour les Edge Functions.** Vous DEVEZ configurer un service externe pour appeler périodiquement l'Edge Function.
+**Supabase propose une intégration Cron native** basée sur `pg_cron` qui permet de programmer des tâches récurrentes directement dans votre base de données.
 
-#### 🔴 Action requise : Configurer un service de cron job externe
+#### 🔴 Action requise : Configurer le cron job Supabase
 
-Consultez le guide complet : **`CRON_JOB_SETUP_GUIDE.md`**
+Consultez le guide complet : **`SUPABASE_CRON_SETUP.md`**
 
-**Services recommandés :**
-- **cron-job.org** (Gratuit, simple) : https://cron-job.org
-- **EasyCron** (Gratuit/Payant) : https://www.easycron.com
-- **GitHub Actions** (Si vous utilisez GitHub) : Voir `CRON_JOB_SETUP_GUIDE.md`
+**Étapes rapides :**
 
-**Configuration minimale :**
-- **URL** : `https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-appointment-reminders`
-- **Méthode** : POST
-- **En-têtes** :
-  - `Authorization: Bearer YOUR_SERVICE_ROLE_KEY`
-  - `Content-Type: application/json`
-- **Body** : `{}`
+1. **Activer l'intégration Cron** :
+   - Allez dans **Supabase Dashboard** > **Integrations** > **Cron**
+   - Cliquez sur **Install** si ce n'est pas déjà fait
+
+2. **Activer l'extension pg_net** :
+   - Allez dans **Database** > **Extensions**
+   - Activez **pg_net** (requis pour les appels HTTP depuis pg_cron)
+
+3. **Exécuter le script SQL** :
+   - Ouvrez le **SQL Editor** dans Supabase Dashboard
+   - Exécutez `supabase-appointment-reminders-cron-setup.sql`
+   - **Remplacez** `YOUR_PROJECT_REF` et `YOUR_SERVICE_ROLE_KEY` par vos valeurs réelles
+
+4. **Vérifier que le cron job est créé** :
+   ```sql
+   SELECT * FROM cron.job WHERE jobname LIKE 'appointment-reminders%';
+   ```
+
+**Configuration recommandée :**
 - **Fréquence** : Toutes les heures (`0 * * * *`)
+- **Alternative** : Toutes les 15 minutes (`*/15 * * * *`) pour plus de précision
 
 **⚠️ Sans cette configuration, les rappels de rendez-vous ne seront PAS envoyés automatiquement.**
+
+#### Alternative : Service externe (si vous préférez)
+
+Si vous préférez utiliser un service externe au lieu de pg_cron, consultez : **`CRON_JOB_SETUP_GUIDE.md`**
 
 ### 4. Exécuter le script SQL (Optionnel)
 

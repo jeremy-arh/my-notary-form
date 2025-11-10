@@ -1,8 +1,10 @@
-# Guide de configuration du cron job pour les rappels de rendez-vous
+# Guide de configuration du cron job externe pour les rappels de rendez-vous
 
-## ⚠️ Important
+## ⚠️ Note importante
 
-**Supabase ne supporte PAS nativement les cron jobs pour les Edge Functions.** Vous devez configurer un service externe pour appeler périodiquement l'Edge Function `send-appointment-reminders`.
+**Supabase propose une intégration Cron native** via `pg_cron` qui est la méthode recommandée. Consultez d'abord **`SUPABASE_CRON_SETUP.md`** pour utiliser la solution native.
+
+Ce guide concerne uniquement l'utilisation d'un **service externe** si vous préférez cette approche ou si vous n'avez pas accès à l'intégration Cron de Supabase.
 
 ## Options de configuration
 

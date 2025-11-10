@@ -1,14 +1,28 @@
--- Setup for appointment reminders cron job
--- This script sets up a cron job to send appointment reminders to notaries
+-- Setup for appointment reminders cron job using Supabase pg_cron
+-- This script sets up cron jobs to send appointment reminders to notaries
 -- 
--- NOTE: Supabase doesn't support direct HTTP calls from pg_cron to Edge Functions.
--- You have two options:
--- 1. Use an external cron service (recommended) - see NOTARY_EMAIL_NOTIFICATIONS_SETUP.md
--- 2. Use this SQL to create a database function that can be called by pg_cron
---    (but you'll need to call the Edge Function from your application or use a webhook)
+-- REQUIREMENTS:
+-- 1. Enable the "Cron" integration in Supabase Dashboard > Integrations
+-- 2. Enable the "pg_net" extension (required for HTTP calls from pg_cron)
+-- 3. Deploy the "send-appointment-reminders" Edge Function
+-- 4. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables
+--
+-- INSTRUCTIONS:
+-- 1. Replace YOUR_PROJECT_REF with your actual Supabase project reference
+-- 2. Replace YOUR_SERVICE_ROLE_KEY with your actual service role key
+-- 3. Execute this script in the Supabase SQL Editor
+--
+-- The cron jobs will:
+-- - Run every hour to check for appointments needing reminders
+-- - Send day-before reminders for appointments tomorrow
+-- - Send one-hour-before reminders for appointments in ~1 hour
 
--- Option 1: Create a function that logs appointments needing reminders
--- This function can be called by pg_cron and then your application can process them
+-- Enable required extensions (if not already enabled)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Create a function to call the Edge Function
+-- This function will be called by pg_cron
 CREATE OR REPLACE FUNCTION public.get_appointments_needing_reminders()
 RETURNS TABLE (
   submission_id UUID,
@@ -92,6 +106,62 @@ $$;
 GRANT EXECUTE ON FUNCTION public.get_appointments_needing_reminders() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_appointments_needing_reminders() TO service_role;
 
+-- ============================================================================
+-- CRON JOBS SETUP
+-- ============================================================================
+-- 
+-- IMPORTANT: Replace the following placeholders:
+-- - YOUR_PROJECT_REF: Your Supabase project reference (e.g., "abcdefghijklmnop")
+-- - YOUR_SERVICE_ROLE_KEY: Your Supabase service role key
+--
+-- To find these values:
+-- 1. Project Ref: Supabase Dashboard > Project Settings > General > Reference ID
+-- 2. Service Role Key: Supabase Dashboard > Project Settings > API > service_role key
+--
+-- ============================================================================
+
+-- Remove existing cron jobs if they exist (to avoid duplicates)
+SELECT cron.unschedule('appointment-reminders-hourly') WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'appointment-reminders-hourly'
+);
+
+-- Schedule cron job to run every hour
+-- This will check for both day-before and one-hour-before reminders
+SELECT cron.schedule(
+  'appointment-reminders-hourly',                    -- Job name
+  '0 * * * *',                                       -- Schedule: Every hour at minute 0
+  $$
+  SELECT net.http_post(
+    url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-appointment-reminders',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY',
+      'apikey', 'YOUR_SERVICE_ROLE_KEY'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+-- Alternative: Run every 15 minutes for more precise one-hour-before reminders
+-- Uncomment the following if you want more frequent checks:
+-- SELECT cron.schedule(
+--   'appointment-reminders-15min',
+--   '*/15 * * * *',  -- Every 15 minutes
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-appointment-reminders',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY',
+--       'apikey', 'YOUR_SERVICE_ROLE_KEY'
+--     ),
+--     body := '{}'::jsonb
+--   );
+--   $$);
+--
+-- Note: If using the 15-minute schedule, you can remove the hourly schedule above
+
 -- Create a table to track sent reminders (optional, to avoid duplicate emails)
 CREATE TABLE IF NOT EXISTS public.appointment_reminder_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -138,4 +208,32 @@ CREATE POLICY "Service role can manage reminder logs"
 -- Comments
 COMMENT ON FUNCTION public.get_appointments_needing_reminders() IS 'Returns appointments that need reminders (day before or one hour before)';
 COMMENT ON TABLE public.appointment_reminder_log IS 'Tracks sent appointment reminders to avoid duplicates';
+
+-- ============================================================================
+-- VERIFICATION
+-- ============================================================================
+-- 
+-- To verify the cron jobs are scheduled correctly, run:
+-- SELECT * FROM cron.job WHERE jobname LIKE 'appointment-reminders%';
+--
+-- To view cron job execution history:
+-- SELECT * FROM cron.job_run_details WHERE jobid IN (
+--   SELECT jobid FROM cron.job WHERE jobname LIKE 'appointment-reminders%'
+-- ) ORDER BY start_time DESC LIMIT 10;
+--
+-- To manually test the Edge Function (replace placeholders):
+-- SELECT net.http_post(
+--   url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-appointment-reminders',
+--   headers := jsonb_build_object(
+--     'Content-Type', 'application/json',
+--     'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY',
+--     'apikey', 'YOUR_SERVICE_ROLE_KEY'
+--   ),
+--   body := '{}'::jsonb
+-- );
+--
+-- To remove a cron job:
+-- SELECT cron.unschedule('appointment-reminders-hourly');
+--
+-- ============================================================================
 
