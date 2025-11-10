@@ -35,11 +35,25 @@ const Messages = () => {
           // Only play sound for messages not from notary (from clients/admins)
           if (newMessage.sender_type !== 'notary') {
             // Check if this message is for a submission assigned to this notary
-            // We'll refresh conversations which will update the unread count
-            fetchConversations();
-            
-            // Play notification sound
-            playNotificationSound();
+            supabase
+              .from('submission')
+              .select('id, assigned_notary_id')
+              .eq('id', newMessage.submission_id)
+              .eq('assigned_notary_id', notaryId)
+              .single()
+              .then(({ data: submission }) => {
+                if (submission) {
+                  // This message is for a submission assigned to this notary
+                  // Refresh conversations which will update the unread count
+                  fetchConversations();
+                  
+                  // Play notification sound only if not currently viewing this conversation
+                  const isViewingThisConversation = selectedConversation?.id === newMessage.submission_id;
+                  if (!isViewingThisConversation) {
+                    playNotificationSound();
+                  }
+                }
+              });
           }
         })
         .subscribe();
