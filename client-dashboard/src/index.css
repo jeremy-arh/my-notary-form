@@ -319,3 +319,27 @@ html, body {
     font-size: 14px;
   }
 }
+
+/* Mobile calendar fixes */
+@media (max-width: 640px) {
+  /* Ensure calendar grid doesn't overflow */
+  .calendar-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  
+  /* Ensure calendar days fit */
+  .calendar-grid {
+    width: 100%;
+    gap: 0.25rem;
+  }
+  
+  /* Timezone dropdown mobile fix */
+  .timezone-dropdown {
+    max-width: calc(100vw - 2rem);
+    left: 0;
+    right: 0;
+  }
+}
