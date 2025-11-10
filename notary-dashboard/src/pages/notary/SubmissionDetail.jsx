@@ -386,7 +386,7 @@ const SubmissionDetail = () => {
 
             if (!clientError && clientData && clientData.user_id) {
               // Call the create_notification function with client's user_id
-              const { error: notifError } = await supabase.rpc('create_notification', {
+              const { data: notificationId, error: notifError } = await supabase.rpc('create_notification', {
                 p_user_id: clientData.id, // Use client.id (not user_id) as per notification schema
                 p_user_type: 'client',
                 p_title: 'New Notarized Document',
@@ -397,11 +397,24 @@ const SubmissionDetail = () => {
                   submission_id: id,
                   file_id: fileData.id,
                   file_name: file.name
-                })
+                }),
+                p_send_email: false // We'll send email via Edge Function
               });
 
               if (notifError) {
                 console.error('Error creating notification:', notifError);
+              } else if (notificationId) {
+                // Send email via Edge Function
+                try {
+                  const { error: emailError } = await supabase.functions.invoke('send-notification-email', {
+                    body: { notification_id: notificationId }
+                  });
+                  if (emailError) {
+                    console.error('Error sending notification email:', emailError);
+                  }
+                } catch (emailError) {
+                  console.error('Error calling email function:', emailError);
+                }
               }
             }
           }
