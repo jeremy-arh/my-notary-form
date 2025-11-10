@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 
 const Notifications = ({ userId, userType = 'admin' }) => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -195,6 +197,27 @@ const Notifications = ({ userId, userType = 'admin' }) => {
                       onClick={() => {
                         if (!notification.is_read) {
                           markAsRead(notification.id);
+                        }
+                        // Handle navigation based on action_data
+                        if (notification.action_data) {
+                          try {
+                            const actionData = typeof notification.action_data === 'string' 
+                              ? JSON.parse(notification.action_data) 
+                              : notification.action_data;
+                            
+                            if (actionData.submission_id) {
+                              // Navigate to submission detail with notarized tab if it's a file notification
+                              if (notification.action_type === 'notarized_file_uploaded' || 
+                                  (notification.type === 'success' && notification.message?.toLowerCase().includes('notarized'))) {
+                                navigate(`/submission/${actionData.submission_id}?tab=notarized`);
+                              } else {
+                                navigate(`/submission/${actionData.submission_id}`);
+                              }
+                              setIsOpen(false);
+                            }
+                          } catch (e) {
+                            console.error('Error parsing action_data:', e);
+                          }
                         }
                       }}
                       className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${

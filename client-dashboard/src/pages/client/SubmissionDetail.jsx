@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import ClientLayout from '../../components/ClientLayout';
 import Chat from '../../components/Chat';
@@ -8,13 +8,24 @@ import { supabase } from '../../lib/supabase';
 const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [submission, setSubmission] = useState(null);
   const [clientInfo, setClientInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [servicesMap, setServicesMap] = useState({});
   const [optionsMap, setOptionsMap] = useState({});
+  const [notarizedFiles, setNotarizedFiles] = useState([]);
+  const [fileComments, setFileComments] = useState({});
+  const [newComment, setNewComment] = useState({});
   const [isRetryingPayment, setIsRetryingPayment] = useState(false);
   const [activeTab, setActiveTab] = useState('services');
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'notarized') {
+      setActiveTab('notarized');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchSubmissionDetail();
@@ -87,6 +98,38 @@ const SubmissionDetail = () => {
       }
       setOptionsMap(oMap);
 
+      // Fetch notarized files
+      const { data: notarizedFilesData, error: notarizedFilesError } = await supabase
+        .from('notarized_files')
+        .select('*')
+        .eq('submission_id', id)
+        .order('uploaded_at', { ascending: false });
+
+      if (!notarizedFilesError && notarizedFilesData) {
+        setNotarizedFiles(notarizedFilesData || []);
+        
+        // Fetch comments for each file
+        const fileIds = (notarizedFilesData || []).map(f => f.id);
+        if (fileIds.length > 0) {
+          const { data: commentsData, error: commentsError } = await supabase
+            .from('file_comments')
+            .select('*')
+            .in('file_id', fileIds)
+            .order('created_at', { ascending: true });
+
+          if (!commentsError && commentsData) {
+            const commentsMap = {};
+            commentsData.forEach(comment => {
+              if (!commentsMap[comment.file_id]) {
+                commentsMap[comment.file_id] = [];
+              }
+              commentsMap[comment.file_id].push(comment);
+            });
+            setFileComments(commentsMap);
+          }
+        }
+      }
+
     } catch (error) {
       console.error('Error fetching submission detail:', error);
       alert('Error loading submission details');
@@ -94,6 +137,50 @@ const SubmissionDetail = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddComment = async (fileId) => {
+    const comment = newComment[fileId]?.trim();
+    if (!comment || !clientInfo) return;
+
+    try {
+      const { data: commentData, error: commentError } = await supabase
+        .from('file_comments')
+        .insert({
+          file_id: fileId,
+          submission_id: id,
+          commenter_type: 'client',
+          commenter_id: clientInfo.id,
+          comment: comment
+        })
+        .select()
+        .single();
+
+      if (commentError) throw commentError;
+
+      // Add to local state
+      setFileComments(prev => ({
+        ...prev,
+        [fileId]: [...(prev[fileId] || []), commentData]
+      }));
+
+      // Clear comment input
+      setNewComment(prev => ({
+        ...prev,
+        [fileId]: ''
+      }));
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      alert('Failed to add comment. Please try again.');
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const getStatusBadge = (status) => {
@@ -311,6 +398,24 @@ const SubmissionDetail = () => {
               >
                 Payment Information
                 {activeTab === 'payment' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('notarized')}
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
+                  activeTab === 'notarized'
+                    ? 'text-black'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Notarized Documents
+                {notarizedFiles.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                    {notarizedFiles.length}
+                  </span>
+                )}
+                {activeTab === 'notarized' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
@@ -573,6 +678,96 @@ const SubmissionDetail = () => {
                   )}
                 </div>
               </div>
+              )}
+
+              {/* Notarized Files Tab */}
+              {activeTab === 'notarized' && (
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">Notarized Documents</h2>
+                    
+                    {/* Files List */}
+                    {notarizedFiles.length === 0 ? (
+                      <p className="text-sm sm:text-base text-gray-600">No notarized documents have been uploaded yet.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {notarizedFiles.map((file) => (
+                          <div key={file.id} className="bg-white rounded-xl p-4 border border-gray-200">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-start flex-1 min-w-0">
+                                <Icon icon="heroicons:document-text" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 mr-3 flex-shrink-0 mt-1" />
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-base sm:text-lg text-gray-900 mb-1">{file.file_name}</h3>
+                                  <p className="text-xs sm:text-sm text-gray-500">
+                                    {formatFileSize(file.file_size)} • Uploaded on {formatDate(file.uploaded_at)}
+                                  </p>
+                                </div>
+                              </div>
+                              <a
+                                href={file.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-4 px-3 py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
+                              >
+                                <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
+                                Download
+                              </a>
+                            </div>
+
+                            {/* Comments Section */}
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <h4 className="text-sm font-semibold text-gray-900 mb-3">Comments</h4>
+                              
+                              {/* Existing Comments */}
+                              {fileComments[file.id] && fileComments[file.id].length > 0 && (
+                                <div className="space-y-3 mb-4">
+                                  {fileComments[file.id].map((comment) => (
+                                    <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
+                                      <div className="flex items-start justify-between mb-1">
+                                        <span className="text-xs font-semibold text-gray-900 capitalize">
+                                          {comment.commenter_type}
+                                        </span>
+                                        <span className="text-xs text-gray-500">
+                                          {formatDate(comment.created_at)}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-gray-700">{comment.comment}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Add Comment */}
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={newComment[file.id] || ''}
+                                  onChange={(e) => setNewComment(prev => ({
+                                    ...prev,
+                                    [file.id]: e.target.value
+                                  }))}
+                                  placeholder="Add a comment..."
+                                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleAddComment(file.id);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={() => handleAddComment(file.id)}
+                                  className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* Notary Info - Always visible */}

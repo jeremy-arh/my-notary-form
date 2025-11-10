@@ -393,11 +393,11 @@ const SubmissionDetail = () => {
                 p_message: `A new notarized document "${file.name}" has been uploaded for your submission.`,
                 p_type: 'success',
                 p_action_type: 'notarized_file_uploaded',
-                p_action_data: {
+                p_action_data: JSON.stringify({
                   submission_id: id,
                   file_id: fileData.id,
                   file_name: file.name
-                }
+                })
               });
 
               if (notifError) {
