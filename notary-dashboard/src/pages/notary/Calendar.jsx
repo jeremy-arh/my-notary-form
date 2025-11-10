@@ -22,10 +22,10 @@ const Calendar = () => {
   }, []);
 
   useEffect(() => {
-    if (notaryId && notaryServiceIds.length >= 0) {
+    if (notaryId !== null) {
       fetchAcceptedAppointments();
     }
-  }, [notaryId, notaryServiceIds, currentMonth]);
+  }, [notaryId, currentMonth]);
 
   const fetchNotaryInfo = async () => {
     try {
@@ -59,48 +59,65 @@ const Calendar = () => {
   };
 
   const fetchAcceptedAppointments = async () => {
+    if (!notaryId) return;
+    
     try {
       setLoading(true);
+      console.log('🔍 Fetching appointments for notary:', notaryId);
       
+      // Get all submissions assigned to this notary with appointment dates
+      // Include multiple statuses: confirmed, accepted, completed, in_progress
       let query = supabase
         .from('submission')
         .select(`
-          *,
+          id,
+          first_name,
+          last_name,
+          appointment_date,
+          appointment_time,
+          timezone,
+          status,
+          created_at,
           submission_services(service_id)
         `)
         .eq('assigned_notary_id', notaryId)
-        .in('status', ['confirmed', 'completed']);
+        .in('status', ['confirmed', 'accepted', 'completed', 'in_progress'])
+        .not('appointment_date', 'is', null)
+        .not('appointment_time', 'is', null);
 
       const { data, error } = await query
         .order('appointment_date', { ascending: true })
         .order('appointment_time', { ascending: true });
 
-      if (error) throw error;
-      
-      // Filter by notary's competent services if they exist
-      let filteredData = data || [];
-      if (notaryServiceIds.length > 0 && data) {
-        // Only show appointments that have at least one service matching notary's competent services
-        filteredData = data.filter(sub => {
-          const submissionServiceIds = (sub.submission_services || []).map(ss => ss.service_id);
-          // Check if any of the submission's services match the notary's competent services
-          return submissionServiceIds.some(serviceId => notaryServiceIds.includes(serviceId));
-        });
+      if (error) {
+        console.error('❌ Error fetching appointments:', error);
+        throw error;
       }
+      
+      console.log(`✅ Found ${data?.length || 0} appointments in database`);
+      
+      // Don't filter by services - show all appointments assigned to this notary
+      // The notary should see all their appointments regardless of service matching
+      const appointments = (data || []).filter(sub => {
+        // Ensure appointment_date and appointment_time exist
+        return sub.appointment_date && sub.appointment_time;
+      });
       
       // Remove duplicates
       const uniqueAppointments = [];
       const seenIds = new Set();
-      filteredData.forEach(apt => {
+      appointments.forEach(apt => {
         if (!seenIds.has(apt.id)) {
           seenIds.add(apt.id);
           uniqueAppointments.push(apt);
         }
       });
       
+      console.log(`✅ Processed ${uniqueAppointments.length} unique appointments`);
       setAcceptedAppointments(uniqueAppointments);
     } catch (error) {
-      console.error('Error fetching appointments:', error);
+      console.error('❌ Error fetching appointments:', error);
+      setAcceptedAppointments([]);
     } finally {
       setLoading(false);
     }
