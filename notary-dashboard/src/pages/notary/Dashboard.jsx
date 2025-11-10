@@ -35,6 +35,13 @@ const Dashboard = () => {
     }
   }, [notaryId]);
 
+  // Refresh data when notaryServiceIds change (in case services are added/removed)
+  useEffect(() => {
+    if (notaryId && notaryServiceIds.length >= 0) {
+      fetchNewSubmissions();
+    }
+  }, [notaryId, notaryServiceIds]);
+
   useEffect(() => {
     setCurrentPage(1); // Reset to first page when filters change
   }, [statusFilter, searchTerm]);
@@ -88,8 +95,13 @@ const Dashboard = () => {
   };
 
   const fetchAllSubmissions = async () => {
+    if (!notaryId) return;
+    
     try {
-      // Optimized query: select only needed columns and use proper filtering
+      console.log('🔍 Fetching all submissions for notary:', notaryId);
+      
+      // Get all submissions assigned to this notary
+      // Don't filter by services - show all submissions assigned to this notary
       let query = supabase
         .from('submission')
         .select(`
@@ -111,28 +123,31 @@ const Dashboard = () => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
-      
-      // Filter by notary's competent services if they exist
-      let filteredData = data || [];
-      if (notaryServiceIds.length > 0 && data) {
-        filteredData = data.filter(sub => {
-          const submissionServiceIds = (sub.submission_services || []).map(ss => ss.service_id);
-          return submissionServiceIds.some(serviceId => notaryServiceIds.includes(serviceId));
-        });
+      if (error) {
+        console.error('❌ Error fetching all submissions:', error);
+        throw error;
       }
       
-      // Remove duplicates using Set for better performance
+      console.log(`✅ Found ${data?.length || 0} submissions assigned to notary`);
+      
+      // Don't filter by services - show all submissions assigned to this notary
+      // The notary should see all their submissions regardless of service matching
+      const submissions = data || [];
+      
+      // Remove duplicates using Map for better performance
       const uniqueMap = new Map();
-      filteredData.forEach(sub => {
+      submissions.forEach(sub => {
         if (!uniqueMap.has(sub.id)) {
           uniqueMap.set(sub.id, sub);
         }
       });
       
-      setAllSubmissions(Array.from(uniqueMap.values()));
+      const uniqueSubmissions = Array.from(uniqueMap.values());
+      console.log(`✅ Processed ${uniqueSubmissions.length} unique submissions`);
+      setAllSubmissions(uniqueSubmissions);
     } catch (error) {
-      console.error('Error fetching submissions:', error);
+      console.error('❌ Error fetching all submissions:', error);
+      setAllSubmissions([]);
     }
   };
 
@@ -257,44 +272,71 @@ const Dashboard = () => {
   };
 
   const fetchNewSubmissions = async () => {
+    if (!notaryId) return;
+    
     try {
-      // Get new submissions that match notary's services
+      console.log('🔍 Fetching new submissions for notary:', notaryId);
+      console.log('🔍 Notary service IDs:', notaryServiceIds);
+      
+      // Get all pending submissions not assigned to any notary
       let query = supabase
         .from('submission')
         .select(`
           *,
-          submission_services!inner(service_id)
+          submission_services(service_id)
         `)
         .is('assigned_notary_id', null)
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(50); // Get more to filter client-side
 
-      // Filter by notary's competent services
-      // If no services, return empty
-      if (notaryServiceIds.length === 0) {
-        setNewSubmissions([]);
-        return;
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ Error fetching new submissions:', error);
+        throw error;
       }
       
-      query = query.in('submission_services.service_id', notaryServiceIds);
-
-      const { data, error } = await query.order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
+      console.log(`✅ Found ${data?.length || 0} pending submissions in database`);
+      
+      // Filter by notary's competent services if they exist
+      // If no services configured, show ALL pending submissions (notary can accept any)
+      let filteredData = data || [];
+      
+      if (notaryServiceIds.length > 0 && data) {
+        // Filter submissions that have at least one service matching notary's competent services
+        filteredData = data.filter(sub => {
+          const submissionServiceIds = (sub.submission_services || []).map(ss => ss.service_id);
+          // Check if any of the submission's services match the notary's competent services
+          // OR if submission has no services (show all)
+          return submissionServiceIds.length === 0 || 
+                 submissionServiceIds.some(serviceId => notaryServiceIds.includes(serviceId));
+        });
+        console.log(`✅ Filtered to ${filteredData.length} submissions matching notary services`);
+      } else {
+        console.log('⚠️ No services configured for notary - showing ALL pending submissions');
+        // If no services configured, show all pending submissions
+        filteredData = data || [];
+      }
       
       // Remove duplicates
       const uniqueSubmissions = [];
       const seenIds = new Set();
-      (data || []).forEach(sub => {
+      filteredData.forEach(sub => {
         if (!seenIds.has(sub.id)) {
           seenIds.add(sub.id);
           uniqueSubmissions.push(sub);
         }
       });
       
-      setNewSubmissions(uniqueSubmissions);
+      // Limit to 10 most recent
+      const limitedSubmissions = uniqueSubmissions.slice(0, 10);
+      
+      console.log(`✅ Setting ${limitedSubmissions.length} new submissions`);
+      setNewSubmissions(limitedSubmissions);
     } catch (error) {
-      console.error('Error fetching new submissions:', error);
+      console.error('❌ Error fetching new submissions:', error);
+      setNewSubmissions([]);
     }
   };
 

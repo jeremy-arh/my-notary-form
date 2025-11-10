@@ -207,8 +207,21 @@ const NotariesList = () => {
 
   const handleSaveNotary = async () => {
     try {
+      console.log('💾 Saving notary...');
+      console.log('📝 Form data:', formData);
+      console.log('🔧 Edit mode:', isEditMode);
+      console.log('🎯 Selected service IDs:', selectedServiceIds);
+      
+      // Validation
       if (!formData.full_name || !formData.email) {
-        alert('Please fill in all required fields');
+        alert('Please fill in all required fields (Full Name and Email are required)');
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        alert('Please enter a valid email address');
         return;
       }
 
@@ -216,90 +229,151 @@ const NotariesList = () => {
 
       if (isEditMode && selectedNotary) {
         // Update existing notary
-        const { error } = await supabase
+        console.log('✏️ Updating existing notary:', selectedNotary.id);
+        const updateData = {
+          name: formData.full_name,
+          full_name: formData.full_name,
+          email: formData.email,
+          phone: formData.phone || null,
+          address: formData.address || null,
+          city: formData.city || null,
+          postal_code: formData.postal_code || null,
+          country: formData.country || null,
+          timezone: formData.timezone || null,
+          license_number: formData.license_number || null,
+          bio: formData.bio || null,
+          iban: formData.iban || null,
+          bic: formData.bic || null,
+          bank_name: formData.bank_name || null,
+          is_active: formData.is_active !== false,
+          updated_at: new Date().toISOString()
+        };
+        
+        console.log('📤 Update data:', updateData);
+        
+        const { data, error } = await supabase
           .from('notary')
-          .update({
-            name: formData.full_name,
-            full_name: formData.full_name,
-            email: formData.email,
-            phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            postal_code: formData.postal_code,
-            country: formData.country,
-            timezone: formData.timezone,
-            license_number: formData.license_number,
-            bio: formData.bio,
-            iban: formData.iban,
-            bic: formData.bic,
-            bank_name: formData.bank_name,
-            is_active: formData.is_active,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', selectedNotary.id);
+          .update(updateData)
+          .eq('id', selectedNotary.id)
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Update error:', error);
+          throw error;
+        }
+        
+        console.log('✅ Notary updated:', data);
         notaryId = selectedNotary.id;
         alert('Notary updated successfully!');
       } else {
         // Create new notary
+        console.log('➕ Creating new notary...');
+        const insertData = {
+          name: formData.full_name,
+          full_name: formData.full_name,
+          email: formData.email,
+          phone: formData.phone || null,
+          address: formData.address || null,
+          city: formData.city || null,
+          postal_code: formData.postal_code || null,
+          country: formData.country || null,
+          timezone: formData.timezone || null,
+          license_number: formData.license_number || null,
+          bio: formData.bio || null,
+          iban: formData.iban || null,
+          bic: formData.bic || null,
+          bank_name: formData.bank_name || null,
+          is_active: formData.is_active !== false
+        };
+        
+        console.log('📤 Insert data:', insertData);
+        
         const { data, error } = await supabase
           .from('notary')
-          .insert({
-            name: formData.full_name,
-            full_name: formData.full_name,
-            email: formData.email,
-            phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            postal_code: formData.postal_code,
-            country: formData.country,
-            timezone: formData.timezone,
-            license_number: formData.license_number,
-            bio: formData.bio,
-            iban: formData.iban,
-            bic: formData.bic,
-            bank_name: formData.bank_name,
-            is_active: formData.is_active
-          })
+          .insert(insertData)
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Insert error:', error);
+          console.error('❌ Error details:', JSON.stringify(error, null, 2));
+          
+          // Provide more helpful error messages
+          if (error.code === '23505') {
+            // Unique constraint violation
+            if (error.message.includes('email')) {
+              throw new Error('A notary with this email already exists. Please use a different email.');
+            } else {
+              throw new Error('A notary with these details already exists.');
+            }
+          } else if (error.code === '42501' || error.message.includes('permission denied') || error.message.includes('policy')) {
+            throw new Error('Permission denied. Please check:\n1. Service Role Key is configured in Cloudflare Pages\n2. RLS policies allow admin operations\n3. You have admin privileges');
+          } else if (error.message.includes('column') && error.message.includes('does not exist')) {
+            throw new Error(`Database column error: ${error.message}\n\nPlease run the migration scripts in Supabase to add missing columns.`);
+          } else {
+            throw new Error(`Failed to create notary: ${error.message}\n\nError code: ${error.code || 'unknown'}`);
+          }
+        }
+        
+        console.log('✅ Notary created:', data);
         notaryId = data.id;
         alert('Notary created successfully! You can now send an invitation.');
       }
 
       // Update notary services
       if (notaryId) {
-        // Delete existing services
-        const { error: deleteError } = await supabase
-          .from('notary_services')
-          .delete()
-          .eq('notary_id', notaryId);
+        console.log('🔗 Updating notary services for notary:', notaryId);
+        
+        // Delete existing services (only for update mode, or if creating and there are existing services)
+        if (isEditMode || selectedServiceIds.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('notary_services')
+            .delete()
+            .eq('notary_id', notaryId);
 
-        if (deleteError) throw deleteError;
+          if (deleteError) {
+            console.error('❌ Error deleting notary services:', deleteError);
+            // Don't throw - services might not exist yet for new notaries
+            if (isEditMode) {
+              // Only warn for edit mode, as services should exist
+              console.warn('⚠️ Could not delete existing services:', deleteError);
+            }
+          } else {
+            console.log('✅ Existing services deleted');
+          }
+        }
 
         // Insert new services
         if (selectedServiceIds.length > 0) {
+          console.log('➕ Inserting services:', selectedServiceIds);
           const notaryServices = selectedServiceIds.map(serviceId => ({
             notary_id: notaryId,
             service_id: serviceId
           }));
 
-          const { error: insertError } = await supabase
+          const { data: servicesData, error: insertError } = await supabase
             .from('notary_services')
-            .insert(notaryServices);
+            .insert(notaryServices)
+            .select();
 
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.error('❌ Error inserting notary services:', insertError);
+            throw new Error(`Failed to assign services: ${insertError.message}`);
+          }
+          
+          console.log('✅ Services assigned:', servicesData);
+        } else {
+          console.log('ℹ️ No services selected for this notary');
         }
       }
 
       setIsModalOpen(false);
       await fetchNotaries();
     } catch (error) {
-      console.error('Error saving notary:', error);
-      alert(`Error: ${error.message}`);
+      console.error('❌ Error saving notary:', error);
+      const errorMessage = error.message || 'Unknown error occurred';
+      alert(`Error: ${errorMessage}\n\nPlease check:\n1. All required fields are filled\n2. Service Role Key is configured\n3. Database schema is up to date\n4. RLS policies allow admin operations\n\nCheck browser console for details.`);
     }
   };
 
