@@ -45,21 +45,40 @@ const NotariesList = () => {
 
   const fetchNotaries = async () => {
     try {
+      console.log('🔍 Fetching notaries...');
       const { data, error } = await supabase
         .from('notary')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching notaries from database:', error);
+        throw error;
+      }
+
+      console.log(`✅ Found ${data?.length || 0} notaries in database`);
 
       // Fetch user data from auth.users for notaries with user_id
+      // Note: auth.admin methods require service role key
       const notariesWithUserData = await Promise.all(
         (data || []).map(async (notary) => {
           if (notary.user_id) {
             try {
+              console.log(`🔍 Fetching user data for notary ${notary.id} (user_id: ${notary.user_id})`);
               const { data: userData, error: userError } = await supabase.auth.admin.getUserById(notary.user_id);
               
-              if (!userError && userData?.user) {
+              if (userError) {
+                console.warn(`⚠️ Error fetching user data for notary ${notary.id}:`, userError);
+                // Continue without user data if admin methods fail
+                return {
+                  ...notary,
+                  account_created_at: null,
+                  last_sign_in_at: null
+                };
+              }
+
+              if (userData?.user) {
+                console.log(`✅ User data found for notary ${notary.id}`);
                 return {
                   ...notary,
                   account_created_at: userData.user.created_at,
@@ -67,7 +86,8 @@ const NotariesList = () => {
                 };
               }
             } catch (err) {
-              console.error(`Error fetching user data for notary ${notary.id}:`, err);
+              console.error(`❌ Exception fetching user data for notary ${notary.id}:`, err);
+              // Continue without user data
             }
           }
           return {
@@ -78,10 +98,11 @@ const NotariesList = () => {
         })
       );
 
+      console.log(`✅ Processed ${notariesWithUserData.length} notaries`);
       setNotaries(notariesWithUserData);
     } catch (error) {
-      console.error('Error fetching notaries:', error);
-      alert('Error loading notaries');
+      console.error('❌ Error fetching notaries:', error);
+      alert(`Error loading notaries: ${error.message}\n\nPlease check:\n1. Database connection\n2. RLS policies\n3. Service role key configuration`);
     } finally {
       setLoading(false);
     }
@@ -284,62 +305,102 @@ const NotariesList = () => {
 
   const handleSendInvitation = async (notary) => {
     try {
+      console.log('📧 Sending invitation to notary:', notary.email);
+      
       if (notary.user_id) {
         alert('This notary already has an account.');
         return;
       }
 
+      // Check if service role key is available
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceRoleKey) {
+        throw new Error('Service Role Key not configured. Please add VITE_SUPABASE_SERVICE_ROLE_KEY to your environment variables in Cloudflare Pages.');
+      }
+
+      console.log('✅ Service role key found, proceeding with admin operations...');
+
+      // Check for existing users
+      console.log('🔍 Checking for existing users...');
       const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
       
       if (listError) {
-        throw new Error('Could not check existing users.');
+        console.error('❌ Error listing users:', listError);
+        throw new Error(`Could not check existing users: ${listError.message}`);
       }
+
+      console.log(`✅ Found ${users?.length || 0} existing users`);
 
       const existingUser = users?.find(u => u.email === notary.email);
       
       if (existingUser) {
+        console.log('✅ Existing user found, linking account...');
         const { error: updateError } = await supabase
           .from('notary')
           .update({ user_id: existingUser.id })
           .eq('id', notary.id);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('❌ Error updating notary:', updateError);
+          throw updateError;
+        }
+        
+        console.log('✅ Account linked successfully');
         alert('Notary account linked successfully! The notary can reset their password from their dashboard if needed.');
         await fetchNotaries();
         return;
       }
 
-      const redirectTo = `${window.location.protocol}//${window.location.hostname}:5175/auth/set-password`;
+      // Determine redirect URL based on environment
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const redirectTo = isProduction 
+        ? `https://notary.mynotary.io/auth/set-password`
+        : `${window.location.protocol}//${window.location.hostname}:5175/auth/set-password`;
       
-      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(notary.email, {
-        redirectTo: redirectTo,
-        data: {
-          full_name: notary.full_name,
-          role: 'notary'
+      console.log('📧 Sending invitation email to:', notary.email);
+      console.log('🔗 Redirect URL:', redirectTo);
+
+      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+        notary.email, 
+        {
+          redirectTo: redirectTo,
+          data: {
+            full_name: notary.full_name,
+            role: 'notary'
+          }
         }
-      });
+      );
 
       if (inviteError) {
-        console.error('Invitation error:', inviteError);
-        throw new Error(`Failed to send invitation: ${inviteError.message}`);
+        console.error('❌ Invitation error:', inviteError);
+        throw new Error(`Failed to send invitation: ${inviteError.message}\n\nPlease check:\n1. Email service is configured in Supabase\n2. Service role key is correct\n3. Email templates are set up`);
       }
 
+      console.log('✅ Invitation sent successfully:', inviteData);
+
       if (inviteData?.user?.id) {
+        console.log('🔗 Linking user_id to notary record...');
         const { error: updateError } = await supabase
           .from('notary')
           .update({ user_id: inviteData.user.id })
           .eq('id', notary.id);
 
         if (updateError) {
-          console.error('Error updating notary with user_id:', updateError);
+          console.error('❌ Error updating notary with user_id:', updateError);
+          // Don't throw - invitation was sent, just the link failed
+          alert(`Invitation sent successfully, but failed to link user_id: ${updateError.message}`);
+        } else {
+          console.log('✅ User_id linked successfully');
         }
+      } else {
+        console.warn('⚠️ No user ID in invitation response');
       }
 
-      alert('Notary account created and invitation email sent successfully!');
+      alert('Notary account created and invitation email sent successfully! The notary will receive an email to set their password.');
       await fetchNotaries();
     } catch (error) {
-      console.error('Error sending invitation:', error);
-      alert(`Error: ${error.message}\n\nNote: Creating auth users requires admin privileges. You may need to create the account manually in Supabase Auth.`);
+      console.error('❌ Error sending invitation:', error);
+      alert(`Error: ${error.message}\n\nTroubleshooting:\n1. Check that VITE_SUPABASE_SERVICE_ROLE_KEY is set in Cloudflare Pages\n2. Verify email service is configured in Supabase\n3. Check Supabase logs for detailed error messages`);
     }
   };
 
