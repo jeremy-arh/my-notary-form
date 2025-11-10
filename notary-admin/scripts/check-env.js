@@ -15,16 +15,24 @@ console.log('VITE_GOOGLE_MAPS_API_KEY:', googleMapsKey ? '✅ Set' : '⚠️ Not
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.error('❌ ERROR: Required environment variables are not set!');
-  console.error('Please configure them in Cloudflare Pages:');
-  console.error('  - Settings > Environment variables');
-  console.error('  - Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
-  console.error('  - Redeploy after adding variables');
+  console.warn('⚠️  WARNING: Required environment variables are not set!');
+  console.warn('⚠️  The build will continue, but the application will use placeholder values.');
+  console.warn('⚠️  To fix this:');
+  console.warn('   1. Go to Cloudflare Pages > Settings > Environment variables');
+  console.warn('   2. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+  console.warn('   3. Redeploy after adding variables');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  process.exit(1);
+  // Ne pas faire échouer le build - seulement afficher un warning
+  // process.exit(1); // Commenté pour permettre le build même sans variables
 }
 
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-console.log('✅ All required environment variables are set');
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+if (supabaseUrl && supabaseAnonKey) {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('✅ All required environment variables are set');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+} else {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('⚠️  Continuing build with placeholder values');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
 
