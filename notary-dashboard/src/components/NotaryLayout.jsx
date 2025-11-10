@@ -16,6 +16,7 @@ const NotaryLayout = ({ children }) => {
     { path: '/dashboard', name: 'Dashboard', icon: 'heroicons:chart-bar' },
     { path: '/calendar', name: 'Calendar', icon: 'heroicons:calendar' },
     { path: '/messages', name: 'Messages', icon: 'heroicons:chat-bubble-left-right', badge: unreadCount },
+    { path: '/payouts', name: 'Payouts', icon: 'heroicons:banknotes' },
     { path: '/profile', name: 'Profile', icon: 'heroicons:user' }
   ];
 

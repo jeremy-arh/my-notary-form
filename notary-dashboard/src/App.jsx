@@ -12,6 +12,7 @@ const Dashboard = lazy(() => import('./pages/notary/Dashboard'))
 const Calendar = lazy(() => import('./pages/notary/Calendar'))
 const SubmissionDetail = lazy(() => import('./pages/notary/SubmissionDetail'))
 const Messages = lazy(() => import('./pages/notary/Messages'))
+const Payouts = lazy(() => import('./pages/notary/Payouts'))
 const Profile = lazy(() => import('./pages/notary/Profile'))
 
 // Loading component
@@ -72,6 +73,18 @@ function App() {
               <Suspense fallback={<LoadingSpinner />}>
                 <Messages />
               </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/payouts"
+          element={
+            <PrivateRoute>
+              <NotaryLayout>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Payouts />
+                </Suspense>
+              </NotaryLayout>
             </PrivateRoute>
           }
         />
