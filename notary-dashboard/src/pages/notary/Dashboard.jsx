@@ -298,7 +298,7 @@ const Dashboard = () => {
       }
       
       console.log(`✅ Found ${data?.length || 0} pending submissions in database`);
-      
+
       // Filter by notary's competent services if they exist
       // If no services configured, show ALL pending submissions (notary can accept any)
       let filteredData = data || [];

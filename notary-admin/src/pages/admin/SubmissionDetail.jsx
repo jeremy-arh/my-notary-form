@@ -370,8 +370,44 @@ const SubmissionDetail = () => {
 
       if (error) throw error;
 
-      // Notifications are automatically created by database trigger for notary assignment
-      // But we can add additional notifications if needed
+      // Send email to client about notary assignment
+      try {
+        // Get client information
+        const { data: clientData, error: clientError } = await supabase
+          .from('client')
+          .select('email, first_name, last_name')
+          .eq('id', submission.client_id)
+          .single();
+
+        // Get notary information
+        const { data: notaryData, error: notaryError } = await supabase
+          .from('notary')
+          .select('full_name, name')
+          .eq('id', selectedNotaryId)
+          .single();
+
+        if (!clientError && clientData && clientData.email && !notaryError && notaryData) {
+          const clientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
+          const notaryName = notaryData.full_name || notaryData.name || 'Notary';
+          const submissionNumber = id.substring(0, 8);
+
+          const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
+          await sendTransactionalEmail(supabase, {
+            email_type: 'notary_assigned',
+            recipient_email: clientData.email,
+            recipient_name: clientName,
+            recipient_type: 'client',
+            data: {
+              submission_id: id,
+              submission_number: submissionNumber,
+              notary_name: notaryName
+            }
+          });
+        }
+      } catch (emailError) {
+        console.error('Error sending notary assignment email:', emailError);
+        // Don't block the assignment if email fails
+      }
 
       // Refresh submission data
       await fetchSubmissionDetail();
@@ -506,6 +542,54 @@ const SubmissionDetail = () => {
     } catch (error) {
       console.error('Error adding comment:', error);
       alert('Failed to add comment. Please try again.');
+    }
+  };
+
+  const handleDeleteFile = async (fileId, storagePath) => {
+    if (!window.confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      // Delete file from storage
+      const { error: storageError } = await supabase.storage
+        .from('submission-documents')
+        .remove([storagePath]);
+
+      if (storageError) {
+        console.error('Error deleting file from storage:', storageError);
+        // Continue with database deletion even if storage deletion fails
+      }
+
+      // Delete file from database (comments will be deleted automatically due to ON DELETE CASCADE)
+      const { error: deleteError } = await supabase
+        .from('notarized_files')
+        .delete()
+        .eq('id', fileId);
+
+      if (deleteError) throw deleteError;
+
+      // Remove from local state
+      setNotarizedFiles(prev => prev.filter(file => file.id !== fileId));
+      
+      // Remove comments from local state
+      setFileComments(prev => {
+        const newComments = { ...prev };
+        delete newComments[fileId];
+        return newComments;
+      });
+
+      // Remove comment input from local state
+      setNewComment(prev => {
+        const newComment = { ...prev };
+        delete newComment[fileId];
+        return newComment;
+      });
+
+      alert('File deleted successfully');
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert(`Failed to delete file: ${error.message}`);
     }
   };
 
@@ -1172,15 +1256,24 @@ const SubmissionDetail = () => {
                                 </p>
                               </div>
                             </div>
-                            <a
-                              href={file.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="ml-4 px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
-                            >
-                              <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
-                              Download
-                            </a>
+                            <div className="flex items-center gap-2 ml-4">
+                              <a
+                                href={file.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
+                              >
+                                <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
+                                Download
+                              </a>
+                              <button
+                                onClick={() => handleDeleteFile(file.id, file.storage_path)}
+                                className="px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center flex-shrink-0"
+                                title="Delete file"
+                              >
+                                <Icon icon="heroicons:trash" className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Comments Section */}

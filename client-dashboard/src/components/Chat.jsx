@@ -194,17 +194,62 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, isF
     if ((!newMessage.trim() && attachments.length === 0) || sending) return;
 
     setSending(true);
+    const messageContent = newMessage.trim() || '(File attachment)';
 
     try {
       const { error } = await supabase.from('message').insert({
         submission_id: submissionId,
         sender_type: currentUserType,
         sender_id: currentUserId,
-        content: newMessage.trim() || '(File attachment)',
+        content: messageContent,
         attachments: attachments.length > 0 ? attachments : null
       });
 
       if (error) throw error;
+
+      // Send email notification to recipient (notary)
+      try {
+        // Get submission and notary info
+        const { data: submissionData, error: subError } = await supabase
+          .from('submission')
+          .select('id, client_id, assigned_notary_id, first_name, last_name')
+          .eq('id', submissionId)
+          .single();
+
+        if (!subError && submissionData && submissionData.assigned_notary_id) {
+          // Get notary info
+          const { data: notaryData, error: notaryError } = await supabase
+            .from('notary')
+            .select('email, full_name, name')
+            .eq('id', submissionData.assigned_notary_id)
+            .single();
+
+          if (!notaryError && notaryData && notaryData.email) {
+            const notaryName = notaryData.full_name || notaryData.name || 'Notary';
+            const submissionNumber = submissionId.substring(0, 8);
+            const messagePreview = messageContent.length > 100 
+              ? messageContent.substring(0, 100) + '...' 
+              : messageContent;
+
+            const { sendTransactionalEmail } = await import('../utils/sendTransactionalEmail');
+            await sendTransactionalEmail(supabase, {
+              email_type: 'message_received',
+              recipient_email: notaryData.email,
+              recipient_name: notaryName,
+              recipient_type: 'notary',
+              data: {
+                submission_id: submissionId,
+                submission_number: submissionNumber,
+                message_preview: messagePreview
+              }
+            });
+          }
+        }
+      } catch (emailError) {
+        console.error('Error sending message email notification:', emailError);
+        // Don't block message sending if email fails
+      }
+
       setNewMessage('');
       setAttachments([]);
       setShowEmojiPicker(false);

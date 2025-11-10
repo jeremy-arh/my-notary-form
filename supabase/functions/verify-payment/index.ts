@@ -138,6 +138,55 @@ serve(async (req) => {
       }
     }
 
+    // Send email to client with invoice
+    try {
+      // Get client information
+      const { data: clientData, error: clientError } = await supabase
+        .from('client')
+        .select('email, first_name, last_name, id')
+        .eq('id', existingSubmission.client_id)
+        .single()
+
+      if (!clientError && clientData && clientData.email) {
+        // Get submission number (first 8 chars of ID)
+        const submissionNumber = submissionId.substring(0, 8)
+        const clientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client'
+
+        // Download invoice PDF if URL is available (optional - can be done later)
+        // Note: PDF attachment is optional - we'll use the URL for now
+        // If you want to attach PDF, you can download it and convert to base64 here
+        // For now, we'll just use the URL
+
+        // Send transactional email
+        const { error: emailError } = await supabase.functions.invoke('send-transactional-email', {
+          body: {
+            email_type: 'payment_success',
+            recipient_email: clientData.email,
+            recipient_name: clientName,
+            recipient_type: 'client',
+            data: {
+              submission_id: submissionId,
+              submission_number: submissionNumber,
+              payment_amount: session.amount_total ? (session.amount_total / 100) : null,
+              payment_date: new Date().toISOString(),
+              invoice_url: invoiceUrl
+              // invoice_pdf can be added later if needed
+            }
+          }
+        })
+
+        if (emailError) {
+          console.error('❌ [EMAIL] Error sending payment success email:', emailError)
+          // Don't throw - payment is successful, just log the error
+        } else {
+          console.log('✅ [EMAIL] Payment success email sent to:', clientData.email)
+        }
+      }
+    } catch (emailError) {
+      console.error('❌ [EMAIL] Error in email sending process:', emailError)
+      // Don't throw - payment is successful, just log the error
+    }
+
     return new Response(
       JSON.stringify({
         verified: true,
