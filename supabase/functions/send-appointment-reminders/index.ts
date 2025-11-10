@@ -75,6 +75,21 @@ serve(async (req) => {
           }
 
           try {
+            // Check if reminder was already sent today (to avoid duplicates)
+            const todayDateStr = now.toISOString().split('T')[0]
+            const { data: existingReminder } = await supabase
+              .from('appointment_reminder_log')
+              .select('id')
+              .eq('submission_id', appointment.id)
+              .eq('reminder_type', 'day_before')
+              .eq('sent_date', todayDateStr)
+              .single()
+
+            if (existingReminder) {
+              console.log(`⏭️ [REMINDERS] Day-before reminder already sent today for appointment ${appointment.id}, skipping`)
+              continue
+            }
+
             const notaryName = appointment.notary.full_name || 'Notary'
             const clientName = `${appointment.first_name || ''} ${appointment.last_name || ''}`.trim() || 'Client'
             const submissionNumber = appointment.id.substring(0, 8)
@@ -112,6 +127,19 @@ serve(async (req) => {
               console.error(`❌ [REMINDERS] Failed to send day-before reminder for appointment ${appointment.id}:`, errorText)
             } else {
               console.log(`✅ [REMINDERS] Day-before reminder sent for appointment ${appointment.id} to ${appointment.notary.email}`)
+              
+              // Log the reminder to avoid duplicates
+              await supabase
+                .from('appointment_reminder_log')
+                .insert({
+                  submission_id: appointment.id,
+                  reminder_type: 'day_before',
+                  sent_date: todayDateStr
+                })
+                .catch(logError => {
+                  console.warn(`⚠️ [REMINDERS] Failed to log reminder for appointment ${appointment.id}:`, logError)
+                  // Don't fail if logging fails
+                })
             }
           } catch (emailError) {
             console.error(`❌ [REMINDERS] Error sending day-before reminder for appointment ${appointment.id}:`, emailError)
@@ -185,6 +213,21 @@ serve(async (req) => {
           }
 
           try {
+            // Check if reminder was already sent today (to avoid duplicates)
+            const todayDateStr = now.toISOString().split('T')[0]
+            const { data: existingReminder } = await supabase
+              .from('appointment_reminder_log')
+              .select('id')
+              .eq('submission_id', appointment.id)
+              .eq('reminder_type', 'one_hour_before')
+              .eq('sent_date', todayDateStr)
+              .single()
+
+            if (existingReminder) {
+              console.log(`⏭️ [REMINDERS] One-hour reminder already sent today for appointment ${appointment.id}, skipping`)
+              continue
+            }
+
             const notaryName = appointment.notary.full_name || 'Notary'
             const clientName = `${appointment.first_name || ''} ${appointment.last_name || ''}`.trim() || 'Client'
             const submissionNumber = appointment.id.substring(0, 8)
@@ -222,6 +265,19 @@ serve(async (req) => {
               console.error(`❌ [REMINDERS] Failed to send one-hour reminder for appointment ${appointment.id}:`, errorText)
             } else {
               console.log(`✅ [REMINDERS] One-hour reminder sent for appointment ${appointment.id} to ${appointment.notary.email}`)
+              
+              // Log the reminder to avoid duplicates
+              await supabase
+                .from('appointment_reminder_log')
+                .insert({
+                  submission_id: appointment.id,
+                  reminder_type: 'one_hour_before',
+                  sent_date: todayDateStr
+                })
+                .catch(logError => {
+                  console.warn(`⚠️ [REMINDERS] Failed to log reminder for appointment ${appointment.id}:`, logError)
+                  // Don't fail if logging fails
+                })
             }
           } catch (emailError) {
             console.error(`❌ [REMINDERS] Error sending one-hour reminder for appointment ${appointment.id}:`, emailError)

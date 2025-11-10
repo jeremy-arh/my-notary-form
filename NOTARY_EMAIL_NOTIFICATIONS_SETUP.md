@@ -37,32 +37,29 @@ Dans le dashboard Supabase, allez dans **Edge Functions** > **Settings** > **Sec
 - `SUPABASE_URL` : URL de votre projet Supabase (déjà configurée)
 - `SUPABASE_SERVICE_ROLE_KEY` : Clé de service Supabase (déjà configurée)
 
-### 3. Configurer le cron job pour les rappels
+### 3. Configurer le cron job pour les rappels ⚠️ IMPORTANT
 
-Les rappels de rendez-vous nécessitent un cron job qui s'exécute périodiquement. Vous avez deux options :
+**Supabase ne supporte PAS nativement les cron jobs pour les Edge Functions.** Vous DEVEZ configurer un service externe pour appeler périodiquement l'Edge Function.
 
-#### Option A : Service externe (Recommandé)
+#### 🔴 Action requise : Configurer un service de cron job externe
 
-Utilisez un service comme [cron-job.org](https://cron-job.org), [EasyCron](https://www.easycron.com), ou [UptimeRobot](https://uptimerobot.com) pour appeler l'Edge Function toutes les heures.
+Consultez le guide complet : **`CRON_JOB_SETUP_GUIDE.md`**
 
-**Configuration :**
+**Services recommandés :**
+- **cron-job.org** (Gratuit, simple) : https://cron-job.org
+- **EasyCron** (Gratuit/Payant) : https://www.easycron.com
+- **GitHub Actions** (Si vous utilisez GitHub) : Voir `CRON_JOB_SETUP_GUIDE.md`
+
+**Configuration minimale :**
 - **URL** : `https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-appointment-reminders`
 - **Méthode** : POST
 - **En-têtes** :
   - `Authorization: Bearer YOUR_SERVICE_ROLE_KEY`
   - `Content-Type: application/json`
-- **Fréquence** : Toutes les heures (0 * * * *)
+- **Body** : `{}`
+- **Fréquence** : Toutes les heures (`0 * * * *`)
 
-**Exemple avec cron-job.org :**
-1. Créez un compte sur cron-job.org
-2. Ajoutez un nouveau cron job
-3. Configurez l'URL et les en-têtes
-4. Définissez la fréquence à "Toutes les heures"
-5. Activez le cron job
-
-#### Option B : Utiliser pg_cron (Avancé)
-
-Si vous avez accès à pg_cron dans votre instance Supabase, vous pouvez utiliser le script SQL `supabase-appointment-reminders-cron-setup.sql` pour créer une fonction de base de données. Cependant, cette fonction ne peut pas appeler directement l'Edge Function via HTTP, donc vous devrez créer un webhook ou utiliser un service externe pour appeler l'Edge Function.
+**⚠️ Sans cette configuration, les rappels de rendez-vous ne seront PAS envoyés automatiquement.**
 
 ### 4. Exécuter le script SQL (Optionnel)
 
