@@ -97,8 +97,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-6 md:pt-10 pb-44 lg:pb-6">
-        <div className="space-y-6">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 pt-6 md:pt-10 pb-44 lg:pb-6">
+        <div className="space-y-4 sm:space-y-6 max-w-full">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Review Your Information
@@ -110,7 +110,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
       {/* Selected Services with Documents */}
       {formData.selectedServices && formData.selectedServices.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 border border-gray-200">
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200 overflow-hidden">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
               <Icon icon="heroicons:check-badge" className="w-5 h-5 text-gray-600" />
@@ -128,14 +128,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 const documents = formData.serviceDocuments?.[serviceId] || [];
 
                 return (
-                  <div key={serviceId} className="border border-gray-200 rounded-xl p-4">
+                  <div key={serviceId} className="border border-gray-200 rounded-xl p-3 sm:p-4 overflow-hidden">
                     <div className="flex items-start space-x-3 mb-3">
                       <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Icon icon="heroicons:check" className="w-4 h-4 text-white" />
                       </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900">{service?.name || serviceId}</h4>
-                        <p className="text-xs text-gray-600 mt-1">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 truncate">{service?.name || serviceId}</h4>
+                        <p className="text-xs text-gray-600 mt-1 break-words">
                           {documents.length} document{documents.length > 1 ? 's' : ''} × ${service?.base_price.toFixed(2)}
                         </p>
                       </div>
@@ -144,16 +144,16 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     {documents.length > 0 && (
                       <div className="ml-9 space-y-2">
                         {documents.map((doc, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                            <div className="flex items-center flex-1">
-                              <Icon icon="heroicons:document" className="w-6 h-6 mr-2 text-gray-600" />
-                              <div>
-                                <p className="text-xs font-medium text-gray-900">{doc.name}</p>
+                          <div key={index} className="flex items-start justify-between p-2 bg-gray-50 rounded-lg gap-2">
+                            <div className="flex items-center flex-1 min-w-0">
+                              <Icon icon="heroicons:document" className="w-6 h-6 mr-2 text-gray-600 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-gray-900 truncate">{doc.name}</p>
                                 <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
                               </div>
                             </div>
                             {doc.selectedOptions && doc.selectedOptions.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
+                              <div className="flex flex-wrap gap-1 flex-shrink-0">
                                 {doc.selectedOptions.map(optionId => {
                                   const option = optionsMap[optionId];
                                   return option ? (
@@ -178,7 +178,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       )}
 
       {/* Appointment Details */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200 overflow-hidden">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
             <Icon icon="heroicons:calendar-days" className="w-5 h-5 text-gray-600" />
@@ -186,23 +186,23 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           Appointment Details
         </h3>
         <div className="space-y-3">
-          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-            <span className="text-sm font-medium text-gray-600">Date</span>
-            <span className="text-sm text-gray-900">{formatDate(formData.appointmentDate)}</span>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl gap-2">
+            <span className="text-sm font-medium text-gray-600 flex-shrink-0">Date</span>
+            <span className="text-sm text-gray-900 text-right break-words">{formatDate(formData.appointmentDate)}</span>
           </div>
-          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-            <span className="text-sm font-medium text-gray-600">Time</span>
-            <span className="text-sm text-gray-900">{formatTime(formData.appointmentTime)}</span>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl gap-2">
+            <span className="text-sm font-medium text-gray-600 flex-shrink-0">Time</span>
+            <span className="text-sm text-gray-900 text-right">{formatTime(formData.appointmentTime)}</span>
           </div>
-          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-            <span className="text-sm font-medium text-gray-600">Timezone</span>
-            <span className="text-sm text-gray-900">{formData.timezone || 'Not specified'}</span>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl gap-2">
+            <span className="text-sm font-medium text-gray-600 flex-shrink-0">Timezone</span>
+            <span className="text-sm text-gray-900 text-right truncate min-w-0 flex-1">{formData.timezone || 'Not specified'}</span>
           </div>
         </div>
       </div>
 
       {/* Personal Information */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200 overflow-hidden">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
             <Icon icon="heroicons:user" className="w-5 h-5 text-gray-600" />
@@ -230,7 +230,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           </div>
           <div className="p-3 bg-gray-50 rounded-xl md:col-span-2">
             <p className="text-xs text-gray-600 mb-1">Address</p>
-            <p className="text-sm font-medium text-gray-900">
+            <p className="text-sm font-medium text-gray-900 break-words">
               {formData.address}, {formData.city}, {formData.postalCode}
             </p>
           </div>
@@ -244,7 +244,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       </div>
 
       {/* Price Breakdown */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200 overflow-hidden">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
             <Icon icon="heroicons:currency-dollar" className="w-5 h-5 text-gray-600" />
@@ -288,10 +288,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div
                         className={`flex justify-between items-center ${index === 0 ? 'pb-3 border-b border-gray-200' : ''}`}
                       >
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-gray-600 flex-1 min-w-0 truncate pr-2">
                           {service.name} ({documents.length} document{documents.length > 1 ? 's' : ''})
                         </span>
-                        <span className="text-sm font-semibold text-gray-900">
+                        <span className="text-sm font-semibold text-gray-900 flex-shrink-0">
                           ${serviceTotal.toFixed(2)}
                         </span>
                       </div>
@@ -322,9 +322,9 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             )}
 
             {/* Total */}
-            <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-              <span className="text-base font-bold text-gray-900">Total Amount</span>
-              <span className="text-xl font-bold text-gray-900">
+            <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300 gap-2">
+              <span className="text-base font-bold text-gray-900 flex-shrink-0">Total Amount</span>
+              <span className="text-xl font-bold text-gray-900 flex-shrink-0">
                 ${(() => {
                   let total = 0;
                   // Calculate total from selected services × files + options
@@ -360,7 +360,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       </div>
 
       {/* Confirmation Notice */}
-      <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-6">
+      <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 sm:p-6 overflow-hidden">
         <div className="flex items-start">
           <div className="flex-shrink-0">
             <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">

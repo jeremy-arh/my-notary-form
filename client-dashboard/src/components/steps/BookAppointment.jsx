@@ -472,7 +472,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           </div>
 
       {/* Timezone Selector */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200 overflow-hidden">
         <label className="block text-sm font-semibold text-gray-900 mb-3 flex items-center">
           <Icon icon="heroicons:globe-alt" className="w-5 h-5 mr-2 text-gray-600" />
           Your Timezone
@@ -486,11 +486,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         <div className="relative" ref={timezoneDropdownRef}>
           <div
             onClick={() => !isDetectingTimezone && setIsTimezoneDropdownOpen(!isTimezoneDropdownOpen)}
-            className={`w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer flex items-center justify-between transition-all ${
+            className={`w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer flex items-center justify-between gap-2 transition-all ${
               isDetectingTimezone ? 'opacity-50 cursor-wait' : 'hover:border-gray-300'
             } ${isTimezoneDropdownOpen ? 'ring-2 ring-black border-black' : ''}`}
           >
-            <span className="text-gray-900">
+            <span className="text-gray-900 truncate flex-1 min-w-0">
               {timezones.find(tz => tz.value === timezone)?.label || timezone}
             </span>
             <Icon 
