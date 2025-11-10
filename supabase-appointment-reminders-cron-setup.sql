@@ -98,13 +98,32 @@ CREATE TABLE IF NOT EXISTS public.appointment_reminder_log (
   submission_id UUID NOT NULL REFERENCES public.submission(id) ON DELETE CASCADE,
   reminder_type TEXT NOT NULL CHECK (reminder_type IN ('day_before', 'one_hour_before')),
   sent_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  sent_date DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-  UNIQUE(submission_id, reminder_type, DATE(sent_at))
+  UNIQUE(submission_id, reminder_type, sent_date)
 );
 
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_appointment_reminder_log_submission ON public.appointment_reminder_log(submission_id);
 CREATE INDEX IF NOT EXISTS idx_appointment_reminder_log_sent_at ON public.appointment_reminder_log(sent_at);
+CREATE INDEX IF NOT EXISTS idx_appointment_reminder_log_sent_date ON public.appointment_reminder_log(sent_date);
+
+-- Create a trigger to automatically set sent_date when sent_at is updated
+CREATE OR REPLACE FUNCTION public.set_reminder_log_sent_date()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.sent_date := DATE(NEW.sent_at);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_set_reminder_log_sent_date ON public.appointment_reminder_log;
+CREATE TRIGGER trigger_set_reminder_log_sent_date
+  BEFORE INSERT OR UPDATE OF sent_at ON public.appointment_reminder_log
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_reminder_log_sent_date();
 
 -- Enable RLS
 ALTER TABLE public.appointment_reminder_log ENABLE ROW LEVEL SECURITY;
