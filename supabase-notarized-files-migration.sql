@@ -48,8 +48,9 @@ CREATE POLICY "Notaries can view their notarized files"
   USING (
     EXISTS (
       SELECT 1 FROM public.submission
+      INNER JOIN public.notary ON submission.assigned_notary_id = notary.id
       WHERE submission.id = notarized_files.submission_id
-      AND submission.assigned_notary_id = auth.uid()::text::uuid
+      AND notary.user_id = auth.uid()
     )
   );
 
@@ -86,8 +87,8 @@ CREATE POLICY "Admins can view all notarized files"
   FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.admin
-      WHERE admin.user_id = auth.uid()
+      SELECT 1 FROM public.admin_user
+      WHERE admin_user.user_id = auth.uid()
     )
   );
 
@@ -99,10 +100,9 @@ CREATE POLICY "Notaries can view file comments"
   USING (
     EXISTS (
       SELECT 1 FROM public.submission
+      INNER JOIN public.notary ON submission.assigned_notary_id = notary.id
       WHERE submission.id = file_comments.submission_id
-      AND submission.assigned_notary_id = (
-        SELECT id FROM public.notary WHERE user_id = auth.uid()
-      )
+      AND notary.user_id = auth.uid()
     )
   );
 
@@ -141,8 +141,8 @@ CREATE POLICY "Admins can add file comments"
   FOR INSERT
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM public.admin
-      WHERE admin.user_id = auth.uid()
+      SELECT 1 FROM public.admin_user
+      WHERE admin_user.user_id = auth.uid()
       AND file_comments.commenter_type = 'admin'
     )
   );
@@ -166,8 +166,8 @@ CREATE POLICY "Admins can view all file comments"
   FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.admin
-      WHERE admin.user_id = auth.uid()
+      SELECT 1 FROM public.admin_user
+      WHERE admin_user.user_id = auth.uid()
     )
   );
 
