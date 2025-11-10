@@ -128,9 +128,13 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
           filter: `submission_id=eq.${submissionId}`
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
-          if (payload.new.sender_type !== currentUserType) {
+          const newMessage = payload.new;
+          setMessages((prev) => [...prev, newMessage]);
+          if (newMessage.sender_type !== currentUserType) {
             markMessagesAsRead();
+            // Play notification sound if message is not from current user
+            const isViewingMessages = window.location.pathname.includes('/messages');
+            playNotificationSoundIfNeeded(!isViewingMessages);
           }
         }
       )

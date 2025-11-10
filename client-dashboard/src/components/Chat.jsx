@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../lib/supabase';
+import { playNotificationSoundIfNeeded } from '../utils/soundNotification';
 
 /**
  * Reusable Chat component for messaging between clients, notaries, and admins
@@ -108,9 +109,13 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, isF
           filter: `submission_id=eq.${submissionId}`
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
-          if (payload.new.sender_type !== currentUserType) {
+          const newMessage = payload.new;
+          setMessages((prev) => [...prev, newMessage]);
+          if (newMessage.sender_type !== currentUserType) {
             markMessagesAsRead();
+            // Play notification sound if message is not from current user
+            const isViewingChat = window.location.pathname.includes('/submission/');
+            playNotificationSoundIfNeeded(!isViewingChat);
           }
         }
       )

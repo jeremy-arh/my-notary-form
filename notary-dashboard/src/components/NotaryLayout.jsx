@@ -21,24 +21,33 @@ const NotaryLayout = ({ children }) => {
 
   useEffect(() => {
     fetchNotaryId();
-    fetchUnreadCount();
-
-    // Subscribe to message changes
-    const channel = supabase
-      .channel('message-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'message'
-      }, () => {
-        fetchUnreadCount();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
+
+  // Fetch unread count when notaryId is available
+  useEffect(() => {
+    if (notaryId) {
+      fetchUnreadCount();
+
+      // Subscribe to message changes for this notary's submissions
+      const channel = supabase
+        .channel(`notary-messages:${notaryId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'message'
+        }, (payload) => {
+          // When a message is inserted or updated, refresh the count
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            fetchUnreadCount();
+          }
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [notaryId]);
 
   const fetchNotaryId = async () => {
     try {
@@ -60,37 +69,43 @@ const NotaryLayout = ({ children }) => {
   };
 
   const fetchUnreadCount = async () => {
+    if (!notaryId) return;
+    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: notary } = await supabase
-        .from('notary')
+      // Get all submissions assigned to this notary
+      const { data: submissions, error: submissionsError } = await supabase
+        .from('submission')
         .select('id')
-        .eq('user_id', user.id)
-        .single();
+        .eq('assigned_notary_id', notaryId);
 
-      if (!notary) return;
+      if (submissionsError) {
+        console.error('Error fetching submissions:', submissionsError);
+        return;
+      }
+
+      if (!submissions || submissions.length === 0) {
+        setUnreadCount(0);
+        return;
+      }
+
+      const submissionIds = submissions.map(s => s.id);
 
       // Count unread messages in submissions assigned to this notary
-      const { data: messages } = await supabase
+      // Only count messages that are not from the notary (messages FROM clients/admins)
+      const { data: messages, error: messagesError } = await supabase
         .from('message')
-        .select('message_id, submission_id')
+        .select('message_id, submission_id, read, sender_type')
+        .in('submission_id', submissionIds)
         .eq('read', false)
         .neq('sender_type', 'notary');
 
-      if (!messages) return;
+      if (messagesError) {
+        console.error('Error fetching messages:', messagesError);
+        return;
+      }
 
-      // Filter messages for submissions assigned to this notary
-      const { data: submissions } = await supabase
-        .from('submission')
-        .select('id')
-        .eq('assigned_notary_id', notary.id);
-
-      const submissionIds = submissions?.map(s => s.id) || [];
-      const unread = messages.filter(m => submissionIds.includes(m.submission_id));
-
-      setUnreadCount(unread.length);
+      const unreadCount = messages?.length || 0;
+      setUnreadCount(unreadCount);
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }

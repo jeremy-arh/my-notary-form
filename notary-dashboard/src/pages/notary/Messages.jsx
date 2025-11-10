@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Chat from '../../components/Chat';
 import { supabase } from '../../lib/supabase';
+import { playNotificationSound } from '../../utils/soundNotification';
 
 const Messages = () => {
   const [conversations, setConversations] = useState([]);
@@ -20,6 +21,32 @@ const Messages = () => {
   useEffect(() => {
     if (notaryId !== null) {
       fetchConversations();
+      
+      // Subscribe to new messages for real-time updates
+      const channel = supabase
+        .channel(`notary-conversations:${notaryId}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message'
+        }, (payload) => {
+          const newMessage = payload.new;
+          
+          // Only play sound for messages not from notary (from clients/admins)
+          if (newMessage.sender_type !== 'notary') {
+            // Check if this message is for a submission assigned to this notary
+            // We'll refresh conversations which will update the unread count
+            fetchConversations();
+            
+            // Play notification sound
+            playNotificationSound();
+          }
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [notaryId, notaryServiceIds]);
 
