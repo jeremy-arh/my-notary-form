@@ -460,8 +460,8 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-6 md:pt-10 pb-44 lg:pb-6">
-        <div className="space-y-6">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 pt-6 md:pt-10 pb-44 lg:pb-6">
+        <div className="space-y-4 sm:space-y-6 max-w-full">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Book Your Appointment
