@@ -38,6 +38,8 @@ serve(async (req) => {
     console.log(`📅 [REMINDERS] Today: ${todayDateStr}, Tomorrow: ${tomorrowDateStr}`)
     console.log(`⏰ [REMINDERS] Current time: ${now.toTimeString().slice(0, 5)}, One hour from now: ${oneHourFromNowTimeStr}`)
 
+    let oneHourRemindersCount = 0
+
     // Find appointments for tomorrow (day before reminder)
     const { data: tomorrowAppointments, error: tomorrowError } = await supabase
       .from('submission')
@@ -151,21 +153,28 @@ serve(async (req) => {
       const oneHourReminders = (todayAppointments || []).filter((appointment) => {
         if (!appointment.appointment_time) return false
 
-        const [appointmentHour, appointmentMinute] = appointment.appointment_time.split(':').map(Number)
-        const appointmentTimeMinutes = appointmentHour * 60 + appointmentMinute
+        try {
+          const [appointmentHour, appointmentMinute] = appointment.appointment_time.split(':').map(Number)
+          if (isNaN(appointmentHour) || isNaN(appointmentMinute)) return false
+          
+          const appointmentTimeMinutes = appointmentHour * 60 + appointmentMinute
 
-        const [currentHour, currentMinute] = [now.getHours(), now.getMinutes()]
-        const currentTimeMinutes = currentHour * 60 + currentMinute
+          const [oneHourHour, oneHourMinute] = oneHourFromNowTimeStr.split(':').map(Number)
+          if (isNaN(oneHourHour) || isNaN(oneHourMinute)) return false
+          
+          const oneHourTimeMinutes = oneHourHour * 60 + oneHourMinute
 
-        const [oneHourHour, oneHourMinute] = oneHourFromNowTimeStr.split(':').map(Number)
-        const oneHourTimeMinutes = oneHourHour * 60 + oneHourMinute
-
-        // Check if appointment time is within 5 minutes of 1 hour from now
-        const timeDiff = Math.abs(appointmentTimeMinutes - oneHourTimeMinutes)
-        return timeDiff <= 5 // 5 minutes tolerance
+          // Check if appointment time is within 5 minutes of 1 hour from now
+          const timeDiff = Math.abs(appointmentTimeMinutes - oneHourTimeMinutes)
+          return timeDiff <= 5 // 5 minutes tolerance
+        } catch (error) {
+          console.error(`❌ [REMINDERS] Error parsing appointment time for ${appointment.id}:`, error)
+          return false
+        }
       })
 
       console.log(`⏰ [REMINDERS] Found ${oneHourReminders.length} appointments in approximately 1 hour`)
+      oneHourRemindersCount = oneHourReminders.length
 
       // Send one-hour-before reminders
       if (oneHourReminders.length > 0) {
@@ -226,7 +235,7 @@ serve(async (req) => {
         success: true,
         message: 'Appointment reminders processed',
         tomorrow_count: tomorrowAppointments?.length || 0,
-        one_hour_count: oneHourReminders?.length || 0
+        one_hour_count: oneHourRemindersCount
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
