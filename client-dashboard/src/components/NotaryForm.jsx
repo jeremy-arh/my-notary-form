@@ -242,6 +242,7 @@ const NotaryForm = () => {
   };
 
   const handleSubmit = async () => {
+    setIsSubmitting(true);
     try {
       console.log('Creating payment session for form data:', formData);
 
