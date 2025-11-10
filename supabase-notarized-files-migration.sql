@@ -121,19 +121,8 @@ CREATE POLICY "Notaries can add file comments"
     )
   );
 
--- Clients can add comments for their submissions
-CREATE POLICY "Clients can add file comments"
-  ON public.file_comments
-  FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.submission
-      INNER JOIN public.client ON submission.client_id = client.id
-      WHERE submission.id = file_comments.submission_id
-      AND client.user_id = auth.uid()
-      AND file_comments.commenter_type = 'client'
-    )
-  );
+-- Clients CANNOT add comments (read-only access)
+-- Policy removed: Clients should only view comments, not create them
 
 -- Admins can add comments
 CREATE POLICY "Admins can add file comments"

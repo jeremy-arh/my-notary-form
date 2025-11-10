@@ -16,7 +16,6 @@ const SubmissionDetail = () => {
   const [optionsMap, setOptionsMap] = useState({});
   const [notarizedFiles, setNotarizedFiles] = useState([]);
   const [fileComments, setFileComments] = useState({});
-  const [newComment, setNewComment] = useState({});
   const [isRetryingPayment, setIsRetryingPayment] = useState(false);
   const [activeTab, setActiveTab] = useState('services');
 
@@ -139,41 +138,6 @@ const SubmissionDetail = () => {
     }
   };
 
-  const handleAddComment = async (fileId) => {
-    const comment = newComment[fileId]?.trim();
-    if (!comment || !clientInfo) return;
-
-    try {
-      const { data: commentData, error: commentError } = await supabase
-        .from('file_comments')
-        .insert({
-          file_id: fileId,
-          submission_id: id,
-          commenter_type: 'client',
-          commenter_id: clientInfo.id,
-          comment: comment
-        })
-        .select()
-        .single();
-
-      if (commentError) throw commentError;
-
-      // Add to local state
-      setFileComments(prev => ({
-        ...prev,
-        [fileId]: [...(prev[fileId] || []), commentData]
-      }));
-
-      // Clear comment input
-      setNewComment(prev => ({
-        ...prev,
-        [fileId]: ''
-      }));
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      alert('Failed to add comment. Please try again.');
-    }
-  };
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
@@ -714,13 +678,13 @@ const SubmissionDetail = () => {
                               </a>
                             </div>
 
-                            {/* Comments Section */}
-                            <div className="mt-4 pt-4 border-t border-gray-200">
-                              <h4 className="text-sm font-semibold text-gray-900 mb-3">Comments</h4>
-                              
-                              {/* Existing Comments */}
-                              {fileComments[file.id] && fileComments[file.id].length > 0 && (
-                                <div className="space-y-3 mb-4">
+                            {/* Comments Section - Read-only for clients */}
+                            {fileComments[file.id] && fileComments[file.id].length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <h4 className="text-sm font-semibold text-gray-900 mb-3">Comments</h4>
+                                
+                                {/* Existing Comments */}
+                                <div className="space-y-3">
                                   {fileComments[file.id].map((comment) => (
                                     <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
                                       <div className="flex items-start justify-between mb-1">
@@ -735,33 +699,8 @@ const SubmissionDetail = () => {
                                     </div>
                                   ))}
                                 </div>
-                              )}
-
-                              {/* Add Comment */}
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={newComment[file.id] || ''}
-                                  onChange={(e) => setNewComment(prev => ({
-                                    ...prev,
-                                    [file.id]: e.target.value
-                                  }))}
-                                  placeholder="Add a comment..."
-                                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-                                  onKeyPress={(e) => {
-                                    if (e.key === 'Enter') {
-                                      handleAddComment(file.id);
-                                    }
-                                  }}
-                                />
-                                <button
-                                  onClick={() => handleAddComment(file.id)}
-                                  className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
-                                >
-                                  Add
-                                </button>
                               </div>
-                            </div>
+                            )}
                           </div>
                         ))}
                       </div>
