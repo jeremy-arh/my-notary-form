@@ -366,18 +366,43 @@ serve(async (req) => {
             console.log(`📋 [OPTIONS DEBUG] Checking documents for service ${service.name}:`)
             documentsForService.forEach((doc, idx) => {
               console.log(`   Document ${idx}: ${doc.name}`)
-              console.log(`   selectedOptions:`, doc.selectedOptions)
-              console.log(`   Has selectedOptions:`, !!doc.selectedOptions)
-              console.log(`   Is Array:`, Array.isArray(doc.selectedOptions))
+              console.log(`   selectedOptions (raw):`, doc.selectedOptions, typeof doc.selectedOptions)
+              
+              // Handle selectedOptions - could be array, string, or null/undefined
+              let optionsArray = []
+              
+              if (doc.selectedOptions) {
+                if (Array.isArray(doc.selectedOptions)) {
+                  optionsArray = doc.selectedOptions
+                } else if (typeof doc.selectedOptions === 'string') {
+                  // Try to parse as JSON string
+                  try {
+                    const parsed = JSON.parse(doc.selectedOptions)
+                    if (Array.isArray(parsed)) {
+                      optionsArray = parsed
+                    } else {
+                      console.warn(`   ⚠️ Parsed selectedOptions is not an array:`, parsed)
+                    }
+                  } catch (parseError) {
+                    console.warn(`   ⚠️ Failed to parse selectedOptions as JSON:`, parseError)
+                    // If it's a single string value, treat it as a single-item array
+                    optionsArray = [doc.selectedOptions]
+                  }
+                } else {
+                  console.warn(`   ⚠️ selectedOptions is neither array nor string:`, typeof doc.selectedOptions)
+                }
+              }
 
-              if (doc.selectedOptions && Array.isArray(doc.selectedOptions)) {
-                console.log(`   Options count:`, doc.selectedOptions.length)
-                doc.selectedOptions.forEach(optionId => {
+              console.log(`   Options array:`, optionsArray)
+              console.log(`   Options count:`, optionsArray.length)
+
+              if (optionsArray.length > 0) {
+                optionsArray.forEach(optionId => {
                   console.log(`   Adding option: ${optionId}`)
                   optionCounts[optionId] = (optionCounts[optionId] || 0) + 1
                 })
               } else {
-                console.log(`   ⚠️ No selectedOptions or not an array`)
+                console.log(`   ⚠️ No options to add`)
               }
             })
           } else {
