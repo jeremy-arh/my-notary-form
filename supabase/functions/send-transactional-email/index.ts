@@ -353,35 +353,30 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'notary_assigned':
       subject = `Notary Assigned - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Geist -->
-        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
-          Notary Assigned to Your Submission
-        </h1>
-        
         <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
         </p>
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          A notary has been assigned to your submission <strong style="color: #000000; font-weight: 600;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          A notary has been assigned to your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
         </p>
         ${data.notary_name ? `
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Assigned notary: <strong style="color: #000000; font-weight: 600;">${data.notary_name}</strong>.
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          Assigned notary: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.notary_name}</strong>.
         </p>
         ` : ''}
-        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           You can now communicate with the notary and track the progress of your submission. If you have any questions, our team is here to help.
         </p>
         
-        <!-- Call to Action Button - Centered, Rounded -->
+        <!-- Call to Action Button - Centered, Rounded, Black -->
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
           <tr>
             <td align="center" style="padding: 0;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td align="center" style="border-radius: 8px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                  <td align="center" style="border-radius: 30px; background-color: #000000;">
+                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       View Submission
                     </a>
                   </td>

@@ -488,6 +488,54 @@ const SubmissionDetail = () => {
     }
   };
 
+  const handleDeleteFile = async (fileId, storagePath) => {
+    if (!window.confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      // Delete file from storage
+      const { error: storageError } = await supabase.storage
+        .from('submission-documents')
+        .remove([storagePath]);
+
+      if (storageError) {
+        console.error('Error deleting file from storage:', storageError);
+        // Continue with database deletion even if storage deletion fails
+      }
+
+      // Delete file from database (comments will be deleted automatically due to ON DELETE CASCADE)
+      const { error: deleteError } = await supabase
+        .from('notarized_files')
+        .delete()
+        .eq('id', fileId);
+
+      if (deleteError) throw deleteError;
+
+      // Remove from local state
+      setNotarizedFiles(prev => prev.filter(file => file.id !== fileId));
+      
+      // Remove comments from local state
+      setFileComments(prev => {
+        const newComments = { ...prev };
+        delete newComments[fileId];
+        return newComments;
+      });
+
+      // Remove comment input from local state
+      setNewComment(prev => {
+        const newComment = { ...prev };
+        delete newComment[fileId];
+        return newComment;
+      });
+
+      alert('File deleted successfully');
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert(`Failed to delete file: ${error.message}`);
+    }
+  };
+
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -822,15 +870,24 @@ const SubmissionDetail = () => {
                               </p>
                             </div>
                           </div>
-                          <a
-                            href={file.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-4 px-3 py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
-                          >
-                            <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
-                            Download
-                          </a>
+                          <div className="flex items-center gap-2 ml-4">
+                            <a
+                              href={file.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
+                            >
+                              <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
+                              Download
+                            </a>
+                            <button
+                              onClick={() => handleDeleteFile(file.id, file.storage_path)}
+                              className="px-3 py-2 text-xs sm:text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center flex-shrink-0"
+                              title="Delete file"
+                            >
+                              <Icon icon="heroicons:trash" className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Comments Section */}
