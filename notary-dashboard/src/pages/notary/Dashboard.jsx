@@ -463,7 +463,12 @@ const Dashboard = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">Welcome back! Here's your overview.</p>
+        <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
+          Welcome back! Here's your overview.
+          {notaryTimezone && (
+            <span className="ml-2 text-xs text-gray-500">(All times displayed in {notaryTimezone})</span>
+          )}
+        </p>
       </div>
 
       {/* Stats Cards */}

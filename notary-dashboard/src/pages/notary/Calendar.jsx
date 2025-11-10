@@ -210,7 +210,12 @@ const Calendar = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Calendar</h1>
-        <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">View and manage your appointments</p>
+        <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
+          View and manage your appointments
+          {notaryTimezone && (
+            <span className="ml-2 text-xs text-gray-500">(All times displayed in {notaryTimezone})</span>
+          )}
+        </p>
       </div>
 
       {/* Calendar/Table View */}
