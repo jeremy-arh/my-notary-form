@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../lib/supabase';
+import { playNotificationSoundIfNeeded } from '../utils/soundNotification';
 
 const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, clientFirstName, clientLastName, isFullscreen = false }) => {
   const [messages, setMessages] = useState([]);
@@ -79,7 +80,16 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
         filter: `submission_id=eq.${submissionId}`
       }, (payload) => {
         if (payload.eventType === 'INSERT') {
-          setMessages(prev => [...prev, payload.new]);
+          const newMessage = payload.new;
+          setMessages(prev => [...prev, newMessage]);
+          
+          // Play notification sound if message is not from current user
+          if (newMessage.sender_type !== currentUserType) {
+            // Check if user is on messages page (we assume they are if Chat component is mounted)
+            // For notary dashboard, we'll play sound if not viewing this specific conversation
+            const isViewingMessages = window.location.pathname.includes('/messages');
+            playNotificationSoundIfNeeded(!isViewingMessages);
+          }
         } else if (payload.eventType === 'UPDATE') {
           setMessages(prev => prev.map(m => m.message_id === payload.new.message_id ? payload.new : m));
         }
