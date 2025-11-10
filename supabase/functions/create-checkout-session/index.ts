@@ -214,6 +214,85 @@ serve(async (req) => {
 
       submission = newSubmission
       console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
+
+      // Send email notification to all active notaries about the new submission
+      try {
+        console.log('📧 [NOTIFICATIONS] Sending new submission notifications to all active notaries...')
+        
+        // Fetch all active notaries
+        const { data: activeNotaries, error: notariesError } = await supabase
+          .from('notary')
+          .select('id, email, full_name, user_id')
+          .eq('is_active', true)
+
+        if (notariesError) {
+          console.error('❌ [NOTIFICATIONS] Error fetching active notaries:', notariesError)
+        } else if (activeNotaries && activeNotaries.length > 0) {
+          console.log(`📧 [NOTIFICATIONS] Found ${activeNotaries.length} active notaries to notify`)
+
+          // Get submission details for email
+          const clientName = `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || 'Client'
+          const submissionNumber = submission.id.substring(0, 8)
+
+          // Send email to each notary
+          const emailPromises = activeNotaries.map(async (notary) => {
+            if (!notary.email) {
+              console.warn(`⚠️ [NOTIFICATIONS] Notary ${notary.id} has no email, skipping`)
+              return
+            }
+
+            try {
+              const notaryName = notary.full_name || 'Notary'
+              
+              // Call send-transactional-email Edge Function
+              const functionUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-transactional-email`
+              const functionResponse = await fetch(functionUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+                  'apikey': Deno.env.get('SUPABASE_ANON_KEY') || ''
+                },
+                body: JSON.stringify({
+                  email_type: 'new_submission_available',
+                  recipient_email: notary.email,
+                  recipient_name: notaryName,
+                  recipient_type: 'notary',
+                  data: {
+                    submission_id: submission.id,
+                    submission_number: submissionNumber,
+                    client_name: clientName,
+                    appointment_date: submission.appointment_date,
+                    appointment_time: submission.appointment_time,
+                    timezone: submission.timezone,
+                    address: submission.address,
+                    city: submission.city,
+                    country: submission.country
+                  }
+                })
+              })
+
+              if (!functionResponse.ok) {
+                const errorText = await functionResponse.text()
+                console.error(`❌ [NOTIFICATIONS] Failed to send email to ${notary.email}:`, errorText)
+              } else {
+                console.log(`✅ [NOTIFICATIONS] Email sent to notary: ${notary.email}`)
+              }
+            } catch (emailError) {
+              console.error(`❌ [NOTIFICATIONS] Error sending email to ${notary.email}:`, emailError)
+            }
+          })
+
+          // Wait for all emails to be sent (don't block if some fail)
+          await Promise.allSettled(emailPromises)
+          console.log('✅ [NOTIFICATIONS] Finished sending new submission notifications')
+        } else {
+          console.log('⚠️ [NOTIFICATIONS] No active notaries found to notify')
+        }
+      } catch (notificationError) {
+        console.error('❌ [NOTIFICATIONS] Error in notification process:', notificationError)
+        // Don't throw - submission creation should not fail if notifications fail
+      }
     }
 
     // Fetch services from database to get pricing
