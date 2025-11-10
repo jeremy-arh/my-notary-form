@@ -255,7 +255,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
   // Generate template based on email type
   switch (email_type) {
     case 'payment_success':
-      subject = `Payment Confirmed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      subject = `✅ Payment Confirmed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -320,7 +320,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'payment_failed':
-      subject = `Payment Failed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      subject = `❌ Payment Failed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -358,7 +358,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'notary_assigned':
-      subject = `Notary Assigned - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      subject = `👤 Notary Assigned - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -396,7 +396,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'notarized_file_uploaded':
-      subject = `Notarized Document Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      subject = `📄 Notarized Document Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -434,7 +434,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'message_received':
-      subject = `New Message - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      subject = `💬 New Message - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -472,7 +472,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'new_submission_available':
-      subject = `New Submission Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      subject = `📋 New Submission Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -523,7 +523,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'appointment_reminder_day_before':
-      subject = `Appointment Reminder - Tomorrow at ${data.appointment_time || ''}`
+      subject = `⏰ Appointment Reminder - Tomorrow at ${data.appointment_time || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -571,7 +571,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'appointment_reminder_one_hour_before':
-      subject = `Appointment Reminder - In 1 Hour at ${data.appointment_time || ''}`
+      subject = `🔔 Appointment Reminder - In 1 Hour at ${data.appointment_time || ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -619,7 +619,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     default:
-      subject = 'MY NOTARY Notification'
+      subject = '📧 MY NOTARY Notification'
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
