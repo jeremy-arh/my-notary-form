@@ -250,11 +250,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'payment_success':
       subject = `Payment Confirmed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Geist (like Papers style) -->
-        <h1 style="margin: 0 0 40px; font-size: 42px; font-weight: 700; color: #222222; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
-          Payment Confirmed
-        </h1>
-        
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
@@ -320,11 +315,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'payment_failed':
       subject = `Payment Failed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Geist (like Papers style) -->
-        <h1 style="margin: 0 0 40px; font-size: 42px; font-weight: 700; color: #222222; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
-          Payment Failed
-        </h1>
-        
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
@@ -406,11 +396,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'notarized_file_uploaded':
       subject = `Notarized Document Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Geist (like Papers style) -->
-        <h1 style="margin: 0 0 40px; font-size: 42px; font-weight: 700; color: #222222; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
-          Notarized Document Available
-        </h1>
-        
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
@@ -449,11 +434,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'message_received':
       subject = `New Message - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Geist (like Papers style) -->
-        <h1 style="margin: 0 0 40px; font-size: 42px; font-weight: 700; color: #222222; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
-          New Message
-        </h1>
-        
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
@@ -492,11 +472,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     default:
       subject = 'MY NOTARY Notification'
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Geist (like Papers style) -->
-        <h1 style="margin: 0 0 40px; font-size: 42px; font-weight: 700; color: #222222; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
-          Notification
-        </h1>
-        
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
