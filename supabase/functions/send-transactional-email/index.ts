@@ -138,36 +138,76 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
   const attachments: any[] = []
 
   // Base HTML structure - styled like Papers email but in black and white
-  // Note: SVG logos may not display in all email clients. Consider using PNG version.
+  // Using PNG logo and Geist font from Google Fonts
   const baseHTML = (content: string) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${subject}</title>
   <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <!-- Google Fonts - Geist -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style type="text/css">
-    body, table, td {font-family: Arial, sans-serif !important;}
+    /* Geist Font for email clients that support web fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    /* Fallback for email clients */
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    /* Outlook specific fixes */
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
   </style>
   <![endif]-->
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f0;">
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
   <!-- Main Container -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f5f5f0; padding: 40px 20px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f5f5f0; padding: 40px 20px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
     <tr>
       <td align="center" style="padding: 0;">
         <!-- Email Content Card -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
           <!-- Header with black banner and logo -->
           <tr>
-            <td style="padding: 30px 40px; background-color: #000000; text-align: center;">
-              <!-- Logo - Try to use SVG, fallback to text if image doesn't load -->
+            <td style="padding: 40px 30px; background-color: #000000; text-align: center;">
+              <!-- Logo - PNG version for better email client compatibility -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
                   <td align="center" style="padding: 0;">
                     <!-- Logo image with proper attributes for email clients -->
-                    <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/logo-blanc.svg" alt="MY NOTARY" width="200" height="auto" style="width: 200px; max-width: 200px; height: auto; display: block; margin: 0 auto; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.2;">
+                    <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary.png" alt="MY NOTARY" width="200" style="width: 200px; max-width: 200px; height: auto; display: block; margin: 0 auto; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; font-family: 'Geist', Arial, sans-serif; font-size: 16px; line-height: 1.2;">
                   </td>
                 </tr>
               </table>
@@ -176,23 +216,23 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
           
           <!-- Content -->
           <tr>
-            <td style="padding: 50px 40px; background-color: #ffffff;">
+            <td style="padding: 50px 40px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
               ${content}
             </td>
           </tr>
           
           <!-- Footer -->
           <tr>
-            <td style="padding: 30px 40px; background-color: #ffffff; border-top: 1px solid #e5e5e5;">
-              <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+            <td style="padding: 30px 40px; background-color: #ffffff; border-top: 1px solid #e5e5e5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
                 MY NOTARY
               </p>
-              <p style="margin: 0 0 20px; font-size: 12px; color: #666666; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
-                This is an automated email from <strong style="color: #000000;">MY NOTARY</strong>.<br>
+              <p style="margin: 0 0 20px; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                This is an automated email from <strong style="color: #000000; font-weight: 600;">MY NOTARY</strong>.<br>
                 Please do not reply to this email.
               </p>
-              <p style="margin: 0; font-size: 12px; color: #666666; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-                <a href="${dashboardUrl}" style="color: #000000; text-decoration: underline;">Visit Dashboard</a>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="${dashboardUrl}" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Visit Dashboard</a>
               </p>
             </td>
           </tr>
@@ -261,24 +301,24 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'payment_failed':
       subject = `Payment Failed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Serif -->
-        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: Georgia, 'Times New Roman', Times, serif; letter-spacing: -0.5px;">
+        <!-- Main Heading - Centered, Large, Geist -->
+        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
           Payment Failed
         </h1>
         
         <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
         </p>
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          The payment for your submission <strong style="color: #000000; font-weight: 600;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> has failed.
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          The payment for your submission <strong style="color: #000000; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> has failed.
         </p>
         ${data.error_message ? `
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Reason: ${data.error_message}
         </p>
         ` : ''}
-        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Please try the payment again using the link below. If you have any questions, our team is here to help.
         </p>
         
@@ -289,7 +329,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" style="border-radius: 8px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       Retry Payment
                     </a>
                   </td>
@@ -304,24 +344,24 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'notary_assigned':
       subject = `Notary Assigned - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Serif -->
-        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: Georgia, 'Times New Roman', Times, serif; letter-spacing: -0.5px;">
+        <!-- Main Heading - Centered, Large, Geist -->
+        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
           Notary Assigned to Your Submission
         </h1>
         
         <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
         </p>
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           A notary has been assigned to your submission <strong style="color: #000000; font-weight: 600;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
         </p>
         ${data.notary_name ? `
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Assigned notary: <strong style="color: #000000; font-weight: 600;">${data.notary_name}</strong>.
         </p>
         ` : ''}
-        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           You can now communicate with the notary and track the progress of your submission. If you have any questions, our team is here to help.
         </p>
         
@@ -332,7 +372,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" style="border-radius: 8px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       View Submission
                     </a>
                   </td>
@@ -347,24 +387,24 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'notarized_file_uploaded':
       subject = `Notarized Document Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Serif -->
-        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: Georgia, 'Times New Roman', Times, serif; letter-spacing: -0.5px;">
+        <!-- Main Heading - Centered, Large, Geist -->
+        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
           Notarized Document Available
         </h1>
         
         <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
         </p>
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           A new notarized document has been added to your submission <strong style="color: #000000; font-weight: 600;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
         </p>
         ${data.file_name ? `
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Document: <strong style="color: #000000; font-weight: 600;">${data.file_name}</strong>
         </p>
         ` : ''}
-        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           You can view and download your notarized documents using the link below. If you have any questions, our team is here to help.
         </p>
         
@@ -375,7 +415,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" style="border-radius: 8px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}?tab=notarized" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                    <a href="${dashboardUrl}/submission/${data.submission_id}?tab=notarized" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       View Notarized Documents
                     </a>
                   </td>
@@ -390,24 +430,24 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     case 'message_received':
       subject = `New Message - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Serif -->
-        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: Georgia, 'Times New Roman', Times, serif; letter-spacing: -0.5px;">
+        <!-- Main Heading - Centered, Large, Geist -->
+        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
           New Message
         </h1>
         
         <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
         </p>
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          You have received a new message regarding your submission <strong style="color: #000000; font-weight: 600;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          You have received a new message regarding your submission <strong style="color: #000000; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
         </p>
         ${data.message_preview ? `
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-style: italic; padding-left: 16px; border-left: 2px solid #000000;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-style: italic; padding-left: 16px; border-left: 2px solid #000000;">
           "${data.message_preview}"
         </p>
         ` : ''}
-        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           You can view and respond to the message using the link below. If you have any questions, our team is here to help.
         </p>
         
@@ -418,7 +458,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" style="border-radius: 8px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       View Conversation
                     </a>
                   </td>
@@ -433,16 +473,16 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     default:
       subject = 'MY NOTARY Notification'
       html = baseHTML(`
-        <!-- Main Heading - Centered, Large, Serif -->
-        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: Georgia, 'Times New Roman', Times, serif; letter-spacing: -0.5px;">
+        <!-- Main Heading - Centered, Large, Geist -->
+        <h1 style="margin: 0 0 24px; font-size: 32px; font-weight: 700; color: #000000; line-height: 1.2; text-align: center; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px;">
           Notification
         </h1>
         
         <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
         </p>
-        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           You have a new notification. If you have any questions, our team is here to help.
         </p>
         
@@ -453,7 +493,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" style="border-radius: 8px; background-color: #000000;">
-                    <a href="${dashboardUrl}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                    <a href="${dashboardUrl}" style="display: inline-block; padding: 16px 32px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       View Dashboard
                     </a>
                   </td>
