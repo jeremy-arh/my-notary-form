@@ -231,10 +231,26 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
                 </tr>
               </table>
               
-              <!-- Footer Content -->
-              <p style="margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-                MY NOTARY
-              </p>
+              <!-- Footer Content with Logo and Text -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 20px 0;">
+                <tr>
+                  <td style="padding: 0;">
+                    <!-- Logo and Text -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding: 0 12px 0 0; vertical-align: middle;">
+                          <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="MY NOTARY" width="100" style="width: 100px; max-width: 100px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+                        </td>
+                        <td style="padding: 0; vertical-align: middle;">
+                          <p style="margin: 0; font-size: 18px; font-weight: 700; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                            MY NOTARY
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
               <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
                 This is an automated email from <strong style="color: #000000; font-weight: 600;">MY NOTARY</strong>.<br>
                 Please do not reply to this email.
@@ -494,11 +510,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
           Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}${data.appointment_time ? ` at ${data.appointment_time}` : ''}</strong>
         </p>
         ` : ''}
-        ${data.address ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Location: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}</strong>
-        </p>
-        ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           You can view and accept this submission from your dashboard. If you have any questions, our team is here to help.
         </p>
@@ -542,11 +553,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
           Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.client_name}</strong>
         </p>
         ` : ''}
-        ${data.address ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Location: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}</strong>
-        </p>
-        ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Please make sure you are prepared for the appointment. If you have any questions or need to reschedule, please contact us as soon as possible.
         </p>
@@ -588,11 +594,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
         ${data.client_name ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.client_name}</strong>
-        </p>
-        ` : ''}
-        ${data.address ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Location: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}</strong>
         </p>
         ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">

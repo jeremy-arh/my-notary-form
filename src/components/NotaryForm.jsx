@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Logo } from '../../shared/assets';
+import { trackPageView, trackFormStep, trackFormSubmissionStart } from '../utils/gtm';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -61,12 +62,18 @@ const NotaryForm = () => {
 
   const currentStep = getCurrentStepFromPath();
 
-  // Validate step access
+  // Track page views and validate step access
   useEffect(() => {
     // Redirect to /documents if at root
     if (location.pathname === '/') {
       navigate('/documents', { replace: true });
       return;
+    }
+
+    // Track page view
+    const currentStepData = steps.find(s => s.path === location.pathname);
+    if (currentStepData) {
+      trackPageView(currentStepData.name, location.pathname);
     }
 
     // Check if user is trying to access a step they haven't completed yet
@@ -149,6 +156,11 @@ const NotaryForm = () => {
   const markStepCompleted = (stepId) => {
     if (!completedSteps.includes(stepId)) {
       setCompletedSteps([...completedSteps, stepId]);
+      // Track step completion in GTM
+      const step = steps.find(s => s.id === stepId);
+      if (step) {
+        trackFormStep(stepId, step.name);
+      }
     }
   };
 
@@ -190,9 +202,23 @@ const NotaryForm = () => {
     try {
       console.log('Submitting form data:', formData);
 
+      // Track form submission start in GTM
+      trackFormSubmissionStart(formData);
+
       const result = await submitNotaryRequest(formData);
 
       if (result.success) {
+        // Track successful form submission in GTM
+        if (typeof window !== 'undefined' && window.dataLayer) {
+          window.dataLayer.push({
+            event: 'form_submit',
+            form_type: 'notary_service',
+            submission_id: result.submissionId,
+            options_count: formData.selectedOptions?.length || 0,
+            documents_count: Array.isArray(formData.documents) ? formData.documents.length : 0
+          });
+        }
+
         // Clear localStorage
         localStorage.removeItem('notaryFormData');
         localStorage.removeItem('notaryCompletedSteps');
