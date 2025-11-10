@@ -546,7 +546,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           )}
         </div>
         {!isDetectingTimezone && (
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-gray-500 break-words">
             Your timezone has been automatically detected. You can change it if needed.
           </p>
         )}
@@ -555,9 +555,9 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       {/* Calendar and Time Slots Row */}
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Calendar */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-200 lg:w-96 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-gray-900">
+        <div className="bg-white rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 lg:w-96 flex-shrink-0 overflow-hidden">
+          <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2">
+            <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate flex-1 min-w-0">
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h3>
             <div className="flex space-x-1">
@@ -579,16 +579,16 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           </div>
 
           {/* Day names */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-2">
             {dayNames.map((day) => (
-              <div key={day} className="text-center text-xs font-semibold text-gray-500 py-1">
+              <div key={day} className="text-center text-[10px] sm:text-xs font-semibold text-gray-500 py-1">
                 {day}
               </div>
             ))}
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
             {calendarDays.map((day, index) => {
               const disabled = !day.isCurrentMonth || isPast(day.date);
               const selected = isSelected(day.date);
@@ -600,7 +600,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="button"
                   onClick={() => !disabled && handleDateClick(day.date)}
                   disabled={disabled}
-                  className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                  className={`aspect-square flex items-center justify-center rounded-lg text-[11px] sm:text-sm font-medium transition-all min-w-0 ${
                     disabled
                       ? 'text-gray-300 cursor-not-allowed'
                       : selected
@@ -618,24 +618,24 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         </div>
 
         {/* Time Slots */}
-        <div ref={timeSlotsRef} className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
-          <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-            <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-600" />
-            Available Time Slots
+        <div ref={timeSlotsRef} className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200 flex-1 overflow-hidden min-w-0">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 flex items-center">
+            <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-600 flex-shrink-0" />
+            <span className="truncate">Available Time Slots</span>
           </h3>
           {!selectedDate && (
-            <p className="text-sm text-gray-500 italic mb-3">
+            <p className="text-xs sm:text-sm text-gray-500 italic mb-3 break-words">
               Please select a date first to choose a time slot
             </p>
           )}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2">
             {timeSlots.map((slot) => (
               <button
                 key={slot.value}
                 type="button"
                 onClick={() => selectedDate && handleTimeClick(slot.value)}
                 disabled={!selectedDate}
-                className={`py-2 px-2 rounded-lg text-xs font-medium transition-all w-full ${
+                className={`py-2 px-2 rounded-lg text-xs font-medium transition-all w-full min-w-0 ${
                   !selectedDate
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : selectedTime === slot.value
