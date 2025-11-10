@@ -426,13 +426,36 @@ const NotariesList = () => {
       }
 
       // Determine redirect URL based on environment
-      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-      const redirectTo = isProduction 
-        ? `https://notary.mynotary.io/auth/set-password`
-        : `${window.location.protocol}//${window.location.hostname}:5175/auth/set-password`;
+      // Check for environment variable first, then fallback to hostname detection
+      const notaryDashboardUrl = import.meta.env.VITE_NOTARY_DASHBOARD_URL;
+      let redirectTo;
+      
+      if (notaryDashboardUrl) {
+        // Use environment variable if set (recommended for production)
+        redirectTo = `${notaryDashboardUrl}/auth/set-password`;
+      } else {
+        // Fallback to hostname detection
+        const isProduction = window.location.hostname !== 'localhost' 
+          && window.location.hostname !== '127.0.0.1'
+          && !window.location.hostname.includes('localhost');
+        
+        if (isProduction) {
+          // Production: use the actual domain (detected from current hostname or default)
+          const protocol = window.location.protocol;
+          const hostname = window.location.hostname;
+          // If admin dashboard is on admin.mynotary.io, notary should be on notary.mynotary.io
+          const notaryHostname = hostname.replace('admin.', 'notary.');
+          redirectTo = `${protocol}//${notaryHostname}/auth/set-password`;
+        } else {
+          // Development: use localhost with port
+          redirectTo = `http://localhost:5175/auth/set-password`;
+        }
+      }
       
       console.log('📧 Sending invitation email to:', notary.email);
       console.log('🔗 Redirect URL:', redirectTo);
+      console.log('🌐 Current hostname:', window.location.hostname);
+      console.log('🔧 VITE_NOTARY_DASHBOARD_URL:', notaryDashboardUrl || 'Not set');
 
       const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
         notary.email, 
