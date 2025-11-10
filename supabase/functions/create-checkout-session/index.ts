@@ -473,9 +473,30 @@ serve(async (req) => {
       }
     )
   } catch (error) {
-    console.error('Error creating checkout session:', error)
+    console.error('❌ [ERROR] Error creating checkout session:', error)
+    console.error('❌ [ERROR] Error type:', error?.constructor?.name)
+    console.error('❌ [ERROR] Error message:', error?.message)
+    console.error('❌ [ERROR] Error stack:', error?.stack)
+    
+    // Log formData for debugging (without sensitive info)
+    if (formData) {
+      console.error('❌ [ERROR] FormData received:', {
+        selectedServices: formData.selectedServices,
+        serviceDocumentsKeys: formData.serviceDocuments ? Object.keys(formData.serviceDocuments) : null,
+        hasEmail: !!formData.email,
+        hasAppointmentDate: !!formData.appointmentDate,
+      })
+    }
+    
+    // Return more detailed error information
+    const errorMessage = error?.message || 'Unknown error occurred'
+    const errorDetails = {
+      error: errorMessage,
+      type: error?.constructor?.name || 'Error',
+    }
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify(errorDetails),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
