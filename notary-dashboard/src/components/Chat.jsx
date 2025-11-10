@@ -111,6 +111,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
     }
 
     setSending(true);
+    const messageContent = newMessage.trim() || '(File attachment)';
 
     try {
       const { error } = await supabase
@@ -119,12 +120,55 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
           submission_id: submissionId,
           sender_type: currentUserType,
           sender_id: currentUserId,
-          content: newMessage.trim() || '',
+          content: messageContent,
           attachments: attachments.length > 0 ? attachments : [],
           read: false
         });
 
       if (error) throw error;
+
+      // Send email notification to recipient (client)
+      try {
+        // Get submission and client info
+        const { data: submissionData, error: subError } = await supabase
+          .from('submission')
+          .select('id, client_id, first_name, last_name')
+          .eq('id', submissionId)
+          .single();
+
+        if (!subError && submissionData && submissionData.client_id) {
+          // Get client info
+          const { data: clientData, error: clientError } = await supabase
+            .from('client')
+            .select('email, first_name, last_name')
+            .eq('id', submissionData.client_id)
+            .single();
+
+          if (!clientError && clientData && clientData.email) {
+            const clientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
+            const submissionNumber = submissionId.substring(0, 8);
+            const messagePreview = messageContent.length > 100 
+              ? messageContent.substring(0, 100) + '...' 
+              : messageContent;
+
+            const { sendTransactionalEmail } = await import('../utils/sendTransactionalEmail');
+            await sendTransactionalEmail(supabase, {
+              email_type: 'message_received',
+              recipient_email: clientData.email,
+              recipient_name: clientName,
+              recipient_type: 'client',
+              data: {
+                submission_id: submissionId,
+                submission_number: submissionNumber,
+                message_preview: messagePreview
+              }
+            });
+          }
+        }
+      } catch (emailError) {
+        console.error('Error sending message email notification:', emailError);
+        // Don't block message sending if email fails
+      }
 
       setNewMessage('');
       setAttachments([]);

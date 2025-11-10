@@ -384,36 +384,51 @@ const SubmissionDetail = () => {
               .eq('id', clientId)
               .single();
 
-            if (!clientError && clientData && clientData.user_id) {
-              // Call the create_notification function with client's user_id
-              const { data: notificationId, error: notifError } = await supabase.rpc('create_notification', {
-                p_user_id: clientData.id, // Use client.id (not user_id) as per notification schema
-                p_user_type: 'client',
-                p_title: 'New Notarized Document',
-                p_message: `A new notarized document "${file.name}" has been uploaded for your submission.`,
-                p_type: 'success',
-                p_action_type: 'notarized_file_uploaded',
-                p_action_data: JSON.stringify({
-                  submission_id: id,
-                  file_id: fileData.id,
-                  file_name: file.name
-                }),
-                p_send_email: false // We'll send email via Edge Function
-              });
+            if (!clientError && clientData) {
+              // Get client email and name
+              const { data: clientInfo, error: clientInfoError } = await supabase
+                .from('client')
+                .select('email, first_name, last_name')
+                .eq('id', clientId)
+                .single();
 
-              if (notifError) {
-                console.error('Error creating notification:', notifError);
-              } else if (notificationId) {
-                // Send email via Edge Function
-                try {
-                  const { error: emailError } = await supabase.functions.invoke('send-notification-email', {
-                    body: { notification_id: notificationId }
-                  });
-                  if (emailError) {
-                    console.error('Error sending notification email:', emailError);
+              if (!clientInfoError && clientInfo && clientInfo.email) {
+                const clientName = `${clientInfo.first_name || ''} ${clientInfo.last_name || ''}`.trim() || 'Client';
+                const submissionNumber = id.substring(0, 8);
+
+                // Send transactional email
+                const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
+                await sendTransactionalEmail(supabase, {
+                  email_type: 'notarized_file_uploaded',
+                  recipient_email: clientInfo.email,
+                  recipient_name: clientName,
+                  recipient_type: 'client',
+                  data: {
+                    submission_id: id,
+                    submission_number: submissionNumber,
+                    file_name: file.name,
+                    file_url: fileData.file_url
                   }
-                } catch (emailError) {
-                  console.error('Error calling email function:', emailError);
+                });
+
+                // Also create notification (for in-app notifications)
+                try {
+                  await supabase.rpc('create_notification', {
+                    p_user_id: clientData.id,
+                    p_user_type: 'client',
+                    p_title: 'New Notarized Document',
+                    p_message: `A new notarized document "${file.name}" has been uploaded for your submission.`,
+                    p_type: 'success',
+                    p_action_type: 'notarized_file_uploaded',
+                    p_action_data: JSON.stringify({
+                      submission_id: id,
+                      file_id: fileData.id,
+                      file_name: file.name
+                    }),
+                    p_send_email: false
+                  });
+                } catch (notifError) {
+                  console.error('Error creating notification:', notifError);
                 }
               }
             }

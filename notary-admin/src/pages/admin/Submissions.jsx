@@ -128,6 +128,45 @@ const Submissions = () => {
 
       if (error) throw error;
 
+      // Send email to client about notary assignment
+      try {
+        // Get client information
+        const { data: clientData, error: clientError } = await supabase
+          .from('client')
+          .select('email, first_name, last_name')
+          .eq('id', selectedSubmissionForAssign.client_id)
+          .single();
+
+        // Get notary information
+        const { data: notaryData, error: notaryError } = await supabase
+          .from('notary')
+          .select('full_name, name')
+          .eq('id', selectedNotaryId)
+          .single();
+
+        if (!clientError && clientData && clientData.email && !notaryError && notaryData) {
+          const clientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
+          const notaryName = notaryData.full_name || notaryData.name || 'Notary';
+          const submissionNumber = selectedSubmissionForAssign.id.substring(0, 8);
+
+          const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
+          await sendTransactionalEmail(supabase, {
+            email_type: 'notary_assigned',
+            recipient_email: clientData.email,
+            recipient_name: clientName,
+            recipient_type: 'client',
+            data: {
+              submission_id: selectedSubmissionForAssign.id,
+              submission_number: submissionNumber,
+              notary_name: notaryName
+            }
+          });
+        }
+      } catch (emailError) {
+        console.error('Error sending notary assignment email:', emailError);
+        // Don't block the assignment if email fails
+      }
+
       alert('Notary assigned successfully!');
       setIsAssignModalOpen(false);
       setSelectedSubmissionForAssign(null);
