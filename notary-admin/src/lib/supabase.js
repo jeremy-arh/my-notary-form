@@ -33,22 +33,26 @@ let supabase = null;
 
   if (hasValidCredentials) {
   console.log('✅ Creating Supabase client...');
-  // Si on utilise service role, on crée un client sans auth
+  // Si on utilise service role, on crée un client avec les permissions admin
   // Sinon on utilise un client normal avec auth
   if (isUsingServiceRole) {
-    // Service role key bypass RLS automatiquement, mais on doit quand même avoir une session
-    // pour que auth.uid() fonctionne dans les fonctions SQL
+    // Service role key permet d'utiliser auth.admin.* methods
+    // Il faut créer le client normalement, les méthodes admin fonctionnent automatiquement avec service role
     supabase = createClient(supabaseUrl, supabaseKey, {
       auth: {
-        autoRefreshToken: false,
-        persistSession: false
+        autoRefreshToken: true,
+        persistSession: true,
+        // Pour les méthodes admin, on doit utiliser le service role key
+        // Le client Supabase détecte automatiquement si c'est une service role key
       },
       global: {
         headers: {
-          'apikey': supabaseKey
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
         }
       }
     });
+    console.log('✅ Supabase client created with SERVICE ROLE KEY - Admin methods available');
   } else {
     supabase = createClient(supabaseUrl, supabaseKey, {
       auth: {
@@ -56,6 +60,8 @@ let supabase = null;
         persistSession: true
       }
     });
+    console.log('⚠️ Supabase client created with ANON KEY - Admin methods will fail');
+    console.warn('⚠️ To use admin features (invite users, list users), add VITE_SUPABASE_SERVICE_ROLE_KEY');
   }
   console.log('✅ Supabase client created successfully!\n');
 } else {
