@@ -443,10 +443,13 @@ const SubmissionDetail = () => {
                       {notaryTimezone && submission.timezone
                         ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, notaryTimezone)
                         : submission.appointment_time}
+                      {notaryTimezone && (
+                        <span className="text-xs text-gray-500 ml-2">({notaryTimezone})</span>
+                      )}
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Timezone:</span>
+                    <span className="text-sm sm:text-base text-gray-600">Client Timezone:</span>
                     <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.timezone}</span>
                   </div>
                 </div>

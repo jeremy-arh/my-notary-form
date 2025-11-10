@@ -145,65 +145,131 @@ const getIANAFromUTCOffset = (utcOffset) => {
 };
 
 /**
- * Simplified conversion using Intl API
- * This is more reliable for timezone conversions
+ * Convert appointment time from client timezone to notary timezone
+ * 
+ * This function finds the UTC timestamp that corresponds to the given local time
+ * in the client's timezone, then formats that same UTC timestamp in the notary's timezone.
+ * 
+ * Uses an iterative approach to find the correct UTC timestamp by checking what time
+ * a UTC timestamp displays in the client's timezone, adjusting until we find a match.
+ * 
+ * @param {string} time - Time in HH:MM format (24-hour) in client's timezone
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @param {string} clientTimezone - Client's timezone (IANA identifier or UTC offset like 'UTC+1')
+ * @param {string} notaryTimezone - Notary's timezone (IANA identifier)
+ * @returns {string} Converted time in HH:MM format in notary's timezone
  */
 export const convertTimeToNotaryTimezone = (time, date, clientTimezone, notaryTimezone) => {
   if (!time || !date || !clientTimezone || !notaryTimezone) {
-    return time;
+    console.warn('Missing timezone conversion parameters:', { time, date, clientTimezone, notaryTimezone });
+    return time || '00:00';
   }
 
   try {
-    // Parse the time
-    const [hours, minutes] = time.split(':').map(Number);
-    
-    // Handle UTC offset format for client timezone
+    // Handle UTC offset format for client timezone (e.g., 'UTC+1', 'UTC-5')
     let clientTz = clientTimezone;
     if (clientTimezone.startsWith('UTC')) {
       clientTz = getIANAFromUTCOffset(clientTimezone);
+      if (!clientTz || clientTz === 'UTC') {
+        console.warn('Could not convert UTC offset to IANA timezone:', clientTimezone);
+        clientTz = 'UTC';
+      }
     }
+
+    // If both timezones are the same, no conversion needed
+    if (clientTz === notaryTimezone) {
+      return time;
+    }
+
+    // Parse the time and date components
+    const [hours, minutes] = time.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      console.error('Invalid time format:', time);
+      return time;
+    }
+
+    const [year, month, day] = date.split('-').map(Number);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      console.error('Invalid date format:', date);
+      return time;
+    }
+
+    // Create formatters
+    const clientFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: clientTz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
     
-    // Create a date object representing the appointment in the client's timezone
-    // We'll create a date string and parse it
-    const dateTimeString = `${date}T${time}:00`;
-    
-    // Create a date object - this will be in local time
-    // We need to interpret it as being in the client's timezone
-    const dateObj = new Date(dateTimeString);
-    
-    // Get the UTC time
-    const utcTime = dateObj.getTime();
-    
-    // Get offset for client timezone
-    const clientDate = new Date(dateObj.toLocaleString('en-US', { timeZone: clientTz }));
-    const utcDate = new Date(dateObj.toLocaleString('en-US', { timeZone: 'UTC' }));
-    const clientOffset = clientDate.getTime() - utcDate.getTime();
-    
-    // Get offset for notary timezone
-    const notaryDate = new Date(dateObj.toLocaleString('en-US', { timeZone: notaryTimezone }));
-    const notaryOffset = notaryDate.getTime() - utcDate.getTime();
-    
-    // Calculate the difference
-    const offsetDiff = notaryOffset - clientOffset;
-    
-    // Adjust the time
-    const adjustedTime = new Date(utcTime + offsetDiff);
-    
-    // Format in notary's timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
+    const notaryFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: notaryTimezone,
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
     });
     
-    const parts = formatter.formatToParts(adjustedTime);
-    const hour = parts.find(p => p.type === 'hour').value;
-    const minute = parts.find(p => p.type === 'minute').value;
+    // Start with a UTC timestamp for the appointment date/time at noon UTC
+    // This gives us a good starting point that's likely to be close to the target
+    let utcTimestamp = Date.UTC(year, month - 1, day, 12, 0, 0);
     
-    return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+    // Iteratively refine the UTC timestamp until we find one that displays
+    // the correct time in the client's timezone
+    for (let iteration = 0; iteration < 15; iteration++) {
+      const testDate = new Date(utcTimestamp);
+      const parts = clientFormatter.formatToParts(testDate);
+      
+      const tzYear = parseInt(parts.find(p => p.type === 'year').value);
+      const tzMonth = parseInt(parts.find(p => p.type === 'month').value);
+      const tzDay = parseInt(parts.find(p => p.type === 'day').value);
+      const tzHour = parseInt(parts.find(p => p.type === 'hour').value);
+      const tzMinute = parseInt(parts.find(p => p.type === 'minute').value);
+      
+      // Check if we have an exact match
+      if (tzYear === year && tzMonth === month && tzDay === day && tzHour === hours && tzMinute === minutes) {
+        // Found it! Format this UTC timestamp in the notary's timezone
+        const notaryParts = notaryFormatter.formatToParts(testDate);
+        const notaryHour = notaryParts.find(p => p.type === 'hour').value;
+        const notaryMinute = notaryParts.find(p => p.type === 'minute').value;
+        return `${notaryHour.padStart(2, '0')}:${notaryMinute.padStart(2, '0')}`;
+      }
+      
+      // Calculate the difference in minutes between desired and actual time
+      // Account for date differences first
+      let totalMinutesDiff = 0;
+      
+      if (tzYear !== year || tzMonth !== month || tzDay !== day) {
+        // Date mismatch - calculate days difference
+        const desiredDate = new Date(year, month - 1, day, hours, minutes);
+        const actualDate = new Date(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute);
+        totalMinutesDiff = Math.round((desiredDate.getTime() - actualDate.getTime()) / (1000 * 60));
+      } else {
+        // Same date, just time difference
+        totalMinutesDiff = (hours - tzHour) * 60 + (minutes - tzMinute);
+      }
+      
+      // Adjust the UTC timestamp
+      // If the displayed time is earlier than desired, we need a later UTC time
+      // If the displayed time is later than desired, we need an earlier UTC time
+      utcTimestamp += totalMinutesDiff * 60 * 1000;
+      
+      // Prevent infinite loops by limiting the adjustment
+      if (Math.abs(totalMinutesDiff) < 1) {
+        break;
+      }
+    }
+    
+    // Use the final UTC timestamp (even if not exact) and format in notary's timezone
+    const notaryParts = notaryFormatter.formatToParts(new Date(utcTimestamp));
+    const notaryHour = notaryParts.find(p => p.type === 'hour').value;
+    const notaryMinute = notaryParts.find(p => p.type === 'minute').value;
+    
+    return `${notaryHour.padStart(2, '0')}:${notaryMinute.padStart(2, '0')}`;
   } catch (error) {
-    console.error('Error converting time:', error);
+    console.error('Error converting time to notary timezone:', error, { time, date, clientTimezone, notaryTimezone });
     return time;
   }
 };
