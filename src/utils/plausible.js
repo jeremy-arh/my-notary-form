@@ -1,15 +1,37 @@
 /**
- * Plausible Analytics - NPM Package Integration
- * Documentation: https://plausible.io/docs/plausible-tracker
+ * Plausible Analytics - Direct API Integration
+ * Compatible with Cloudflare Pages/Workers
+ * Documentation: https://plausible.io/docs/events-api
  */
 
-import { Plausible } from 'plausible-tracker';
+const PLAUSIBLE_DOMAIN = 'mynotary.io';
+const PLAUSIBLE_API = 'https://plausible.io/api/event';
 
-// Initialiser Plausible avec votre domaine
-const plausible = Plausible({
-  domain: 'mynotary.io',
-  apiHost: 'https://plausible.io'
-});
+/**
+ * Send event to Plausible API
+ * @param {object} eventData - Event data
+ */
+const sendToPlausible = async (eventData) => {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    await fetch(PLAUSIBLE_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        domain: PLAUSIBLE_DOMAIN,
+        ...eventData
+      })
+    });
+  } catch (error) {
+    // Silently fail - don't break the app if analytics fails
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Plausible tracking error:', error);
+    }
+  }
+};
 
 /**
  * Track page view
@@ -17,8 +39,11 @@ const plausible = Plausible({
  * @param {string} pagePath - Page path
  */
 export const trackPageView = (pageName, pagePath) => {
-  plausible.pageview({ 
-    url: pagePath || window.location.pathname,
+  // The script in index.html handles automatic page views
+  // This is for custom page views with props
+  sendToPlausible({
+    name: 'pageview',
+    url: pagePath || window.location.href,
     props: {
       page_name: pageName
     }
@@ -31,7 +56,11 @@ export const trackPageView = (pageName, pagePath) => {
  * @param {object} props - Event properties (optional)
  */
 export const trackEvent = (eventName, props = {}) => {
-  plausible.event(eventName, { props });
+  sendToPlausible({
+    name: eventName,
+    url: window.location.href,
+    props: props
+  });
 };
 
 /**
@@ -123,5 +152,5 @@ export const trackAppointmentBooking = (appointmentDate, appointmentTime, timezo
   });
 };
 
-export default plausible;
+// No default export needed
 

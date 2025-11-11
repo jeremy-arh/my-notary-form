@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Logo from '../assets/Logo';
 import { supabase } from '../lib/supabase';
+import { trackPaymentSuccess } from '../utils/gtm';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
@@ -33,6 +34,15 @@ const PaymentSuccess = () => {
         if (data.verified && data.submissionId) {
           setSubmissionId(data.submissionId);
           setInvoiceUrl(data.invoiceUrl);
+          
+          // Track payment success in GTM
+          trackPaymentSuccess({
+            transactionId: data.transactionId || sessionId,
+            amount: data.amount || 0,
+            currency: data.currency || 'EUR',
+            submissionId: data.submissionId,
+            servicesCount: 0 // You can calculate this from submission data if needed
+          });
         } else {
           setError('Payment verification failed');
         }

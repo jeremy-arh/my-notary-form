@@ -264,6 +264,10 @@ serve(async (req) => {
         submissionId: submission.id,
         accountCreated: accountCreated,
         invoiceUrl: invoiceUrl,
+        // Add payment data for GTM tracking
+        amount: session.amount_total ? session.amount_total / 100 : 0, // Convert from cents to currency unit
+        currency: session.currency ? session.currency.toUpperCase() : 'EUR',
+        transactionId: sessionId,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
