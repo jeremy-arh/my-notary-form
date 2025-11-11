@@ -31,14 +31,16 @@ export const pushGTMEvent = (eventName, eventData = {}) => {
 };
 
 /**
- * Track payment success
+ * Track payment success (purchase event for Google Ads conversion)
  * @param {object} paymentData - Payment data
  */
 export const trackPaymentSuccess = (paymentData) => {
-  pushGTMEvent('payment_success', {
+  // Envoyer l'événement purchase avec les variables attendues par GTM
+  pushGTMEvent('purchase', {
     transaction_id: paymentData.transactionId,
-    value: paymentData.amount,
+    value: paymentData.amount, // Montant en nombre (pas de formatage)
     currency: paymentData.currency || 'EUR',
+    // Données supplémentaires pour tracking
     submission_id: paymentData.submissionId,
     services_count: paymentData.servicesCount || 0
   });

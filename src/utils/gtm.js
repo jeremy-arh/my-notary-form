@@ -1,6 +1,7 @@
 /**
- * Google Tag Manager Utility
+ * Google Tag Manager Utility for Notary Form
  * Helper functions to send events to GTM dataLayer
+ * Compatible with GTM Web (client-side) and GTM Server-Side
  */
 
 /**
@@ -14,19 +15,42 @@ export const initGTM = () => {
 
 /**
  * Push an event to GTM dataLayer
+ * Compatible with both client-side and server-side GTM
  * @param {string} eventName - Name of the event
  * @param {object} eventData - Additional event data
  */
 export const pushGTMEvent = (eventName, eventData = {}) => {
   if (typeof window === 'undefined' || !window.dataLayer) {
-    console.warn('GTM dataLayer not initialized');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('GTM dataLayer not initialized');
+    }
     return;
   }
 
   window.dataLayer.push({
     event: eventName,
-    event_name: eventName, // Pour GTM server-side
+    event_name: eventName, // For GTM server-side compatibility
     ...eventData
+  });
+};
+
+/**
+ * Track page view
+ * @param {string} pageName - Page name
+ * @param {string} pagePath - Page path
+ */
+export const trackPageView = (pageName, pagePath) => {
+  const pageLocation = typeof window !== 'undefined' ? window.location.href : pagePath;
+  const pageReferrer = typeof document !== 'undefined' ? document.referrer || '' : '';
+  const screenResolution = typeof window !== 'undefined' && window.screen ? `${window.screen.width}x${window.screen.height}` : null;
+
+  pushGTMEvent('page_view', {
+    page_name: pageName,
+    page_path: pagePath,
+    page_title: typeof document !== 'undefined' ? document.title : '',
+    page_location: pageLocation,
+    page_referrer: pageReferrer,
+    screen_resolution: screenResolution
   });
 };
 
@@ -55,14 +79,31 @@ export const trackFormSubmissionStart = (formData) => {
 };
 
 /**
- * Track payment success
+ * Track form submission success
+ * @param {object} submissionData - Submission data
+ */
+export const trackFormSubmission = (submissionData) => {
+  pushGTMEvent('form_submit', {
+    form_type: 'notary_service',
+    submission_id: submissionData.submissionId,
+    options_count: submissionData.optionsCount || 0,
+    documents_count: submissionData.documentsCount || 0
+  });
+};
+
+/**
+ * Track payment success (purchase event for Google Ads conversion)
+ * This event is used by GTM to trigger Google Ads conversion tracking
  * @param {object} paymentData - Payment data
  */
 export const trackPaymentSuccess = (paymentData) => {
-  pushGTMEvent('payment_success', {
+  // Envoyer l'événement purchase avec les variables attendues par GTM
+  // Variables: value, currency, transaction_id
+  pushGTMEvent('purchase', {
     transaction_id: paymentData.transactionId,
-    value: paymentData.amount,
+    value: typeof paymentData.amount === 'number' ? paymentData.amount : parseFloat(paymentData.amount) || 0,
     currency: paymentData.currency || 'EUR',
+    // Données supplémentaires pour tracking
     submission_id: paymentData.submissionId,
     services_count: paymentData.servicesCount || 0
   });
@@ -76,28 +117,6 @@ export const trackPaymentFailure = (errorData) => {
   pushGTMEvent('payment_failed', {
     error_message: errorData.message,
     submission_id: errorData.submissionId
-  });
-};
-
-/**
- * Track page view
- * @param {string} pageName - Page name
- * @param {string} pagePath - Page path
- */
-export const trackPageView = (pageName, pagePath) => {
-  // Récupérer l'URL complète pour page_location
-  const pageLocation = typeof window !== 'undefined' ? window.location.href : pagePath;
-  const pageReferrer = typeof document !== 'undefined' ? document.referrer || '' : '';
-  const screenResolution = typeof window !== 'undefined' && window.screen ? window.screen.width : null;
-
-  pushGTMEvent('page_view', {
-    page_name: pageName,
-    page_path: pagePath,
-    page_title: typeof document !== 'undefined' ? document.title : '',
-    // Clés attendues par GTM server-side
-    page_location: pageLocation,
-    page_referrer: pageReferrer,
-    screen_resolution: screenResolution
   });
 };
 
@@ -146,4 +165,3 @@ export const trackAppointmentBooking = (appointmentDate, appointmentTime, timezo
 if (typeof window !== 'undefined') {
   initGTM();
 }
-

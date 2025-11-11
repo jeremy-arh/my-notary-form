@@ -4,7 +4,8 @@ import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Logo } from '../../shared/assets';
-import { trackPageView, trackFormStep, trackFormSubmissionStart } from '../utils/plausible';
+import { trackPageView as trackPageViewPlausible, trackFormStep as trackFormStepPlausible, trackFormSubmissionStart as trackFormSubmissionStartPlausible } from '../utils/plausible';
+import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission } from '../utils/gtm';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -70,9 +71,10 @@ const NotaryForm = () => {
       return;
     }
 
-    // Track page view
+    // Track page view (Plausible + GTM)
     const currentStepData = steps.find(s => s.path === location.pathname);
     if (currentStepData) {
+      trackPageViewPlausible(currentStepData.name, location.pathname);
       trackPageView(currentStepData.name, location.pathname);
     }
 
@@ -156,9 +158,10 @@ const NotaryForm = () => {
   const markStepCompleted = (stepId) => {
     if (!completedSteps.includes(stepId)) {
       setCompletedSteps([...completedSteps, stepId]);
-      // Track step completion in GTM
+      // Track step completion (Plausible + GTM)
       const step = steps.find(s => s.id === stepId);
       if (step) {
+        trackFormStepPlausible(stepId, step.name);
         trackFormStep(stepId, step.name);
       }
     }
@@ -202,22 +205,19 @@ const NotaryForm = () => {
     try {
       console.log('Submitting form data:', formData);
 
-      // Track form submission start in GTM
+      // Track form submission start (Plausible + GTM)
+      trackFormSubmissionStartPlausible(formData);
       trackFormSubmissionStart(formData);
 
       const result = await submitNotaryRequest(formData);
 
       if (result.success) {
-        // Track successful form submission in GTM
-        if (typeof window !== 'undefined' && window.dataLayer) {
-          window.dataLayer.push({
-            event: 'form_submit',
-            form_type: 'notary_service',
-            submission_id: result.submissionId,
-            options_count: formData.selectedOptions?.length || 0,
-            documents_count: Array.isArray(formData.documents) ? formData.documents.length : 0
-          });
-        }
+        // Track successful form submission (Plausible + GTM)
+        trackFormSubmission({
+          submissionId: result.submissionId,
+          optionsCount: formData.selectedOptions?.length || 0,
+          documentsCount: Array.isArray(formData.documents) ? formData.documents.length : 0
+        });
 
         // Clear localStorage
         localStorage.removeItem('notaryFormData');

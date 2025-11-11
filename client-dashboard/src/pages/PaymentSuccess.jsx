@@ -35,10 +35,10 @@ const PaymentSuccess = () => {
           setSubmissionId(data.submissionId);
           setInvoiceUrl(data.invoiceUrl);
           
-          // Track payment success in GTM
+          // Track payment success in GTM (purchase event for Google Ads conversion)
           trackPaymentSuccess({
             transactionId: data.transactionId || sessionId,
-            amount: data.amount || 0,
+            amount: data.amount || 0, // Montant en nombre (pas de formatage)
             currency: data.currency || 'EUR',
             submissionId: data.submissionId,
             servicesCount: 0 // You can calculate this from submission data if needed
