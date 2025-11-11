@@ -27,11 +27,19 @@ export const pushGTMEvent = (eventName, eventData = {}) => {
     return;
   }
 
-  window.dataLayer.push({
+  const eventPayload = {
     event: eventName,
     event_name: eventName, // For GTM server-side compatibility
     ...eventData
-  });
+  };
+
+  // Push to dataLayer
+  window.dataLayer.push(eventPayload);
+
+  // Debug log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📊 [GTM] Event pushed to dataLayer:', eventPayload);
+  }
 };
 
 /**
