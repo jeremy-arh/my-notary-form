@@ -25,6 +25,7 @@ export const pushGTMEvent = (eventName, eventData = {}) => {
 
   window.dataLayer.push({
     event: eventName,
+    event_name: eventName, // Pour GTM server-side
     ...eventData
   });
 };
@@ -84,10 +85,19 @@ export const trackPaymentFailure = (errorData) => {
  * @param {string} pagePath - Page path
  */
 export const trackPageView = (pageName, pagePath) => {
+  // Récupérer l'URL complète pour page_location
+  const pageLocation = typeof window !== 'undefined' ? window.location.href : pagePath;
+  const pageReferrer = typeof document !== 'undefined' ? document.referrer || '' : '';
+  const screenResolution = typeof window !== 'undefined' && window.screen ? window.screen.width : null;
+
   pushGTMEvent('page_view', {
     page_name: pageName,
     page_path: pagePath,
-    page_title: document.title
+    page_title: typeof document !== 'undefined' ? document.title : '',
+    // Clés attendues par GTM server-side
+    page_location: pageLocation,
+    page_referrer: pageReferrer,
+    screen_resolution: screenResolution
   });
 };
 

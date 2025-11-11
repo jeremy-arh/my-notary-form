@@ -1,0 +1,96 @@
+{
+  "exportFormatVersion": 2,
+  "exportTime": "2024-01-01T00:00:00.000Z",
+  "containerVersion": {
+    "path": "accounts/0/containers/0/versions/0",
+    "accountId": "0",
+    "containerId": "0",
+    "containerVersionId": "0",
+    "name": "GTM Plausible Analytics - Variables Only",
+    "description": "Variables pour Plausible Analytics - Ajoutez les déclencheurs manuellement",
+    "fingerprint": "",
+    "tag": [],
+    "variable": [
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "1",
+        "name": "Page URL",
+        "type": "r",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "requestPath",
+            "value": "{{Request Path}}"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "2",
+        "name": "Page Referrer",
+        "type": "h",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "headerName",
+            "value": "Referer"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "3",
+        "name": "User Agent",
+        "type": "h",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "headerName",
+            "value": "User-Agent"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "4",
+        "name": "Event Name",
+        "type": "v",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "dataLayerVersion",
+            "value": "2"
+          },
+          {
+            "type": "TEMPLATE",
+            "key": "name",
+            "value": "event"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "5",
+        "name": "Screen Width",
+        "type": "j",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "javascript",
+            "value": "function() {\n  return window.screen ? window.screen.width : null;\n}"
+          }
+        ]
+      }
+    ],
+    "trigger": [],
+    "builtInVariable": [],
+    "folder": [],
+    "zone": []
+  }
+}
+
