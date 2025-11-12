@@ -53,12 +53,25 @@ export const trackPageView = (pageName, pagePath) => {
   const screenResolution = typeof window !== 'undefined' && window.screen ? `${window.screen.width}x${window.screen.height}` : null;
 
   pushGTMEvent('page_view', {
-    page_name: pageName,
-    page_path: pagePath,
     page_title: typeof document !== 'undefined' ? document.title : '',
     page_location: pageLocation,
+    page_path: typeof window !== 'undefined' ? window.location.pathname : pagePath,
+    page_name: pageName,
     page_referrer: pageReferrer,
     screen_resolution: screenResolution
+  });
+};
+
+/**
+ * Track form start (when user clicks CTA to begin form)
+ * @param {object} options - Form start options
+ */
+export const trackFormStart = (options = {}) => {
+  pushGTMEvent('form_start', {
+    form_name: options.formName || 'notarization_form',
+    service_type: options.serviceType || 'Document Notarization',
+    cta_location: options.ctaLocation || 'homepage_hero',
+    cta_text: options.ctaText || 'Commencer ma notarisation'
   });
 };
 
@@ -71,6 +84,26 @@ export const trackFormStep = (stepNumber, stepName) => {
   pushGTMEvent('form_step_completed', {
     step_number: stepNumber,
     step_name: stepName
+  });
+};
+
+/**
+ * Track begin checkout (when user clicks "Confirm & Pay" button)
+ * @param {object} checkoutData - Checkout data
+ */
+export const trackBeginCheckout = (checkoutData) => {
+  const items = (checkoutData.items || []).map((item) => ({
+    item_id: item.item_id || item.service_id || item.id || '',
+    item_name: item.item_name || item.name || item.service_name || '',
+    item_category: item.item_category || 'Notarization Service',
+    price: item.price || 0,
+    quantity: item.quantity || 1
+  }));
+
+  pushGTMEvent('begin_checkout', {
+    currency: checkoutData.currency || 'EUR',
+    value: checkoutData.value || checkoutData.amount || 0,
+    items: items
   });
 };
 

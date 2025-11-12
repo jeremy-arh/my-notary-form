@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
+import { trackBeginCheckout } from '../../utils/gtm';
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,9 +20,90 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     'consultation': 'Legal Consultation'
   };
 
+  // Calculate total and build items for GTM begin_checkout
+  const calculateCheckoutData = () => {
+    const servicePrices = {
+      'real-estate': 500,
+      'will': 250,
+      'power-of-attorney': 200,
+      'marriage-contract': 400,
+      'succession': 600,
+      'authentication': 150,
+      'affidavit': 100,
+      'incorporation': 800
+    };
+
+    const optionPrices = {
+      'urgent': 50,
+      'home-visit': 100,
+      'translation': 35,
+      'consultation': 150
+    };
+
+    // Main services (exclude options)
+    const mainServices = ['real-estate', 'will', 'power-of-attorney', 'marriage-contract', 'succession', 'authentication', 'affidavit', 'incorporation'];
+    const selectedServices = (formData.selectedOptions || []).filter(id => mainServices.includes(id));
+    const selectedOptions = (formData.selectedOptions || []).filter(id => !mainServices.includes(id));
+
+    // Build items array
+    const items = [];
+    
+    // Add main services
+    selectedServices.forEach(serviceId => {
+      items.push({
+        item_id: serviceId,
+        item_name: notaryOptions[serviceId] || serviceId,
+        item_category: 'Notarization Service',
+        price: servicePrices[serviceId] || 0,
+        quantity: 1
+      });
+    });
+
+    // Add options as separate items
+    selectedOptions.forEach(optionId => {
+      items.push({
+        item_id: optionId,
+        item_name: notaryOptions[optionId] || optionId,
+        item_category: 'Additional Service',
+        price: optionPrices[optionId] || 0,
+        quantity: 1
+      });
+    });
+
+    // Calculate total (matching the calculation in Summary display)
+    let total = 75; // Base fee
+    selectedOptions.forEach(optionId => {
+      total += optionPrices[optionId] || 0;
+    });
+    if (formData.documents?.length) {
+      total += formData.documents.length * 10;
+    }
+    
+    // If no main services selected, add base service as an item
+    if (selectedServices.length === 0 && items.length === 0) {
+      items.push({
+        item_id: 'notary_standard',
+        item_name: 'Document Notarization',
+        item_category: 'Notarization Service',
+        price: 75,
+        quantity: 1
+      });
+    }
+
+    return {
+      currency: 'USD',
+      value: total,
+      items: items
+    };
+  };
+
   const onSubmit = async () => {
     setIsSubmitting(true);
     try {
+      // Track begin_checkout event before submitting
+      const checkoutData = calculateCheckoutData();
+      trackBeginCheckout(checkoutData);
+      
       await handleSubmit();
     } finally {
       setIsSubmitting(false);
