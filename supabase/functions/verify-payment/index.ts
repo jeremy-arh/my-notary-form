@@ -294,7 +294,40 @@ serve(async (req) => {
     }
 
     // Get selected services from submission data
-    const selectedServices = existingSubmission.data?.selectedServices || []
+    const selectedServiceIds = existingSubmission.data?.selectedServices || []
+    
+    // Fetch full service details from database for GTM tracking
+    let selectedServices = []
+    if (selectedServiceIds.length > 0) {
+      const { data: services, error: servicesError } = await supabase
+        .from('services')
+        .select('service_id, name, base_price')
+        .in('service_id', selectedServiceIds)
+        .eq('is_active', true)
+
+      if (!servicesError && services && services.length > 0) {
+        // Map services to include all required fields for GTM
+        selectedServices = services.map((service) => ({
+          service_id: service.service_id,
+          id: service.service_id, // Alias for compatibility
+          name: service.name,
+          service_name: service.name, // Alias for compatibility
+          price: service.base_price || 0,
+        }))
+        console.log('✅ [GTM] Fetched services for tracking:', selectedServices.length)
+      } else {
+        console.error('❌ [GTM] Error fetching services:', servicesError)
+        // Fallback: create minimal service objects from IDs
+        selectedServices = selectedServiceIds.map((serviceId) => ({
+          service_id: serviceId,
+          id: serviceId,
+          name: '',
+          service_name: '',
+          price: 0,
+        }))
+        console.warn('⚠️ [GTM] Using fallback service data')
+      }
+    }
     
     // Calculate total amount
     const totalAmount = session.amount_total ? session.amount_total / 100 : 0
