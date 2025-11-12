@@ -36,12 +36,16 @@ const PaymentSuccess = () => {
           setInvoiceUrl(data.invoiceUrl);
           
           // Track payment success in GTM (purchase event for Google Ads conversion)
+          // Structured according to GTM Enhanced Conversions requirements
           trackPaymentSuccess({
-            transactionId: data.transactionId || sessionId,
-            amount: data.amount || 0, // Montant en nombre (pas de formatage)
-            currency: data.currency || 'EUR',
             submissionId: data.submissionId,
-            servicesCount: 0 // You can calculate this from submission data if needed
+            transactionId: data.transactionId || sessionId,
+            amount: data.amount || 0,
+            currency: data.currency || 'EUR',
+            userData: data.userData || {},
+            selectedServices: data.selectedServices || [],
+            isFirstPurchase: data.isFirstPurchase !== undefined ? data.isFirstPurchase : true,
+            servicesCount: data.servicesCount || 0,
           });
         } else {
           setError('Payment verification failed');

@@ -42,18 +42,41 @@ export const pushGTMEvent = (eventName, eventData = {}) => {
 
 /**
  * Track payment success (purchase event for Google Ads conversion)
+ * Structured according to GTM Enhanced Conversions requirements
  * @param {object} paymentData - Payment data
  */
 export const trackPaymentSuccess = (paymentData) => {
-  // Envoyer l'événement purchase avec les variables attendues par GTM
-  pushGTMEvent('purchase', {
-    transaction_id: paymentData.transactionId,
-    value: paymentData.amount, // Montant en nombre (pas de formatage)
+  // Structure the event according to GTM Enhanced Conversions format
+  // Note: pushGTMEvent will add 'event' and 'event_name' automatically
+  const eventData = {
+    transaction_id: paymentData.submissionId, // Use submission_id as transaction_id
+    value: paymentData.amount || 0,
     currency: paymentData.currency || 'EUR',
-    // Données supplémentaires pour tracking
-    submission_id: paymentData.submissionId,
-    services_count: paymentData.servicesCount || 0
-  });
+    // User data for Enhanced Conversions
+    user_data: {
+      email: paymentData.userData?.email || '',
+      phone_number: paymentData.userData?.phone || '',
+      address: {
+        first_name: paymentData.userData?.firstName || '',
+        last_name: paymentData.userData?.lastName || '',
+        postal_code: paymentData.userData?.postalCode || '',
+        country: paymentData.userData?.country || '',
+      },
+    },
+    // Items array with selected services
+    items: (paymentData.selectedServices || []).map((service) => ({
+      item_id: service.service_id || service.id || '',
+      item_name: service.name || service.service_name || '',
+      price: service.price || 0,
+      quantity: 1,
+    })),
+    // Customer status
+    new_customer: paymentData.isFirstPurchase !== undefined ? paymentData.isFirstPurchase : true,
+    services_count: paymentData.servicesCount || (paymentData.selectedServices || []).length,
+  };
+
+  // Push to dataLayer (pushGTMEvent will add 'event' and 'event_name')
+  pushGTMEvent('purchase', eventData);
 };
 
 /**

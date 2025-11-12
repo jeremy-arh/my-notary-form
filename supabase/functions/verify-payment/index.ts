@@ -258,16 +258,72 @@ serve(async (req) => {
       // Don't throw - payment is successful, just log the error
     }
 
+    // Get client data for GTM tracking
+    let clientData: { email?: string; phone?: string; id?: string } | null = null
+    if (existingSubmission.client_id) {
+      const { data: client, error: clientError } = await supabase
+        .from('client')
+        .select('email, phone, id')
+        .eq('id', existingSubmission.client_id)
+        .single()
+
+      if (!clientError && client) {
+        clientData = client as { email?: string; phone?: string; id?: string }
+      }
+    }
+
+    // Check if this is the first purchase (new_customer)
+    let isFirstPurchase = true
+    if (existingSubmission.client_id) {
+      const { count } = await supabase
+        .from('submission')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', existingSubmission.client_id)
+        .eq('status', 'pending')
+
+      // If there are other pending submissions, this is not the first purchase
+      // We check for 'pending' status because completed purchases would have different statuses
+      // Actually, we should check for any completed/pending submission
+      const { count: allSubmissionsCount } = await supabase
+        .from('submission')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', existingSubmission.client_id)
+        .in('status', ['pending', 'completed', 'in_progress'])
+
+      isFirstPurchase = (allSubmissionsCount || 0) <= 1
+    }
+
+    // Get selected services from submission data
+    const selectedServices = existingSubmission.data?.selectedServices || []
+    
+    // Calculate total amount
+    const totalAmount = session.amount_total ? session.amount_total / 100 : 0
+
     return new Response(
       JSON.stringify({
         verified: true,
         submissionId: submission.id,
         accountCreated: accountCreated,
         invoiceUrl: invoiceUrl,
-        // Add payment data for GTM tracking
-        amount: session.amount_total ? session.amount_total / 100 : 0, // Convert from cents to currency unit
+        // Payment data for GTM tracking
+        // Use the actual currency from Stripe checkout session
+        amount: totalAmount,
         currency: session.currency ? session.currency.toUpperCase() : 'EUR',
         transactionId: sessionId,
+        // User data for GTM Enhanced Conversions
+        userData: {
+          email: existingSubmission.email || clientData?.email || '',
+          phone: existingSubmission.phone || clientData?.phone || '',
+          firstName: existingSubmission.first_name || '',
+          lastName: existingSubmission.last_name || '',
+          postalCode: existingSubmission.postal_code || '',
+          country: existingSubmission.country || '',
+        },
+        // Services data
+        selectedServices: selectedServices,
+        // Customer status
+        isFirstPurchase: isFirstPurchase,
+        servicesCount: selectedServices.length,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
