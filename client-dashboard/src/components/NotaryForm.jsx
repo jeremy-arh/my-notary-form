@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
+import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -115,12 +116,40 @@ const NotaryForm = () => {
 
   const currentStep = getCurrentStepFromPath();
 
-  // Validate step access
+  // Map step names to GTM format
+  const getStepNameForGTM = (stepName) => {
+    const stepNameMap = {
+      'Choose Services': 'service_selection',
+      'Upload Documents': 'document_upload',
+      'Book an appointment': 'appointment_booking',
+      'Your personal informations': 'personal_info',
+      'Summary': 'review_summary'
+    };
+    return stepNameMap[stepName] || stepName.toLowerCase().replace(/\s+/g, '_');
+  };
+
+  // Validate step access and track page views
   useEffect(() => {
     // Redirect to /form/choose-services if at /form root
     if (location.pathname === '/form' || location.pathname === '/form/') {
       navigate('/form/choose-services', { replace: true });
       return;
+    }
+
+    // Track page view (GTM)
+    const currentStepData = steps.find(s => s.path === location.pathname);
+    if (currentStepData) {
+      trackPageView(currentStepData.name, location.pathname);
+      
+      // Track form_start when user arrives on first step (Choose Services)
+      if (currentStepData.id === 1 && completedSteps.length === 0) {
+        trackFormStart({
+          formName: 'notarization_form',
+          serviceType: 'Document Notarization',
+          ctaLocation: 'homepage_hero',
+          ctaText: 'Commencer ma notarisation'
+        });
+      }
     }
 
     // Check if user is trying to access a step they haven't completed yet
@@ -204,6 +233,11 @@ const NotaryForm = () => {
   const markStepCompleted = (stepId) => {
     if (!completedSteps.includes(stepId)) {
       setCompletedSteps([...completedSteps, stepId]);
+      // Track step completion (GTM)
+      const step = steps.find(s => s.id === stepId);
+      if (step) {
+        trackFormStep(stepId, getStepNameForGTM(step.name));
+      }
     }
   };
 
@@ -245,6 +279,12 @@ const NotaryForm = () => {
     setIsSubmitting(true);
     try {
       console.log('Creating payment session for form data:', formData);
+
+      // Track form submission start (GTM)
+      trackFormSubmissionStart({
+        selectedOptions: formData.selectedServices || [],
+        documents: formData.serviceDocuments ? Object.values(formData.serviceDocuments).flat() : []
+      });
 
       // Upload documents to Supabase Storage, organized by service
       const uploadedServiceDocuments = {};

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import { trackBeginCheckout } from '../../utils/gtm';
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,9 +66,82 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     }
   };
 
+  // Calculate checkout data for GTM begin_checkout event
+  const calculateCheckoutData = () => {
+    const items = [];
+    let total = 0;
+
+    if (formData.selectedServices && formData.selectedServices.length > 0) {
+      formData.selectedServices.forEach(serviceId => {
+        const service = servicesMap[serviceId];
+        const documents = formData.serviceDocuments?.[serviceId] || [];
+        
+        if (service && documents.length > 0) {
+          // Add service as item
+          items.push({
+            item_id: service.service_id || serviceId,
+            item_name: service.name || serviceId,
+            item_category: 'Notarization Service',
+            price: service.base_price || 0,
+            quantity: documents.length
+          });
+
+          // Add options as separate items
+          documents.forEach(doc => {
+            if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+              doc.selectedOptions.forEach(optionId => {
+                const option = optionsMap[optionId];
+                if (option) {
+                  items.push({
+                    item_id: option.option_id || optionId,
+                    item_name: option.name || optionId,
+                    item_category: 'Additional Service',
+                    price: option.additional_price || 0,
+                    quantity: 1
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // Calculate total
+      formData.selectedServices.forEach(serviceId => {
+        const service = servicesMap[serviceId];
+        const documents = formData.serviceDocuments?.[serviceId] || [];
+        if (service) {
+          total += documents.length * (service.base_price || 0);
+          documents.forEach(doc => {
+            if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+              doc.selectedOptions.forEach(optionId => {
+                const option = optionsMap[optionId];
+                if (option) {
+                  total += option.additional_price || 0;
+                }
+              });
+            }
+          });
+        }
+      });
+    }
+
+    return {
+      currency: 'USD',
+      value: total,
+      items: items
+    };
+  };
+
   const onSubmit = async () => {
     setIsSubmitting(true);
     try {
+      // Track begin_checkout event before submitting
+      if (!loading && services.length > 0) {
+        const checkoutData = calculateCheckoutData();
+        trackBeginCheckout(checkoutData);
+      }
+      
       await handleSubmit();
     } finally {
       setIsSubmitting(false);
