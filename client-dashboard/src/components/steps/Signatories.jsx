@@ -322,7 +322,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Content Area - Scrollable */}
-      <div className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-x-hidden" style={{ minHeight: 0 }}>
+      <div className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
         {documents.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-600">No documents uploaded. Please go back to the previous step.</p>

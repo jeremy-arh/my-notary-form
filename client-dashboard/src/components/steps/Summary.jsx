@@ -171,7 +171,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6" style={{ minHeight: 0 }}>
         <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-full">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">

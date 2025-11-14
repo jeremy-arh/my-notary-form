@@ -671,7 +671,7 @@ const NotaryForm = () => {
       {/* Main Content - Full width with left margin for sidebar */}
       <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5 pt-14 sm:pt-16 lg:pt-5 pb-28 sm:pb-28 lg:pb-5">
         {/* Form Content - 95vh centered with full width and side margins */}
-        <div className="w-full max-w-full h-[calc(100vh-6.5rem)] sm:h-[calc(100vh-7rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-y-auto overflow-x-hidden relative mx-0 lg:mx-auto">
+        <div className="w-full max-w-full h-[calc(100vh-6.5rem)] sm:h-[calc(100vh-7rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative mx-0 lg:mx-auto">
           <Routes>
             <Route
               path="choose-services"
