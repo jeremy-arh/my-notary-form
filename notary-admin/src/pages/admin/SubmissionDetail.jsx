@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import PhoneInputWrapper, { isValidPhoneNumber } from '../../components/PhoneInputWrapper';
 import AdminLayout from '../../components/admin/AdminLayout';
 import Chat from '../../components/admin/Chat';
+import SignatoriesList from '../../components/SignatoriesList';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirm } from '../../hooks/useConfirm';
 
 const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const { confirm, ConfirmComponent, setLoading: setConfirmLoading, closeConfirm } = useConfirm();
   const [searchParams] = useSearchParams();
   const [submission, setSubmission] = useState(null);
   const [adminInfo, setAdminInfo] = useState(null);
@@ -22,6 +28,9 @@ const SubmissionDetail = () => {
   const [isEditingSubmission, setIsEditingSubmission] = useState(false);
   const [notarizedFiles, setNotarizedFiles] = useState([]);
   const [fileComments, setFileComments] = useState({});
+  const [signatories, setSignatories] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [newComment, setNewComment] = useState({});
   const [editFormData, setEditFormData] = useState({
     appointment_date: '',
@@ -38,11 +47,16 @@ const SubmissionDetail = () => {
     notes: '',
     selectedServices: [],
     serviceDocuments: {},
+    signatoriesByDocument: {},
     notary_cost: 0
   });
   const [allServices, setAllServices] = useState([]);
   const [allOptions, setAllOptions] = useState([]);
   const [calculatedPrice, setCalculatedPrice] = useState(0);
+  const [phoneErrors, setPhoneErrors] = useState({}); // Store phone errors by docKey_signatoryIndex
+  const [emailErrors, setEmailErrors] = useState({}); // Store email errors by docKey_signatoryIndex
+  const [isFormValid, setIsFormValid] = useState(false); // Track form validation state
+  const [isSaving, setIsSaving] = useState(false); // Track saving state
 
   useEffect(() => {
     fetchAdminInfo();
@@ -55,13 +69,209 @@ const SubmissionDetail = () => {
     }
   }, [id, adminInfo]);
 
+  // Recalculate price when editFormData changes
+  useEffect(() => {
+    if (isEditingSubmission && Object.keys(servicesMap).length > 0 && Object.keys(optionsMap).length > 0) {
+      const newPrice = calculatePriceHelper(
+        editFormData.selectedServices,
+        editFormData.serviceDocuments,
+        servicesMap,
+        optionsMap,
+        editFormData.signatoriesByDocument
+      );
+      setCalculatedPrice(newPrice);
+    }
+  }, [editFormData, servicesMap, optionsMap, isEditingSubmission]);
+
+  // Auto-switch away from edit tab if submission is cancelled
+  useEffect(() => {
+    if (submission?.status === 'cancelled' && (activeTab === 'edit' || isEditingSubmission)) {
+      setActiveTab('details');
+      setIsEditingSubmission(false);
+    }
+  }, [submission?.status, activeTab, isEditingSubmission]);
+
+  // Validate form whenever editFormData changes
+  useEffect(() => {
+    if (isEditingSubmission && Object.keys(servicesMap).length > 0) {
+      // Validate form inline to avoid dependency issues
+      const errors = [];
+      
+      // Validate basic fields
+      if (!editFormData.first_name?.trim()) errors.push('First name');
+      if (!editFormData.last_name?.trim()) errors.push('Last name');
+      if (!editFormData.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email?.trim())) errors.push('Email');
+      if (!editFormData.phone?.trim() || !isValidPhoneNumber(editFormData.phone)) errors.push('Phone');
+      if (!editFormData.address?.trim()) errors.push('Address');
+      if (!editFormData.city?.trim()) errors.push('City');
+      if (!editFormData.postal_code?.trim()) errors.push('Postal code');
+      if (!editFormData.country?.trim()) errors.push('Country');
+      
+      // Validate services
+      if (!editFormData.selectedServices || editFormData.selectedServices.length === 0) {
+        errors.push('Services');
+      } else {
+        for (const serviceId of editFormData.selectedServices) {
+          const documents = editFormData.serviceDocuments[serviceId] || [];
+          if (documents.length === 0) {
+            errors.push('Documents');
+            break;
+          }
+        }
+      }
+      
+      // Validate signatories
+      if (editFormData.selectedServices && editFormData.selectedServices.length > 0) {
+        for (const serviceId of editFormData.selectedServices) {
+          const documents = editFormData.serviceDocuments[serviceId] || [];
+          for (let docIndex = 0; docIndex < documents.length; docIndex++) {
+            const docKey = `${serviceId}_${docIndex}`;
+            const signatories = editFormData.signatoriesByDocument[docKey];
+            if (!signatories || !Array.isArray(signatories) || signatories.length === 0) {
+              errors.push('Signatories');
+              break;
+            } else {
+              for (const signatory of signatories) {
+                if (!signatory.firstName?.trim() || !signatory.lastName?.trim() || 
+                    !signatory.birthDate?.trim() || !signatory.birthCity?.trim() || 
+                    !signatory.postalAddress?.trim() || !signatory.email?.trim() || 
+                    !signatory.phone?.trim()) {
+                  errors.push('Signatory fields');
+                  break;
+                }
+                if (signatory.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email.trim())) {
+                  errors.push('Signatory email');
+                  break;
+                }
+                if (signatory.phone && !isValidPhoneNumber(signatory.phone)) {
+                  errors.push('Signatory phone');
+                  break;
+                }
+              }
+              if (errors.length > 0) break;
+            }
+          }
+          if (errors.length > 0) break;
+        }
+      }
+      
+      setIsFormValid(errors.length === 0);
+    } else {
+      setIsFormValid(false);
+    }
+  }, [editFormData, servicesMap, isEditingSubmission, phoneErrors, emailErrors]);
+
   // Handle tab parameter from URL
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'notarized') {
       setActiveTab('notarized');
+    } else if (tabParam === 'transactions') {
+      setActiveTab('transactions');
     }
   }, [searchParams]);
+
+  // Fetch transactions when transactions tab is active
+  useEffect(() => {
+    if (activeTab === 'transactions' && id) {
+      fetchTransactions();
+    }
+  }, [activeTab, id]);
+
+  const fetchTransactions = async () => {
+    if (!id) return;
+    
+    setTransactionsLoading(true);
+    try {
+      // Récupérer la soumission avec ses données de paiement depuis Supabase
+      const { data: submissionData, error } = await supabase
+        .from('submission')
+        .select('id, email, first_name, last_name, created_at, data')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
+      const allTransactions = [];
+      const paymentData = submissionData?.data?.payment;
+
+      if (paymentData) {
+        // Transaction de paiement initiale
+        if (paymentData.payment_intent_id && paymentData.amount_paid) {
+          const paymentDate = paymentData.paid_at 
+            ? new Date(paymentData.paid_at).getTime() / 1000 
+            : submissionData.created_at 
+              ? new Date(submissionData.created_at).getTime() / 1000 
+              : Date.now() / 1000;
+
+          allTransactions.push({
+            id: paymentData.payment_intent_id,
+            type: 'payment',
+            amount: paymentData.amount_paid / 100,
+            currency: paymentData.currency || 'usd',
+            status: paymentData.payment_status === 'paid' ? 'succeeded' : paymentData.payment_status || 'pending',
+            created: paymentDate,
+            stripeUrl: paymentData.payment_intent_id 
+              ? `https://dashboard.stripe.com/test/payments/${paymentData.payment_intent_id}` 
+              : null
+          });
+
+          // Paiements supplémentaires
+          if (paymentData.additional_payments && Array.isArray(paymentData.additional_payments)) {
+            for (const additionalPayment of paymentData.additional_payments) {
+              const paymentDate = additionalPayment.created_at 
+                ? new Date(additionalPayment.created_at).getTime() / 1000 
+                : Date.now() / 1000;
+
+              allTransactions.push({
+                id: additionalPayment.payment_intent_id,
+                type: 'payment',
+                amount: additionalPayment.amount / 100,
+                currency: additionalPayment.currency || paymentData.currency || 'usd',
+                status: additionalPayment.status || 'succeeded',
+                created: paymentDate,
+                stripeUrl: additionalPayment.payment_intent_id 
+                  ? `https://dashboard.stripe.com/test/payments/${additionalPayment.payment_intent_id}` 
+                  : null
+              });
+            }
+          }
+
+          // Remboursements
+          if (paymentData.refunds && Array.isArray(paymentData.refunds)) {
+            for (const refund of paymentData.refunds) {
+              const refundDate = refund.created_at 
+                ? new Date(refund.created_at).getTime() / 1000 
+                : Date.now() / 1000;
+
+              allTransactions.push({
+                id: refund.id || `refund_${paymentData.payment_intent_id}_${refundDate}`,
+                type: 'refund',
+                amount: refund.amount / 100,
+                currency: refund.currency || paymentData.currency || 'usd',
+                status: refund.status || 'succeeded',
+                created: refundDate,
+                reason: refund.reason || null,
+                stripeUrl: refund.id 
+                  ? `https://dashboard.stripe.com/test/refunds/${refund.id}` 
+                  : null
+              });
+            }
+          }
+        }
+      }
+
+      // Trier par date (plus récent en premier)
+      allTransactions.sort((a, b) => b.created - a.created);
+
+      setTransactions(allTransactions);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      setTransactions([]);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
 
   const fetchAdminInfo = async () => {
     try {
@@ -162,6 +372,50 @@ const SubmissionDetail = () => {
       setSelectedNotaryId(submissionData.assigned_notary_id || '');
 
       // Initialize edit form data
+      // Get signatories from database or submission.data
+      let signatoriesData = {};
+      
+      // Fetch signatories first
+      const { data: signatoriesFromDB, error: signatoriesError } = await supabase
+        .from('signatories')
+        .select('*')
+        .eq('submission_id', id)
+        .order('created_at', { ascending: true });
+
+      if (!signatoriesError && signatoriesFromDB && signatoriesFromDB.length > 0) {
+        // Convert database signatories to editFormData format
+        signatoriesFromDB.forEach(sig => {
+          if (!signatoriesData[sig.document_key]) {
+            signatoriesData[sig.document_key] = [];
+          }
+          signatoriesData[sig.document_key].push({
+            firstName: sig.first_name,
+            lastName: sig.last_name,
+            birthDate: sig.birth_date,
+            birthCity: sig.birth_city,
+            postalAddress: sig.postal_address,
+            email: sig.email || '',
+            phone: sig.phone || ''
+          });
+        });
+      } else {
+        // Use signatories from submission.data
+        const signatoriesFromData = submissionData.data?.signatoriesByDocument || {};
+        Object.entries(signatoriesFromData).forEach(([docKey, sigs]) => {
+          if (sigs && sigs.length > 0) {
+            signatoriesData[docKey] = sigs.map(sig => ({
+              firstName: sig.firstName || sig.first_name,
+              lastName: sig.lastName || sig.last_name,
+              birthDate: sig.birthDate || sig.birth_date,
+              birthCity: sig.birthCity || sig.birth_city,
+              postalAddress: sig.postalAddress || sig.postal_address,
+              email: sig.email || '',
+              phone: sig.phone || ''
+            }));
+          }
+        });
+      }
+
       setEditFormData({
         appointment_date: submissionData.appointment_date || '',
         appointment_time: submissionData.appointment_time || '',
@@ -177,6 +431,7 @@ const SubmissionDetail = () => {
         notes: submissionData.notes || '',
         selectedServices: submissionData.data?.selectedServices || [],
         serviceDocuments: submissionData.data?.serviceDocuments || {},
+        signatoriesByDocument: signatoriesData,
         notary_cost: submissionData.notary_cost || 0
       });
 
@@ -257,12 +512,23 @@ const SubmissionDetail = () => {
       
       setAllServices(allServicesData || []);
 
-      // Calculate initial price
-      const initialPrice = calculatePriceHelper(submissionData.data?.selectedServices || [], submissionData.data?.serviceDocuments || {}, sMap, oMap);
+      // Set signatories state for display (already fetched above)
+      if (signatoriesFromDB && signatoriesFromDB.length > 0) {
+        setSignatories(signatoriesFromDB);
+      }
+
+      // Calculate initial price (including signatories)
+      const initialPrice = calculatePriceHelper(
+        submissionData.data?.selectedServices || [], 
+        submissionData.data?.serviceDocuments || {}, 
+        sMap, 
+        oMap,
+        signatoriesData
+      );
       setCalculatedPrice(initialPrice);
     } catch (error) {
       console.error('Error fetching submission detail:', error);
-      alert('Error loading submission details');
+      toast.error('Error loading submission details');
       navigate('/submissions');
     } finally {
       setLoading(false);
@@ -283,13 +549,93 @@ const SubmissionDetail = () => {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading document:', error);
-      alert('Failed to download document');
+      toast.error('Failed to download document');
     }
   };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  // Convert time from Florida (Eastern Time) to client timezone for display
+  const convertTimeToClientTimezone = (time, date, clientTimezone) => {
+    if (!time || !date || !clientTimezone) return time;
+    
+    try {
+      const floridaTimezone = 'America/New_York';
+      
+      // Convert UTC offset to IANA timezone for client
+      let clientTz = clientTimezone;
+      if (clientTimezone.startsWith('UTC')) {
+        const offsetMatch = clientTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+        if (offsetMatch) {
+          const sign = offsetMatch[1] === '+' ? 1 : -1;
+          const hours = parseInt(offsetMatch[2]);
+          const minutes = parseInt(offsetMatch[3] || '0');
+          const offsetMinutes = sign * (hours * 60 + minutes);
+          
+          // Map common UTC offsets to IANA timezones
+          if (offsetMinutes === -300) clientTz = 'America/New_York'; // UTC-5
+          else if (offsetMinutes === -240) clientTz = 'America/New_York'; // UTC-4 (EDT)
+          else if (offsetMinutes === 60) clientTz = 'Europe/Paris'; // UTC+1
+          else if (offsetMinutes === 0) clientTz = 'Europe/London'; // UTC+0
+          else if (offsetMinutes === 120) clientTz = 'Europe/Berlin'; // UTC+2
+          else clientTz = 'UTC';
+        }
+      }
+      
+      // Parse the time (HH:MM format)
+      const [hours, minutes] = time.split(':').map(Number);
+      
+      // Create a date string in ISO format
+      const dateTimeString = `${date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      
+      // Create a formatter for Florida timezone to get the UTC timestamp
+      // We'll use a trick: create a date and format it in Florida timezone to see what UTC time it represents
+      const tempDate = new Date(dateTimeString);
+      
+      // Format in Florida timezone to see what time it represents there
+      const floridaFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: floridaTimezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const floridaParts = floridaFormatter.formatToParts(tempDate);
+      const floridaHour = parseInt(floridaParts.find(p => p.type === 'hour').value);
+      const floridaMinute = parseInt(floridaParts.find(p => p.type === 'minute').value);
+      
+      // Calculate the difference and adjust
+      const desiredMinutes = hours * 60 + minutes;
+      const actualMinutes = floridaHour * 60 + floridaMinute;
+      const diffMinutes = desiredMinutes - actualMinutes;
+      
+      // Adjust the UTC timestamp
+      const utcTimestamp = tempDate.getTime() + diffMinutes * 60 * 1000;
+      const adjustedDate = new Date(utcTimestamp);
+      
+      // Format in client's timezone
+      const clientFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: clientTz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const clientParts = clientFormatter.formatToParts(adjustedDate);
+      const clientHour = clientParts.find(p => p.type === 'hour').value;
+      const clientMinute = clientParts.find(p => p.type === 'minute').value;
+      
+      return `${clientHour.padStart(2, '0')}:${clientMinute.padStart(2, '0')}`;
+    } catch (error) {
+      console.error('Error converting time:', error);
+      return time;
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -348,10 +694,10 @@ const SubmissionDetail = () => {
       // The trigger will handle it, but we can add additional notifications here if needed
       
       setSubmission({ ...submission, status: newStatus });
-      alert('Status updated successfully!');
+      toast.success('Status updated successfully!');
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status');
+      toast.error('Failed to update status');
     }
   };
 
@@ -411,10 +757,10 @@ const SubmissionDetail = () => {
 
       // Refresh submission data
       await fetchSubmissionDetail();
-      alert('Notary assigned successfully!');
+      toast.success('Notary assigned successfully!');
     } catch (error) {
       console.error('Error assigning notary:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
@@ -443,15 +789,15 @@ const SubmissionDetail = () => {
 
       // Refresh submission data
       await fetchSubmissionDetail();
-      alert('Notary removed successfully!');
+      toast.success('Notary removed successfully!');
     } catch (error) {
       console.error('Error removing notary:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
   // Helper function to calculate price (can be called before state is set)
-  const calculatePriceHelper = (selectedServices, serviceDocuments, servicesMap, optionsMap) => {
+  const calculatePriceHelper = (selectedServices, serviceDocuments, servicesMap, optionsMap, signatoriesByDocument = {}) => {
     let total = 0;
     
     selectedServices.forEach(serviceId => {
@@ -471,6 +817,16 @@ const SubmissionDetail = () => {
                 total += parseFloat(option.additional_price) || 0;
               }
             });
+          }
+        });
+        
+        // Add signatories cost ($10 per additional signatory)
+        documents.forEach((doc, docIndex) => {
+          const docKey = `${serviceId}_${docIndex}`;
+          const docSignatories = signatoriesByDocument[docKey];
+          if (Array.isArray(docSignatories) && docSignatories.length > 1) {
+            // First signatory is included, count additional ones
+            total += (docSignatories.length - 1) * 10;
           }
         });
       }
@@ -479,32 +835,9 @@ const SubmissionDetail = () => {
     return total;
   };
 
-  // Calculate price based on services and options
-  const calculatePrice = (selectedServices, serviceDocuments, servicesMap, optionsMap) => {
-    let total = 0;
-    
-    selectedServices.forEach(serviceId => {
-      const service = servicesMap[serviceId];
-      const documents = serviceDocuments[serviceId] || [];
-      
-      if (service) {
-        // Add service cost (base_price × number of documents)
-        total += documents.length * (parseFloat(service.base_price) || 0);
-        
-        // Add options cost
-        documents.forEach(doc => {
-          if (doc.selectedOptions && doc.selectedOptions.length > 0) {
-            doc.selectedOptions.forEach(optionId => {
-              const option = optionsMap[optionId];
-              if (option) {
-                total += parseFloat(option.additional_price) || 0;
-              }
-            });
-          }
-        });
-      }
-    });
-    
+  // Calculate price based on services, options, and signatories
+  const calculatePrice = (selectedServices, serviceDocuments, servicesMap, optionsMap, signatoriesByDocument = {}) => {
+    const total = calculatePriceHelper(selectedServices, serviceDocuments, servicesMap, optionsMap, signatoriesByDocument);
     setCalculatedPrice(total);
     return total;
   };
@@ -541,12 +874,20 @@ const SubmissionDetail = () => {
       }));
     } catch (error) {
       console.error('Error adding comment:', error);
-      alert('Failed to add comment. Please try again.');
+      toast.error('Failed to add comment. Please try again.');
     }
   };
 
   const handleDeleteFile = async (fileId, storagePath) => {
-    if (!window.confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+    const confirmed = await confirm({
+      title: 'Delete File',
+      message: 'Are you sure you want to delete this file? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -586,10 +927,10 @@ const SubmissionDetail = () => {
         return newComment;
       });
 
-      alert('File deleted successfully');
+      toast.success('File deleted successfully');
     } catch (error) {
       console.error('Error deleting file:', error);
-      alert(`Failed to delete file: ${error.message}`);
+      toast.error(`Failed to delete file: ${error.message}`);
     }
   };
 
@@ -676,22 +1017,139 @@ const SubmissionDetail = () => {
 
       setIsEditingAppointment(false);
       await fetchSubmissionDetail();
-      alert('Appointment updated successfully!');
+      toast.success('Appointment updated successfully!');
     } catch (error) {
       console.error('Error updating appointment:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
+  };
+
+  // Validate form data before submission
+  const validateEditForm = () => {
+    const errors = [];
+
+    // Validate basic fields
+    if (!editFormData.first_name?.trim()) {
+      errors.push('First name is required');
+    }
+    if (!editFormData.last_name?.trim()) {
+      errors.push('Last name is required');
+    }
+    if (!editFormData.email?.trim()) {
+      errors.push('Email is required');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email.trim())) {
+      errors.push('Invalid email format');
+    }
+    if (!editFormData.phone?.trim()) {
+      errors.push('Phone number is required');
+    } else if (!isValidPhoneNumber(editFormData.phone)) {
+      errors.push('Invalid phone number format');
+    }
+    if (!editFormData.address?.trim()) {
+      errors.push('Address is required');
+    }
+    if (!editFormData.city?.trim()) {
+      errors.push('City is required');
+    }
+    if (!editFormData.postal_code?.trim()) {
+      errors.push('Postal code is required');
+    }
+    if (!editFormData.country?.trim()) {
+      errors.push('Country is required');
+    }
+
+    // Validate services and documents
+    if (!editFormData.selectedServices || editFormData.selectedServices.length === 0) {
+      errors.push('At least one service must be selected');
+    } else {
+      // Check that each selected service has at least one document
+      for (const serviceId of editFormData.selectedServices) {
+        const documents = editFormData.serviceDocuments[serviceId] || [];
+        if (documents.length === 0) {
+          errors.push(`Service "${servicesMap[serviceId]?.name || serviceId}" must have at least one document`);
+        }
+      }
+    }
+
+    // Validate signatories
+    if (!editFormData.signatoriesByDocument || Object.keys(editFormData.signatoriesByDocument).length === 0) {
+      // Check if there are documents that need signatories
+      let hasDocuments = false;
+      for (const serviceId of editFormData.selectedServices || []) {
+        const documents = editFormData.serviceDocuments[serviceId] || [];
+        if (documents.length > 0) {
+          hasDocuments = true;
+          break;
+        }
+      }
+      if (hasDocuments) {
+        errors.push('At least one signatory is required for documents');
+      }
+    } else {
+      // Check that all documents have signatories
+      for (const serviceId of editFormData.selectedServices || []) {
+        const documents = editFormData.serviceDocuments[serviceId] || [];
+        for (let docIndex = 0; docIndex < documents.length; docIndex++) {
+          const docKey = `${serviceId}_${docIndex}`;
+          const signatories = editFormData.signatoriesByDocument[docKey];
+          if (!signatories || !Array.isArray(signatories) || signatories.length === 0) {
+            const docName = documents[docIndex]?.name || `Document ${docIndex + 1}`;
+            errors.push(`Document "${docName}" must have at least one signatory`);
+          } else {
+            // Validate each signatory
+            signatories.forEach((signatory, sigIndex) => {
+              if (!signatory.firstName?.trim()) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" is missing first name`);
+              }
+              if (!signatory.lastName?.trim()) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" is missing last name`);
+              }
+              if (!signatory.birthDate?.trim()) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" is missing date of birth`);
+              }
+              if (!signatory.birthCity?.trim()) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" is missing birth city`);
+              }
+              if (!signatory.postalAddress?.trim()) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" is missing postal address`);
+              }
+              if (!signatory.email?.trim()) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" is missing email`);
+              } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email.trim())) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" has invalid email format`);
+              }
+              if (!signatory.phone?.trim()) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" is missing phone number`);
+              } else if (!isValidPhoneNumber(signatory.phone)) {
+                errors.push(`Signatory ${sigIndex + 1} in document "${documents[docIndex]?.name || docKey}" has invalid phone number format`);
+              }
+            });
+          }
+        }
+      }
+    }
+
+    return errors;
   };
 
   // Update full submission
   const handleUpdateSubmission = async () => {
+    // Validate form before submission
+    const validationErrors = validateEditForm();
+    if (validationErrors.length > 0) {
+      toast.error(`Please fix the following errors:\n${validationErrors.join('\n')}`);
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      // Recalculate price
+      // Recalculate price (including signatories)
       const newPrice = calculatePrice(
         editFormData.selectedServices,
         editFormData.serviceDocuments,
         servicesMap,
-        optionsMap
+        optionsMap,
+        editFormData.signatoriesByDocument
       );
 
       // Update submission
@@ -715,7 +1173,8 @@ const SubmissionDetail = () => {
           data: {
             ...submission.data,
             selectedServices: editFormData.selectedServices,
-            serviceDocuments: editFormData.serviceDocuments
+            serviceDocuments: editFormData.serviceDocuments,
+            signatoriesByDocument: editFormData.signatoriesByDocument
           },
           updated_at: new Date().toISOString()
         })
@@ -772,18 +1231,213 @@ const SubmissionDetail = () => {
         );
       }
 
+      // Update signatories in database if payment was completed
+      const paymentInfo = submission.data?.payment;
+      if (paymentInfo && paymentInfo.payment_status === 'paid') {
+        // Delete existing signatories
+        await supabase
+          .from('signatories')
+          .delete()
+          .eq('submission_id', id);
+
+        // Insert updated signatories
+        const signatoryEntries = [];
+        Object.entries(editFormData.signatoriesByDocument).forEach(([docKey, signatories]) => {
+          if (Array.isArray(signatories)) {
+            signatories.forEach((signatory) => {
+              if (signatory.firstName && signatory.lastName) {
+                signatoryEntries.push({
+                  submission_id: id,
+                  document_key: docKey,
+                  first_name: signatory.firstName,
+                  last_name: signatory.lastName,
+                  birth_date: signatory.birthDate,
+                  birth_city: signatory.birthCity,
+                  postal_address: signatory.postalAddress,
+                  email: signatory.email || null,
+                  phone: signatory.phone || null,
+                });
+              }
+            });
+          }
+        });
+
+        if (signatoryEntries.length > 0) {
+          await supabase
+            .from('signatories')
+            .insert(signatoryEntries);
+        }
+
+        // ALWAYS update Stripe payment when submission is updated
+        if (paymentInfo && paymentInfo.payment_status === 'paid') {
+          try {
+            const oldPrice = parseFloat(submission.total_price) || 0;
+            
+            const requestBody = {
+              submissionId: id,
+              newAmount: newPrice,
+              oldAmount: oldPrice
+              // NO updateMetadataOnly - always calculate and charge/refund if needed
+            };
+            
+            console.log('🔄 [UPDATE-SUBMISSION] Calling update-payment to update PRICE in Stripe');
+            console.log('💰 [UPDATE-SUBMISSION] Old price:', oldPrice, 'New price:', newPrice);
+            
+            let paymentUpdateResult = null;
+            let paymentUpdateError = null;
+            
+            try {
+              const { data, error } = await supabase.functions.invoke('update-payment', {
+                body: requestBody
+              });
+              
+              paymentUpdateResult = data;
+              paymentUpdateError = error;
+              
+              // If there's an error, try to parse the error message from the response
+              if (paymentUpdateError) {
+                console.error('❌ [UPDATE-SUBMISSION] Error updating Stripe payment:', paymentUpdateError);
+                console.error('❌ [UPDATE-SUBMISSION] Full error object:', paymentUpdateError);
+                console.error('❌ [UPDATE-SUBMISSION] Error keys:', Object.keys(paymentUpdateError));
+                
+                // Try multiple ways to get the error message
+                let errorMessage = 'Unknown error';
+                
+                // Method 1: Check if error has message property
+                if (paymentUpdateError.message && paymentUpdateError.message !== 'Edge Function returned a non-2xx status code') {
+                  errorMessage = paymentUpdateError.message;
+                }
+                
+                // Method 2: Check if data contains error info (sometimes error is in data when status is 400)
+                if (paymentUpdateResult && paymentUpdateResult.error) {
+                  errorMessage = typeof paymentUpdateResult.error === 'string' 
+                    ? paymentUpdateResult.error 
+                    : paymentUpdateResult.error?.error || paymentUpdateResult.error?.message || errorMessage;
+                }
+                
+                // Method 3: Try to get from context if available
+                if (errorMessage === 'Unknown error' && paymentUpdateError.context) {
+                  console.log('❌ [UPDATE-SUBMISSION] Error context:', paymentUpdateError.context);
+                  // Context might contain response body
+                  if (paymentUpdateError.context.response) {
+                    try {
+                      const errorBody = typeof paymentUpdateError.context.response === 'string' 
+                        ? JSON.parse(paymentUpdateError.context.response)
+                        : paymentUpdateError.context.response;
+                      
+                      if (errorBody?.error) {
+                        errorMessage = typeof errorBody.error === 'string' 
+                          ? errorBody.error 
+                          : errorBody.error?.error || errorBody.error?.message || errorMessage;
+                      } else if (errorBody?.message) {
+                        errorMessage = errorBody.message;
+                      }
+                    } catch (e) {
+                      console.warn('Could not parse error response from context:', e);
+                    }
+                  }
+                }
+                
+                console.error('❌ [UPDATE-SUBMISSION] Final error message:', errorMessage);
+                toast.warning(`Submission updated but Stripe sync failed: ${errorMessage}`);
+              }
+            } catch (invokeError) {
+              console.error('❌ [UPDATE-SUBMISSION] Exception calling update-payment:', invokeError);
+              paymentUpdateError = invokeError;
+              toast.warning(`Submission updated but Stripe sync failed: ${invokeError.message || 'Unknown error'}`);
+            }
+
+            if (!paymentUpdateError && paymentUpdateResult?.success) {
+              // Only open checkout session if explicitly required AND checkout_url is provided
+              if (paymentUpdateResult?.requires_customer_action === true && paymentUpdateResult?.checkout_url) {
+                // If checkout session was created, show message and open link
+                console.log('🔄 [UPDATE-SUBMISSION] Checkout session required, opening:', paymentUpdateResult.checkout_url);
+                toast.warning(`${paymentUpdateResult.message} Opening checkout session...`, 10000);
+                // Open checkout session in new tab after a short delay
+                setTimeout(() => {
+                  window.open(paymentUpdateResult.checkout_url, '_blank');
+                }, 1000);
+              } else {
+                // Payment succeeded automatically - no checkout needed
+                console.log('✅ [UPDATE-SUBMISSION] Payment processed automatically, no checkout needed');
+                toast.success(`Submission updated! ${paymentUpdateResult.message || 'Stripe payment updated successfully.'}`);
+              }
+            } else if (!paymentUpdateError && paymentUpdateResult && !paymentUpdateResult.success) {
+              // Response received but indicates failure
+              const errorMsg = paymentUpdateResult.error || paymentUpdateResult.message || 'Stripe sync failed';
+              toast.warning(`Submission updated but Stripe sync failed: ${errorMsg}`);
+            }
+          } catch (paymentError) {
+            console.error('Error calling update-payment function:', paymentError);
+            toast.warning('Submission updated but Stripe sync failed. Please update manually in Stripe.');
+          }
+        }
+      }
+
       setIsEditingSubmission(false);
       await fetchSubmissionDetail();
-      alert('Submission updated successfully! New total price: $' + newPrice.toFixed(2));
+      
+      // Send email to client about submission update
+      try {
+        const clientEmail = editFormData.email || submission.email;
+        const clientName = `${editFormData.first_name || ''} ${editFormData.last_name || ''}`.trim() || 'Client';
+        const submissionNumber = id.substring(0, 8);
+        
+        // Get services names for email
+        const servicesNames = (editFormData.selectedServices || [])
+          .map(serviceId => servicesMap[serviceId]?.name)
+          .filter(Boolean)
+          .join(', ');
+        
+        const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
+        await sendTransactionalEmail(supabase, {
+          email_type: 'submission_updated',
+          recipient_email: clientEmail,
+          recipient_name: clientName,
+          recipient_type: 'client',
+          data: {
+            submission_id: id,
+            submission_number: submissionNumber,
+            old_price: submission.total_price || 0,
+            new_price: newPrice,
+            price_changed: Math.abs((submission.total_price || 0) - newPrice) > 0.01,
+            services: servicesNames,
+            appointment_date: editFormData.appointment_date,
+            appointment_time: editFormData.appointment_time,
+            timezone: editFormData.timezone,
+            updated_fields: {
+              personal_info: editFormData.first_name !== submission.first_name || 
+                           editFormData.last_name !== submission.last_name ||
+                           editFormData.email !== submission.email ||
+                           editFormData.phone !== submission.phone,
+              address: editFormData.address !== submission.address ||
+                      editFormData.city !== submission.city ||
+                      editFormData.postal_code !== submission.postal_code ||
+                      editFormData.country !== submission.country,
+              services: JSON.stringify(editFormData.selectedServices) !== JSON.stringify(submission.data?.selectedServices || []),
+              appointment: editFormData.appointment_date !== submission.appointment_date ||
+                          editFormData.appointment_time !== submission.appointment_time
+            }
+          }
+        });
+      } catch (emailError) {
+        console.error('Error sending submission update email:', emailError);
+        // Don't block the update if email fails
+      }
+      
+      toast.success('Submission updated successfully! New total price: $' + newPrice.toFixed(2));
     } catch (error) {
       console.error('Error updating submission:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   if (loading) {
     return (
       <AdminLayout>
+        <ConfirmComponent />
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
         </div>
@@ -813,6 +1467,7 @@ const SubmissionDetail = () => {
 
   return (
     <AdminLayout>
+      <ConfirmComponent />
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -881,18 +1536,34 @@ const SubmissionDetail = () => {
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('edit');
-                  setIsEditingSubmission(true);
+                  setActiveTab('signatories');
+                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
-                  activeTab === 'edit' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                  activeTab === 'signatories' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Edit Submission
-                {activeTab === 'edit' && (
+                Signatories
+                {activeTab === 'signatories' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
+              {submission?.status !== 'cancelled' && (
+                <button
+                  onClick={() => {
+                    setActiveTab('edit');
+                    setIsEditingSubmission(true);
+                  }}
+                  className={`pb-3 text-sm font-medium transition-colors relative ${
+                    activeTab === 'edit' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Edit Submission
+                  {activeTab === 'edit' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => {
                   setActiveTab('notarized');
@@ -909,6 +1580,25 @@ const SubmissionDetail = () => {
                   </span>
                 )}
                 {activeTab === 'notarized' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('transactions');
+                  setIsEditingSubmission(false);
+                }}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'transactions' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Transactions
+                {transactions.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                    {transactions.length}
+                  </span>
+                )}
+                {activeTab === 'transactions' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
@@ -1033,7 +1723,7 @@ const SubmissionDetail = () => {
                                 }
                               } catch (error) {
                                 console.error('Error updating notary cost:', error);
-                                alert(`Error: ${error.message}`);
+                                toast.error(`Error: ${error.message}`);
                               }
                             }}
                             className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
@@ -1120,12 +1810,14 @@ const SubmissionDetail = () => {
                         <span className="font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Time:</span>
+                        <span className="text-gray-600">Time (Florida - Eastern Time):</span>
                         <span className="font-semibold text-gray-900">{submission.appointment_time}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Timezone:</span>
-                        <span className="font-semibold text-gray-900">{submission.timezone}</span>
+                        <span className="text-gray-600">Time (Client Timezone):</span>
+                        <span className="font-semibold text-gray-900">
+                          {convertTimeToClientTimezone(submission.appointment_time, submission.appointment_date, submission.timezone)} ({submission.timezone})
+                        </span>
                       </div>
                     </div>
                   )}
@@ -1138,6 +1830,278 @@ const SubmissionDetail = () => {
                     <p className="text-gray-700">{submission.notes}</p>
                   </div>
                 )}
+
+                {/* Price Details */}
+                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                      <Icon icon="heroicons:currency-dollar" className="w-5 h-5 text-gray-600" />
+                    </div>
+                    Price Details
+                  </h2>
+                  <div className="space-y-3">
+                    {selectedServices.length > 0 ? (
+                      <>
+                        {selectedServices.map((serviceId) => {
+                          const service = servicesMap[serviceId];
+                          const documents = serviceDocuments[serviceId] || [];
+                          if (!service) return null;
+
+                          const serviceTotal = documents.length * (parseFloat(service.base_price) || 0);
+                          let signatoriesTotal = 0;
+                          
+                          // Track count per option for detailed display
+                          const optionCounts = {}; // Track count per option
+
+                          // Calculate options total and collect details for this service
+                          documents.forEach(doc => {
+                            if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+                              doc.selectedOptions.forEach(optionId => {
+                                const option = optionsMap[optionId];
+                                if (option) {
+                                  const optionPrice = parseFloat(option.additional_price) || 0;
+                                  // Track option count
+                                  if (!optionCounts[optionId]) {
+                                    optionCounts[optionId] = {
+                                      option: option,
+                                      count: 0,
+                                      total: 0
+                                    };
+                                  }
+                                  optionCounts[optionId].count += 1;
+                                  optionCounts[optionId].total += optionPrice;
+                                }
+                              });
+                            }
+                          });
+
+                          // Calculate signatories cost for this service
+                          documents.forEach((doc, docIndex) => {
+                            const docKey = `${serviceId}_${docIndex}`;
+                            // Try to get signatories from database first
+                            if (signatories.length > 0) {
+                              const docSignatories = signatories.filter(sig => sig.document_key === docKey);
+                              if (docSignatories.length > 1) {
+                                signatoriesTotal += (docSignatories.length - 1) * 10; // $10 per additional signatory
+                              }
+                            } else {
+                              // Use signatories from submission.data
+                              const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+                              const docSignatories = signatoriesFromData[docKey];
+                              if (Array.isArray(docSignatories) && docSignatories.length > 1) {
+                                signatoriesTotal += (docSignatories.length - 1) * 10; // $10 per additional signatory
+                              }
+                            }
+                          });
+
+                          return (
+                            <div key={serviceId} className="bg-white rounded-xl p-4 border border-gray-200">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <h3 className="font-semibold text-gray-900">{service.name}</h3>
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    {documents.length} document{documents.length > 1 ? 's' : ''} × ${parseFloat(service.base_price || 0).toFixed(2)}
+                                  </p>
+                                </div>
+                                <span className="font-bold text-gray-900">${serviceTotal.toFixed(2)}</span>
+                              </div>
+                              
+                              {/* Options breakdown - detailed */}
+                              {Object.keys(optionCounts).length > 0 && (
+                                <div className="ml-4 mt-2 pt-2 border-t border-gray-200 space-y-1">
+                                  {Object.values(optionCounts).map((optionDetail, idx) => {
+                                    const option = optionDetail.option;
+                                    return (
+                                      <div key={option.option_id || idx} className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-600 italic">
+                                          + {option.name}
+                                          {optionDetail.count > 1 && <span className="ml-1">({optionDetail.count} documents)</span>}
+                                        </span>
+                                        <span className="font-semibold text-gray-700">${optionDetail.total.toFixed(2)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Signatories breakdown */}
+                              {signatoriesTotal > 0 && (
+                                <div className="ml-4 mt-2 pt-2 border-t border-gray-200">
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600 italic">+ Additional Signatories</span>
+                                    <span className="font-semibold text-gray-700">${signatoriesTotal.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Total */}
+                        <div className="mt-4 pt-4 border-t-2 border-gray-300">
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-lg font-bold text-gray-900">Total Amount</span>
+                            <span className="text-2xl font-bold text-gray-900">
+                              ${(() => {
+                                let grandTotal = 0;
+                                
+                                // Calculate services and options costs
+                                selectedServices.forEach(serviceId => {
+                                  const service = servicesMap[serviceId];
+                                  const documents = serviceDocuments[serviceId] || [];
+                                  if (service) {
+                                    grandTotal += documents.length * (parseFloat(service.base_price) || 0);
+                                    documents.forEach(doc => {
+                                      if (doc.selectedOptions) {
+                                        doc.selectedOptions.forEach(optionId => {
+                                          const option = optionsMap[optionId];
+                                          if (option) {
+                                            grandTotal += parseFloat(option.additional_price) || 0;
+                                          }
+                                        });
+                                      }
+                                    });
+                                  }
+                                });
+                                
+                                // Calculate additional signatories cost ($10 per additional signatory)
+                                if (signatories.length > 0) {
+                                  // Group signatories by document_key
+                                  const signatoriesByDoc = {};
+                                  signatories.forEach(sig => {
+                                    if (!signatoriesByDoc[sig.document_key]) {
+                                      signatoriesByDoc[sig.document_key] = [];
+                                    }
+                                    signatoriesByDoc[sig.document_key].push(sig);
+                                  });
+                                  
+                                  // Calculate cost for each document
+                                  Object.values(signatoriesByDoc).forEach(docSignatories => {
+                                    if (docSignatories.length > 1) {
+                                      // First signatory is included, count additional ones
+                                      grandTotal += (docSignatories.length - 1) * 10;
+                                    }
+                                  });
+                                } else {
+                                  // Use signatories from submission.data (if not yet paid)
+                                  const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+                                  Object.values(signatoriesFromData).forEach(docSignatories => {
+                                    if (Array.isArray(docSignatories) && docSignatories.length > 1) {
+                                      // First signatory is included, count additional ones
+                                      grandTotal += (docSignatories.length - 1) * 10;
+                                    }
+                                  });
+                                }
+                                
+                                return grandTotal.toFixed(2);
+                              })()}
+                            </span>
+                          </div>
+                          
+                          {/* Stripe Actions */}
+                          {submission.data?.payment?.stripe_session_id && (() => {
+                            // Extract account ID from Stripe secret key (if available) or use default
+                            // Format: sk_test_XXXXX or sk_live_XXXXX
+                            // Account ID format: acct_XXXXX
+                            const stripeAccountId = 'acct_1SOkkU21pQO5v0OI'; // Default account ID, should be from env
+                            const isTestMode = true; // Should be determined from Stripe key or env
+                            const env = isTestMode ? 'test' : 'live';
+                            
+                            // Get payment_intent_id from payment data
+                            const paymentIntentId = submission.data?.payment?.payment_intent_id;
+                            
+                            // Construct Stripe dashboard URL
+                            const stripeUrl = paymentIntentId 
+                              ? `https://dashboard.stripe.com/${stripeAccountId}/${env}/payments/${paymentIntentId}`
+                              : null;
+                            
+                            return (
+                              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                                <button
+                                  onClick={async () => {
+                                  const confirmed = await confirm({
+                                    title: 'Refund Payment',
+                                    message: `Are you sure you want to refund the full payment amount of $${(submission.data.payment.amount_paid / 100).toFixed(2)}? This action cannot be undone.`,
+                                    confirmText: 'Refund',
+                                    cancelText: 'Cancel',
+                                    type: 'danger',
+                                  });
+
+                                  if (!confirmed) return;
+
+                                  // Set loading state in confirm dialog
+                                  setConfirmLoading(true);
+
+                                  try {
+                                    const paymentInfo = submission.data.payment;
+                                    if (!paymentInfo.stripe_session_id) {
+                                      toast.error('No payment session found');
+                                      setConfirmLoading(false);
+                                      return;
+                                    }
+
+                                    // Retrieve session to get payment intent
+                                    const { data: sessionData, error: sessionError } = await supabase.functions.invoke('verify-payment', {
+                                      body: { sessionId: paymentInfo.stripe_session_id }
+                                    });
+
+                                    if (sessionError) throw sessionError;
+
+                                    // Create full refund
+                                    const { data: refundResult, error: refundError } = await supabase.functions.invoke('update-payment', {
+                                      body: {
+                                        submissionId: id,
+                                        newAmount: 0,
+                                        oldAmount: paymentInfo.amount_paid / 100
+                                      }
+                                    });
+
+                                    if (refundError) throw refundError;
+
+                                    if (refundResult?.success) {
+                                      // Update submission status to cancelled
+                                      const { error: statusError } = await supabase
+                                        .from('submission')
+                                        .update({
+                                          status: 'cancelled',
+                                          updated_at: new Date().toISOString()
+                                        })
+                                        .eq('id', id);
+
+                                      if (statusError) {
+                                        console.error('Error updating submission status:', statusError);
+                                      }
+
+                                      toast.success(`Payment refunded successfully: ${refundResult.message}`);
+                                      await fetchSubmissionDetail();
+                                      // Close confirm dialog after successful refund
+                                      setConfirmLoading(false);
+                                      closeConfirm();
+                                    } else {
+                                      toast.error('Refund failed');
+                                      setConfirmLoading(false);
+                                    }
+                                  } catch (error) {
+                                    console.error('Error refunding payment:', error);
+                                    toast.error(`Failed to refund payment: ${error.message}`);
+                                    setConfirmLoading(false);
+                                  }
+                                }}
+                                className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                              >
+                                <Icon icon="heroicons:arrow-path" className="w-5 h-5" />
+                                Refund Payment
+                              </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-gray-600">No services selected.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1230,8 +2194,110 @@ const SubmissionDetail = () => {
                     </div>
                   </div>
                 )}
+
               </div>
             )}
+
+            {/* Signatories Tab */}
+            {activeTab === 'signatories' && (() => {
+              // Get signatories from database (if payment completed) or from submission.data (if not yet paid)
+              const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+              const hasSignatoriesInDB = signatories.length > 0;
+              const hasSignatoriesInData = Object.keys(signatoriesFromData).length > 0 && 
+                Object.values(signatoriesFromData).some(sigs => sigs && sigs.length > 0);
+
+              if (!hasSignatoriesInDB && !hasSignatoriesInData) {
+                return (
+                  <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                        <Icon icon="heroicons:user-group" className="w-5 h-5 text-gray-600" />
+                      </div>
+                      Signatories
+                    </h2>
+                    <p className="text-base text-gray-600">No signatories added for this submission.</p>
+                  </div>
+                );
+              }
+
+              // Convert database signatories to the format expected by SignatoriesList
+              const signatoriesByDoc = {};
+              const serviceDocuments = submission?.data?.serviceDocuments || {};
+              const selectedServices = submission?.data?.selectedServices || [];
+              
+              if (hasSignatoriesInDB) {
+                // Use database signatories (after payment)
+                signatories.forEach(sig => {
+                  if (!signatoriesByDoc[sig.document_key]) {
+                    signatoriesByDoc[sig.document_key] = [];
+                  }
+                  signatoriesByDoc[sig.document_key].push({
+                    first_name: sig.first_name,
+                    last_name: sig.last_name,
+                    birth_date: sig.birth_date,
+                    birth_city: sig.birth_city,
+                    postal_address: sig.postal_address
+                  });
+                });
+              } else {
+                // Use signatories from submission.data (before payment)
+                Object.entries(signatoriesFromData).forEach(([docKey, sigs]) => {
+                  if (sigs && sigs.length > 0) {
+                    signatoriesByDoc[docKey] = sigs.map(sig => ({
+                      first_name: sig.firstName || sig.first_name,
+                      last_name: sig.lastName || sig.last_name,
+                      birth_date: sig.birthDate || sig.birth_date,
+                      birth_city: sig.birthCity || sig.birth_city,
+                      postal_address: sig.postalAddress || sig.postal_address
+                    }));
+                  }
+                });
+              }
+
+              if (Object.keys(signatoriesByDoc).length === 0) {
+                return (
+                  <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                        <Icon icon="heroicons:user-group" className="w-5 h-5 text-gray-600" />
+                      </div>
+                      Signatories
+                    </h2>
+                    <p className="text-base text-gray-600">No signatories added for this submission.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                      <Icon icon="heroicons:user-group" className="w-5 h-5 text-gray-600" />
+                    </div>
+                    Signatories
+                  </h2>
+                  <div className="space-y-4">
+                    {Object.entries(signatoriesByDoc).map(([docKey, docSignatories]) => {
+                      // Extract serviceId and docIndex from docKey (format: "serviceId_docIndex")
+                      const [serviceId, docIndex] = docKey.split('_');
+                      const documents = serviceDocuments[serviceId] || [];
+                      const document = documents[parseInt(docIndex)] || {};
+                      const documentName = document.name || `Document ${parseInt(docIndex) + 1}`;
+
+                      return (
+                        <SignatoriesList
+                          key={docKey}
+                          signatories={docSignatories}
+                          documentKey={docKey}
+                          documentName={documentName}
+                          showPrices={true}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Notarized Files Tab */}
             {activeTab === 'notarized' && (
@@ -1332,8 +2398,107 @@ const SubmissionDetail = () => {
               </div>
             )}
 
+            {/* Transactions Tab */}
+            {activeTab === 'transactions' && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Transactions Stripe</h2>
+                
+                {transactionsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+                  </div>
+                ) : transactions.length === 0 ? (
+                  <p className="text-base text-gray-600">Aucune transaction trouvée pour cette soumission.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Type</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Montant</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Statut</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Date</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {transactions.map((tx) => {
+                          const formatDate = (timestamp) => {
+                            return new Date(timestamp * 1000).toLocaleDateString('fr-FR', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                          };
+
+                          const formatCurrency = (amount, currency = 'usd') => {
+                            return new Intl.NumberFormat('fr-FR', {
+                              style: 'currency',
+                              currency: currency.toUpperCase()
+                            }).format(amount);
+                          };
+
+                          const getStatusBadge = (status, type) => {
+                            const badges = {
+                              succeeded: 'bg-green-100 text-green-700',
+                              paid: 'bg-green-100 text-green-700',
+                              failed: 'bg-red-100 text-red-700',
+                              pending: 'bg-gray-100 text-gray-700',
+                              processing: 'bg-blue-100 text-blue-700',
+                              canceled: 'bg-gray-100 text-gray-700',
+                            };
+
+                            const displayStatus = type === 'refund' ? 'REFUND' : (status?.toUpperCase() || 'UNKNOWN');
+                            
+                            // Use purple color for refunds
+                            const badgeClass = type === 'refund' 
+                              ? 'bg-purple-100 text-purple-700'
+                              : (badges[status] || badges.pending);
+
+                            return (
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}`}>
+                                {displayStatus}
+                              </span>
+                            );
+                          };
+
+                          return (
+                            <tr key={`${tx.type}-${tx.id}`} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm font-semibold text-gray-900">
+                                  {tx.type === 'refund' ? 'Remboursement' : 'Paiement'}
+                                </div>
+                                <div className="text-xs text-gray-600 font-mono">
+                                  {tx.type === 'payment' ? tx.id : tx.id}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className={`text-sm font-semibold ${tx.type === 'refund' ? 'text-red-600' : 'text-gray-900'}`}>
+                                  {tx.type === 'refund' ? '-' : ''}{formatCurrency(tx.amount, tx.currency)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {getStatusBadge(tx.status, tx.type)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                {formatDate(tx.created)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right">
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Edit Submission Tab */}
-            {activeTab === 'edit' && (
+            {submission?.status !== 'cancelled' && activeTab === 'edit' && (
               <div className="space-y-6">
                 <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
                   <p className="text-sm text-yellow-800">
@@ -1459,66 +2624,552 @@ const SubmissionDetail = () => {
                 {/* Services Selection */}
                 <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Services</h2>
-                  <div className="space-y-3">
-                    {allServices.map((service) => (
-                      <label key={service.id} className="flex items-start space-x-3 bg-white rounded-xl p-4 cursor-pointer hover:bg-gray-50">
-                        <input
-                          type="checkbox"
-                          checked={editFormData.selectedServices.includes(service.service_id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditFormData({
-                                ...editFormData,
-                                selectedServices: [...editFormData.selectedServices, service.service_id],
-                                serviceDocuments: {
-                                  ...editFormData.serviceDocuments,
-                                  [service.service_id]: editFormData.serviceDocuments[service.service_id] || []
+                  <div className="space-y-4">
+                    {allServices.map((service) => {
+                      const isSelected = editFormData.selectedServices.includes(service.service_id);
+                      const documents = editFormData.serviceDocuments[service.service_id] || [];
+                      const isApostilleService = service.service_id === '473fb677-4dd3-4766-8221-0250ea3440cd';
+
+                      return (
+                        <div key={service.id} className="bg-white rounded-xl p-4 border-2 border-gray-200">
+                          {/* Service Checkbox */}
+                          <label className="flex items-start space-x-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const newServiceDocuments = {
+                                    ...editFormData.serviceDocuments,
+                                    [service.service_id]: editFormData.serviceDocuments[service.service_id] || []
+                                  };
+                                  
+                                  // Ensure at least one signatory per document
+                                  const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
+                                  const docs = newServiceDocuments[service.service_id] || [];
+                                  docs.forEach((doc, docIndex) => {
+                                    const docKey = `${service.service_id}_${docIndex}`;
+                                    if (!newSignatoriesByDocument[docKey] || newSignatoriesByDocument[docKey].length === 0) {
+                                      newSignatoriesByDocument[docKey] = [{
+                                        firstName: '',
+                                        lastName: '',
+                                        birthDate: '',
+                                        birthCity: '',
+                                        postalAddress: '',
+                                        email: '',
+                                        phone: ''
+                                      }];
+                                    }
+                                  });
+                                  
+                                  setEditFormData({
+                                    ...editFormData,
+                                    selectedServices: [...editFormData.selectedServices, service.service_id],
+                                    serviceDocuments: newServiceDocuments,
+                                    signatoriesByDocument: newSignatoriesByDocument
+                                  });
+                                } else {
+                                  const newSelected = editFormData.selectedServices.filter(id => id !== service.service_id);
+                                  const newServiceDocuments = { ...editFormData.serviceDocuments };
+                                  const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
+                                  
+                                  // Remove signatories for this service
+                                  documents.forEach((doc, docIndex) => {
+                                    const docKey = `${service.service_id}_${docIndex}`;
+                                    delete newSignatoriesByDocument[docKey];
+                                  });
+                                  
+                                  delete newServiceDocuments[service.service_id];
+                                  setEditFormData({
+                                    ...editFormData,
+                                    selectedServices: newSelected,
+                                    serviceDocuments: newServiceDocuments,
+                                    signatoriesByDocument: newSignatoriesByDocument
+                                  });
                                 }
-                              });
-                            } else {
-                              const newSelected = editFormData.selectedServices.filter(id => id !== service.service_id);
-                              const newServiceDocuments = { ...editFormData.serviceDocuments };
-                              delete newServiceDocuments[service.service_id];
-                              setEditFormData({
-                                ...editFormData,
-                                selectedServices: newSelected,
-                                serviceDocuments: newServiceDocuments
-                              });
-                            }
-                            // Recalculate price
-                            setTimeout(() => {
-                              const newPrice = calculatePriceHelper(
-                                e.target.checked 
-                                  ? [...editFormData.selectedServices, service.service_id]
-                                  : editFormData.selectedServices.filter(id => id !== service.service_id),
-                                e.target.checked
-                                  ? { ...editFormData.serviceDocuments, [service.service_id]: editFormData.serviceDocuments[service.service_id] || [] }
-                                  : (() => {
-                                      const newDocs = { ...editFormData.serviceDocuments };
-                                      delete newDocs[service.service_id];
-                                      return newDocs;
-                                    })(),
-                                servicesMap,
-                                optionsMap
-                              );
-                              setCalculatedPrice(newPrice);
-                            }, 0);
-                          }}
-                          className="mt-1 w-5 h-5 text-black border-gray-300 rounded focus:ring-black"
-                        />
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-900">{service.name}</p>
-                          {service.description && (
-                            <p className="text-sm text-gray-600 mt-1">{service.description}</p>
+                              }}
+                              className="mt-1 w-5 h-5 text-black border-gray-300 rounded focus:ring-black"
+                            />
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-900">{service.name}</p>
+                              <p className="text-sm font-semibold text-gray-900 mt-2">
+                                ${parseFloat(service.base_price || 0).toFixed(2)} per document
+                              </p>
+                            </div>
+                          </label>
+
+                          {/* Documents Management - Only show if service is selected */}
+                          {isSelected && (
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-semibold text-gray-900">Documents ({documents.length})</h3>
+                                <label className="px-3 py-1.5 bg-black text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                                  <Icon icon="heroicons:plus-circle" className="w-4 h-4 inline mr-1" />
+                                  Add Document
+                                  <input
+                                    type="file"
+                                    multiple
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const files = Array.from(e.target.files);
+                                      if (files.length === 0) return;
+
+                                      const convertedFiles = await Promise.all(
+                                        files.map(async (file) => {
+                                          return new Promise((resolve) => {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => {
+                                              resolve({
+                                                name: file.name,
+                                                size: file.size,
+                                                type: file.type,
+                                                lastModified: file.lastModified,
+                                                dataUrl: reader.result,
+                                                selectedOptions: [],
+                                              });
+                                            };
+                                            reader.readAsDataURL(file);
+                                          });
+                                        })
+                                      );
+
+                                      const newServiceDocuments = {
+                                        ...editFormData.serviceDocuments,
+                                        [service.service_id]: [...documents, ...convertedFiles]
+                                      };
+
+                                      // Ensure signatories for new documents
+                                      const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
+                                      convertedFiles.forEach((doc, index) => {
+                                        const docIndex = documents.length + index;
+                                        const docKey = `${service.service_id}_${docIndex}`;
+                                        if (!newSignatoriesByDocument[docKey]) {
+                                          newSignatoriesByDocument[docKey] = [{
+                                            firstName: '',
+                                            lastName: '',
+                                            birthDate: '',
+                                            birthCity: '',
+                                            postalAddress: '',
+                                            email: '',
+                                            phone: ''
+                                          }];
+                                        }
+                                      });
+
+                                      setEditFormData({
+                                        ...editFormData,
+                                        serviceDocuments: newServiceDocuments,
+                                        signatoriesByDocument: newSignatoriesByDocument
+                                      });
+                                    }}
+                                  />
+                                </label>
+                              </div>
+
+                              {/* Documents List */}
+                              {documents.length > 0 && (
+                                <div className="space-y-3">
+                                  {documents.map((doc, docIndex) => {
+                                    const docOptions = doc.selectedOptions || [];
+                                    const docKey = `${service.service_id}_${docIndex}`;
+
+                                    return (
+                                      <div key={docIndex} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <div className="flex items-start justify-between mb-2">
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                              <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                                              <div className="min-w-0 flex-1">
+                                                <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
+                                                <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              const newServiceDocuments = { ...editFormData.serviceDocuments };
+                                              newServiceDocuments[service.service_id] = newServiceDocuments[service.service_id].filter((_, i) => i !== docIndex);
+                                              
+                                              // Remove signatories for this document
+                                              const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
+                                              delete newSignatoriesByDocument[docKey];
+                                              
+                                              // Reindex remaining signatories
+                                              const remainingDocs = newServiceDocuments[service.service_id];
+                                              const reindexedSignatories = {};
+                                              Object.keys(newSignatoriesByDocument).forEach(key => {
+                                                if (key.startsWith(`${service.service_id}_`)) {
+                                                  const oldIndex = parseInt(key.split('_').pop());
+                                                  if (oldIndex < docIndex) {
+                                                    reindexedSignatories[key] = newSignatoriesByDocument[key];
+                                                  } else if (oldIndex > docIndex) {
+                                                    const newKey = `${service.service_id}_${oldIndex - 1}`;
+                                                    reindexedSignatories[newKey] = newSignatoriesByDocument[key];
+                                                  }
+                                                } else {
+                                                  reindexedSignatories[key] = newSignatoriesByDocument[key];
+                                                }
+                                              });
+
+                                              if (newServiceDocuments[service.service_id].length === 0) {
+                                                delete newServiceDocuments[service.service_id];
+                                              }
+
+                                              setEditFormData({
+                                                ...editFormData,
+                                                serviceDocuments: newServiceDocuments,
+                                                signatoriesByDocument: reindexedSignatories
+                                              });
+                                            }}
+                                            className="ml-2 text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
+                                          >
+                                            <Icon icon="heroicons:trash" className="w-4 h-4" />
+                                            Remove
+                                          </button>
+                                        </div>
+
+                                        {/* Options for this document */}
+                                        {!isApostilleService && allOptions.length > 0 && (
+                                          <div className="mt-3 pt-3 border-t border-gray-200">
+                                            <p className="text-xs font-semibold text-gray-700 mb-2">Options:</p>
+                                            <div className="space-y-2">
+                                              {allOptions.map((option) => (
+                                                <label key={option.option_id} className="flex items-center space-x-2 cursor-pointer group">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={docOptions.includes(option.option_id)}
+                                                    onChange={() => {
+                                                      const newServiceDocuments = { ...editFormData.serviceDocuments };
+                                                      const file = newServiceDocuments[service.service_id][docIndex];
+                                                      
+                                                      if (!file.selectedOptions) {
+                                                        file.selectedOptions = [];
+                                                      }
+                                                      
+                                                      if (file.selectedOptions.includes(option.option_id)) {
+                                                        file.selectedOptions = file.selectedOptions.filter(id => id !== option.option_id);
+                                                      } else {
+                                                        file.selectedOptions = [...file.selectedOptions, option.option_id];
+                                                      }
+                                                      
+                                                      setEditFormData({
+                                                        ...editFormData,
+                                                        serviceDocuments: newServiceDocuments
+                                                      });
+                                                    }}
+                                                    className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
+                                                  />
+                                                  <span className="text-xs font-medium text-gray-700 group-hover:text-black transition-colors">
+                                                    {option.name}
+                                                    <span className="text-gray-500 font-normal ml-1">
+                                                      (+${option.additional_price?.toFixed(2) || '0.00'})
+                                                    </span>
+                                                  </span>
+                                                </label>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           )}
-                          <p className="text-sm font-semibold text-gray-900 mt-2">
-                            ${parseFloat(service.base_price || 0).toFixed(2)} per document
-                          </p>
                         </div>
-                      </label>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
+
+                {/* Signatories Editing */}
+                {editFormData.selectedServices.length > 0 && (
+                  <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">Signatories</h2>
+                    <div className="space-y-6">
+                      {editFormData.selectedServices.map((serviceId) => {
+                        const service = servicesMap[serviceId];
+                        const documents = editFormData.serviceDocuments[serviceId] || [];
+                        if (!service) return null;
+
+                        return documents.map((doc, docIndex) => {
+                          const docKey = `${serviceId}_${docIndex}`;
+                          const docSignatories = editFormData.signatoriesByDocument[docKey] || [];
+                          
+                          return (
+                            <div key={docKey} className="bg-white rounded-xl p-4 border border-gray-200">
+                              <h3 className="font-semibold text-gray-900 mb-4">
+                                {doc.name || `Document ${docIndex + 1}`} - Signatories
+                              </h3>
+                              <div className="space-y-4">
+                                {docSignatories.map((signatory, sigIndex) => (
+                                  <div key={sigIndex} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Signatory {sigIndex + 1}
+                                        {sigIndex === 0 && <span className="ml-2 text-xs text-gray-500">(included)</span>}
+                                        {sigIndex > 0 && <span className="ml-2 text-xs text-orange-600 font-medium">(+$10)</span>}
+                                      </span>
+                                      {sigIndex > 0 && (
+                                        <button
+                                          onClick={() => {
+                                            const newSignatories = docSignatories.filter((_, i) => i !== sigIndex);
+                                            setEditFormData({
+                                              ...editFormData,
+                                              signatoriesByDocument: {
+                                                ...editFormData.signatoriesByDocument,
+                                                [docKey]: newSignatories
+                                              }
+                                            });
+                                          }}
+                                          className="text-red-600 hover:text-red-700 text-sm font-medium"
+                                        >
+                                          Remove
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">First Name</label>
+                                        <input
+                                          type="text"
+                                          value={signatory.firstName || ''}
+                                          onChange={(e) => {
+                                            const updated = [...docSignatories];
+                                            updated[sigIndex] = { ...updated[sigIndex], firstName: e.target.value };
+                                            setEditFormData({
+                                              ...editFormData,
+                                              signatoriesByDocument: {
+                                                ...editFormData.signatoriesByDocument,
+                                                [docKey]: updated
+                                              }
+                                            });
+                                          }}
+                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name</label>
+                                        <input
+                                          type="text"
+                                          value={signatory.lastName || ''}
+                                          onChange={(e) => {
+                                            const updated = [...docSignatories];
+                                            updated[sigIndex] = { ...updated[sigIndex], lastName: e.target.value };
+                                            setEditFormData({
+                                              ...editFormData,
+                                              signatoriesByDocument: {
+                                                ...editFormData.signatoriesByDocument,
+                                                [docKey]: updated
+                                              }
+                                            });
+                                          }}
+                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Date of Birth</label>
+                                        <input
+                                          type="date"
+                                          value={signatory.birthDate || ''}
+                                          onChange={(e) => {
+                                            const updated = [...docSignatories];
+                                            updated[sigIndex] = { ...updated[sigIndex], birthDate: e.target.value };
+                                            setEditFormData({
+                                              ...editFormData,
+                                              signatoriesByDocument: {
+                                                ...editFormData.signatoriesByDocument,
+                                                [docKey]: updated
+                                              }
+                                            });
+                                          }}
+                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Birth City</label>
+                                        <input
+                                          type="text"
+                                          value={signatory.birthCity || ''}
+                                          onChange={(e) => {
+                                            const updated = [...docSignatories];
+                                            updated[sigIndex] = { ...updated[sigIndex], birthCity: e.target.value };
+                                            setEditFormData({
+                                              ...editFormData,
+                                              signatoriesByDocument: {
+                                                ...editFormData.signatoriesByDocument,
+                                                [docKey]: updated
+                                              }
+                                            });
+                                          }}
+                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+                                        />
+                                      </div>
+                                      <div className="col-span-2">
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Postal Address</label>
+                                        <input
+                                          type="text"
+                                          value={signatory.postalAddress || ''}
+                                          onChange={(e) => {
+                                            const updated = [...docSignatories];
+                                            updated[sigIndex] = { ...updated[sigIndex], postalAddress: e.target.value };
+                                            setEditFormData({
+                                              ...editFormData,
+                                              signatoriesByDocument: {
+                                                ...editFormData.signatoriesByDocument,
+                                                [docKey]: updated
+                                              }
+                                            });
+                                          }}
+                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+                                          placeholder="Enter full address"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+                                        <input
+                                          type="email"
+                                          value={signatory.email || ''}
+                                          onChange={(e) => {
+                                            const updated = [...docSignatories];
+                                            updated[sigIndex] = { ...updated[sigIndex], email: e.target.value };
+                                            setEditFormData({
+                                              ...editFormData,
+                                              signatoriesByDocument: {
+                                                ...editFormData.signatoriesByDocument,
+                                                [docKey]: updated
+                                              }
+                                            });
+                                            
+                                            // Validate email in real-time
+                                            const errorKey = `${docKey}_${sigIndex}`;
+                                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                            if (e.target.value && e.target.value.trim()) {
+                                              if (!emailRegex.test(e.target.value.trim())) {
+                                                setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email address' }));
+                                              } else {
+                                                setEmailErrors(prev => {
+                                                  const newErrors = { ...prev };
+                                                  delete newErrors[errorKey];
+                                                  return newErrors;
+                                                });
+                                              }
+                                            } else {
+                                              setEmailErrors(prev => {
+                                                const newErrors = { ...prev };
+                                                delete newErrors[errorKey];
+                                                return newErrors;
+                                              });
+                                            }
+                                          }}
+                                          className={`w-full px-3 py-2 bg-white border rounded-lg focus:ring-2 text-sm ${
+                                            emailErrors[`${docKey}_${sigIndex}`] 
+                                              ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                                              : 'border-gray-300 focus:ring-black focus:border-black'
+                                          }`}
+                                          placeholder="email@example.com"
+                                        />
+                                        {emailErrors[`${docKey}_${sigIndex}`] && (
+                                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                                            <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
+                                            <span>{emailErrors[`${docKey}_${sigIndex}`]}</span>
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Number</label>
+                                        <div className={`flex items-center bg-white border rounded-lg overflow-hidden focus-within:ring-2 pl-2 pr-2 ${
+                                          phoneErrors[`${docKey}_${sigIndex}`] 
+                                            ? 'border-red-500 focus-within:ring-red-500 focus-within:border-red-500' 
+                                            : 'border-gray-300 focus-within:ring-black'
+                                        }`}>
+                                          <PhoneInputWrapper
+                                            international
+                                            defaultCountry="US"
+                                            value={signatory.phone || ''}
+                                            onChange={(value) => {
+                                              const updated = [...docSignatories];
+                                              updated[sigIndex] = { ...updated[sigIndex], phone: value || '' };
+                                              setEditFormData({
+                                                ...editFormData,
+                                                signatoriesByDocument: {
+                                                  ...editFormData.signatoriesByDocument,
+                                                  [docKey]: updated
+                                                }
+                                              });
+                                              
+                                              // Validate phone number in real-time
+                                              const errorKey = `${docKey}_${sigIndex}`;
+                                              if (value && value.length > 3) {
+                                                if (!isValidPhoneNumber(value)) {
+                                                  setPhoneErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid phone number' }));
+                                                } else {
+                                                  setPhoneErrors(prev => {
+                                                    const newErrors = { ...prev };
+                                                    delete newErrors[errorKey];
+                                                    return newErrors;
+                                                  });
+                                                }
+                                              } else if (value === '' || !value) {
+                                                setPhoneErrors(prev => {
+                                                  const newErrors = { ...prev };
+                                                  delete newErrors[errorKey];
+                                                  return newErrors;
+                                                });
+                                              }
+                                            }}
+                                            className="phone-input-integrated w-full flex text-sm"
+                                            countrySelectProps={{
+                                              className: "pr-1 py-2 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none text-xs"
+                                            }}
+                                            numberInputProps={{
+                                              className: "flex-1 pl-1 py-2 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-sm"
+                                            }}
+                                          />
+                                        </div>
+                                        {phoneErrors[`${docKey}_${sigIndex}`] && (
+                                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                                            <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
+                                            <span>{phoneErrors[`${docKey}_${sigIndex}`]}</span>
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                <button
+                                  onClick={() => {
+                                    const newSignatory = {
+                                      firstName: '',
+                                      lastName: '',
+                                      birthDate: '',
+                                      birthCity: '',
+                                      postalAddress: '',
+                                      email: '',
+                                      phone: ''
+                                    };
+                                    setEditFormData({
+                                      ...editFormData,
+                                      signatoriesByDocument: {
+                                        ...editFormData.signatoriesByDocument,
+                                        [docKey]: [...docSignatories, newSignatory]
+                                      }
+                                    });
+                                  }}
+                                  className="w-full px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <Icon icon="heroicons:plus-circle" className="w-5 h-5" />
+                                  Add Signatory (+$10)
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Notary Cost */}
                 {submission.assigned_notary_id && (
@@ -1552,83 +3203,255 @@ const SubmissionDetail = () => {
                     placeholder="Additional notes..."
                   />
                 </div>
-
-                {/* Price Summary */}
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border-2 border-gray-300">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Price Summary</h2>
-                  <div className="bg-white rounded-xl p-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold text-gray-900">Total Price:</span>
-                      <span className="text-2xl font-bold text-gray-900">${calculatedPrice.toFixed(2)}</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-2">
-                      Price calculated based on current service and option prices
-                    </p>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleUpdateSubmission}
-                    className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 flex-1"
-                  >
-                    Save Changes
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsEditingSubmission(false);
-                      setActiveTab('details');
-                      // Reset form data
-                      setEditFormData({
-                        appointment_date: submission.appointment_date || '',
-                        appointment_time: submission.appointment_time || '',
-                        timezone: submission.timezone || '',
-                        first_name: submission.first_name || '',
-                        last_name: submission.last_name || '',
-                        email: submission.email || '',
-                        phone: submission.phone || '',
-                        address: submission.address || '',
-                        city: submission.city || '',
-                        postal_code: submission.postal_code || '',
-                        country: submission.country || '',
-                        notes: submission.notes || '',
-                        selectedServices: submission.data?.selectedServices || [],
-                        serviceDocuments: submission.data?.serviceDocuments || {},
-                        notary_cost: submission.notary_cost || 0
-                      });
-                      const initialPrice = calculatePriceHelper(
-                        submission.data?.selectedServices || [],
-                        submission.data?.serviceDocuments || {},
-                        servicesMap,
-                        optionsMap
-                      );
-                      setCalculatedPrice(initialPrice);
-                    }}
-                    className="px-8 py-3 bg-gray-200 text-gray-700 font-semibold rounded-full hover:bg-gray-300 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
               </div>
             )}
           </div>
 
-          {/* Right Column - Chat */}
+          {/* Right Column - Chat or Price Details */}
           <div className="lg:col-span-1">
-            <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Messages</h2>
-              {adminInfo && submission.client && (
-                <Chat
-                  submissionId={id}
-                  currentUserType="admin"
-                  currentUserId={adminInfo.id}
-                  recipientName={submission.client ? `${submission.client.first_name} ${submission.client.last_name}` : 'Client'}
-                  clientFirstName={submission.client?.first_name}
-                  clientLastName={submission.client?.last_name}
-                />
-              )}
-            </div>
+            {activeTab === 'edit' ? (
+              <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <div className="bg-[#F3F4F6] rounded-2xl p-6 border-2 border-gray-300">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                      <Icon icon="heroicons:currency-dollar" className="w-5 h-5 text-gray-600" />
+                    </div>
+                    Price Details
+                  </h2>
+                  <div className="space-y-3">
+                    {editFormData.selectedServices.length > 0 ? (
+                      <>
+                        {editFormData.selectedServices.map((serviceId) => {
+                          const service = servicesMap[serviceId];
+                          const documents = editFormData.serviceDocuments[serviceId] || [];
+                          if (!service) return null;
+
+                          const serviceTotal = documents.length * (parseFloat(service.base_price) || 0);
+                          let signatoriesTotal = 0;
+                          
+                          // Track count per option for detailed display
+                          const optionCounts = {};
+
+                          // Calculate options total and collect details for this service
+                          documents.forEach(doc => {
+                            if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+                              doc.selectedOptions.forEach(optionId => {
+                                const option = optionsMap[optionId];
+                                if (option) {
+                                  const optionPrice = parseFloat(option.additional_price) || 0;
+                                  // Track option count
+                                  if (!optionCounts[optionId]) {
+                                    optionCounts[optionId] = {
+                                      option: option,
+                                      count: 0,
+                                      total: 0
+                                    };
+                                  }
+                                  optionCounts[optionId].count += 1;
+                                  optionCounts[optionId].total += optionPrice;
+                                }
+                              });
+                            }
+                          });
+
+                          // Calculate signatories cost for this service
+                          documents.forEach((doc, docIndex) => {
+                            const docKey = `${serviceId}_${docIndex}`;
+                            const docSignatories = editFormData.signatoriesByDocument[docKey];
+                            if (Array.isArray(docSignatories) && docSignatories.length > 1) {
+                              signatoriesTotal += (docSignatories.length - 1) * 10; // $10 per additional signatory
+                            }
+                          });
+
+                          return (
+                            <div key={serviceId} className="bg-white rounded-xl p-4 border border-gray-200">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <h3 className="font-semibold text-gray-900">{service.name}</h3>
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    {documents.length} document{documents.length > 1 ? 's' : ''} × ${parseFloat(service.base_price || 0).toFixed(2)}
+                                  </p>
+                                </div>
+                                <span className="font-bold text-gray-900">${serviceTotal.toFixed(2)}</span>
+                              </div>
+                              
+                              {/* Options breakdown - detailed */}
+                              {Object.keys(optionCounts).length > 0 && (
+                                <div className="ml-4 mt-2 pt-2 border-t border-gray-200 space-y-1">
+                                  {Object.values(optionCounts).map((optionDetail, idx) => {
+                                    const option = optionDetail.option;
+                                    return (
+                                      <div key={option.option_id || idx} className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-600 italic">
+                                          + {option.name}
+                                          {optionDetail.count > 1 && <span className="ml-1">({optionDetail.count} documents)</span>}
+                                        </span>
+                                        <span className="font-semibold text-gray-700">${optionDetail.total.toFixed(2)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Signatories breakdown */}
+                              {signatoriesTotal > 0 && (
+                                <div className="ml-4 mt-2 pt-2 border-t border-gray-200">
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600 italic">+ Additional Signatories</span>
+                                    <span className="font-semibold text-gray-700">${signatoriesTotal.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Total */}
+                        <div className="mt-4 pt-4 border-t-2 border-gray-300">
+                          <div className="flex justify-between items-center">
+                            <span className="text-lg font-bold text-gray-900">Total Amount</span>
+                            <span className="text-2xl font-bold text-gray-900">${calculatedPrice.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-gray-600">No services selected.</p>
+                    )}
+                  </div>
+
+                  {/* Stripe Actions */}
+                  {submission.data?.payment?.stripe_session_id && (() => {
+                    // Extract account ID from Stripe secret key (if available) or use default
+                    const stripeAccountId = 'acct_1SOkkU21pQO5v0OI'; // Default account ID, should be from env
+                    const isTestMode = true; // Should be determined from Stripe key or env
+                    const env = isTestMode ? 'test' : 'live';
+                    
+                    // Get payment_intent_id from payment data, or use stripe_session_id as fallback
+                    const paymentIntentId = submission.data?.payment?.payment_intent_id;
+                    const sessionId = submission.data?.payment?.stripe_session_id;
+                    
+                    // Construct Stripe dashboard URL - use payment_intent_id if available, otherwise use session_id
+                    const stripeUrl = paymentIntentId 
+                      ? `https://dashboard.stripe.com/${stripeAccountId}/${env}/payments/${paymentIntentId}`
+                      : sessionId
+                        ? `https://dashboard.stripe.com/${stripeAccountId}/${env}/payments/${sessionId}`
+                        : null;
+                    
+                    return null;
+                  })()}
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col gap-3 mt-6">
+                    <button
+                      onClick={handleUpdateSubmission}
+                      disabled={!isFormValid || isSaving}
+                      className={`btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 w-full flex items-center justify-center gap-2 ${
+                        !isFormValid || isSaving ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''
+                      }`}
+                    >
+                      {isSaving ? (
+                        <>
+                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingSubmission(false);
+                        setActiveTab('details');
+                        // Reset form data
+                        // Get signatories from already loaded data (signatories state or submission.data)
+                        let resetSignatoriesData = {};
+                        
+                        if (signatories.length > 0) {
+                          // Convert database signatories to editFormData format
+                          signatories.forEach(sig => {
+                            if (!resetSignatoriesData[sig.document_key]) {
+                              resetSignatoriesData[sig.document_key] = [];
+                            }
+                            resetSignatoriesData[sig.document_key].push({
+                              firstName: sig.first_name,
+                              lastName: sig.last_name,
+                              birthDate: sig.birth_date,
+                              birthCity: sig.birth_city,
+                              postalAddress: sig.postal_address,
+                              email: sig.email || '',
+                              phone: sig.phone || ''
+                            });
+                          });
+                        } else {
+                          // Use signatories from submission.data
+                          const signatoriesFromData = submission.data?.signatoriesByDocument || {};
+                          Object.entries(signatoriesFromData).forEach(([docKey, sigs]) => {
+                            if (sigs && sigs.length > 0) {
+                              resetSignatoriesData[docKey] = sigs.map(sig => ({
+                                firstName: sig.firstName || sig.first_name,
+                                lastName: sig.lastName || sig.last_name,
+                                birthDate: sig.birthDate || sig.birth_date,
+                                birthCity: sig.birthCity || sig.birth_city,
+                                postalAddress: sig.postalAddress || sig.postal_address,
+                                email: sig.email || '',
+                                phone: sig.phone || ''
+                              }));
+                            }
+                          });
+                        }
+
+                        setEditFormData({
+                          appointment_date: submission.appointment_date || '',
+                          appointment_time: submission.appointment_time || '',
+                          timezone: submission.timezone || '',
+                          first_name: submission.first_name || '',
+                          last_name: submission.last_name || '',
+                          email: submission.email || '',
+                          phone: submission.phone || '',
+                          address: submission.address || '',
+                          city: submission.city || '',
+                          postal_code: submission.postal_code || '',
+                          country: submission.country || '',
+                          notes: submission.notes || '',
+                          selectedServices: submission.data?.selectedServices || [],
+                          serviceDocuments: submission.data?.serviceDocuments || {},
+                          signatoriesByDocument: resetSignatoriesData,
+                          notary_cost: submission.notary_cost || 0
+                        });
+                        const initialPrice = calculatePriceHelper(
+                          submission.data?.selectedServices || [],
+                          submission.data?.serviceDocuments || {},
+                          servicesMap,
+                          optionsMap,
+                          resetSignatoriesData
+                        );
+                        setCalculatedPrice(initialPrice);
+                      }}
+                      className="px-8 py-3 bg-gray-200 text-gray-700 font-semibold rounded-full hover:bg-gray-300 transition-colors w-full"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Messages</h2>
+                {adminInfo && submission.client && (
+                  <Chat
+                    submissionId={id}
+                    currentUserType="admin"
+                    currentUserId={adminInfo.id}
+                    recipientName={submission.client ? `${submission.client.first_name} ${submission.client.last_name}` : 'Client'}
+                    clientFirstName={submission.client?.first_name}
+                    clientLastName={submission.client?.last_name}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

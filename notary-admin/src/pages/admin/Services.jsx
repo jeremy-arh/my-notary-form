@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirm } from '../../hooks/useConfirm';
 
 const Services = () => {
+  const toast = useToast();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [services, setServices] = useState([]);
   const [filteredServices, setFilteredServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +46,7 @@ const Services = () => {
       setServices(data || []);
     } catch (error) {
       console.error('Error fetching services:', error);
-      alert('Erreur lors du chargement des services');
+      toast.error('Error loading services');
     } finally {
       setLoading(false);
     }
@@ -132,15 +136,23 @@ const Services = () => {
       console.error('Error saving service:', error);
       // Vérifier si c'est un problème RLS
       if (error.code === '42501' || error.message.includes('row-level security')) {
-        alert('Erreur RLS : Vérifiez que vous utilisez la SERVICE ROLE KEY dans votre .env, ou exécutez le script supabase-admin-rls-policies.sql dans Supabase.');
+        toast.error('RLS Error: Check that you are using the SERVICE ROLE KEY in your .env, or run the supabase-admin-rls-policies.sql script in Supabase.');
       } else {
-        alert('Erreur lors de la sauvegarde: ' + error.message);
+        toast.error('Error saving: ' + error.message);
       }
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce service ?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Service',
+      message: 'Are you sure you want to delete this service?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+
+    if (!confirmed) return;
 
     try {
       const { data, error } = await supabase
@@ -153,24 +165,24 @@ const Services = () => {
         console.error('Error deleting service:', error);
         // Vérifier si c'est un problème de permissions RLS
         if (error.code === '42501' || error.message.includes('permission denied') || error.message.includes('policy')) {
-          alert('Erreur de permissions : Vous n\'avez pas les droits pour supprimer ce service. Vérifiez les politiques RLS dans Supabase.');
+          toast.error('Permission error: You do not have the rights to delete this service. Check RLS policies in Supabase.');
         } else {
-          alert('Erreur lors de la suppression: ' + error.message);
+          toast.error('Error deleting: ' + error.message);
         }
         return;
       }
 
       // Vérifier si la suppression a réussi
       if (data && data.length > 0) {
-        alert('Service supprimé avec succès');
+        toast.success('Service deleted successfully');
       } else {
-        alert('Aucun service supprimé. Vérifiez que le service existe et que vous avez les permissions nécessaires.');
+        toast.warning('No service deleted. Check that the service exists and you have the necessary permissions.');
       }
 
       fetchServices();
     } catch (error) {
       console.error('Error deleting service:', error);
-      alert('Erreur lors de la suppression: ' + (error.message || 'Erreur inconnue'));
+      toast.error('Error deleting: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -185,7 +197,7 @@ const Services = () => {
       fetchServices();
     } catch (error) {
       console.error('Error toggling service:', error);
-      alert('Erreur lors de la modification');
+      toast.error('Error updating');
     }
   };
 
@@ -199,6 +211,7 @@ const Services = () => {
 
   return (
     <>
+      <ConfirmComponent />
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

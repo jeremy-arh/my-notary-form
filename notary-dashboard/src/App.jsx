@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
+import { ToastProvider } from './contexts/ToastContext'
 import PrivateRoute from './components/PrivateRoute'
 import NotaryLayout from './components/NotaryLayout'
 import Login from './pages/notary/Login'
@@ -24,8 +25,9 @@ const LoadingSpinner = () => (
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <ToastProvider>
+      <BrowserRouter>
+        <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/auth/reset-password" element={<ResetPassword />} />
@@ -102,6 +104,7 @@ function App() {
         />
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   )
 }
 

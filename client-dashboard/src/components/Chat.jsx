@@ -1,9 +1,17 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
-import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../lib/supabase';
 import { playNotificationSoundIfNeeded } from '../utils/soundNotification';
+import { useToast } from '../contexts/ToastContext';
+
+// Lazy load emoji-picker-react to avoid import errors
+const EmojiPicker = lazy(() => 
+  import('emoji-picker-react').catch(() => {
+    console.warn('emoji-picker-react not available');
+    return { default: () => null };
+  })
+);
 
 /**
  * Reusable Chat component for messaging between clients, notaries, and admins
@@ -14,6 +22,7 @@ import { playNotificationSoundIfNeeded } from '../utils/soundNotification';
  * @param {string} recipientName - Name of the person you're chatting with (optional)
  */
 const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, isFullscreen = false }) => {
+  const toast = useToast();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -175,7 +184,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, isF
       setAttachments((prev) => [...prev, ...uploadedAttachments]);
     } catch (error) {
       console.error('Error handling files:', error);
-      alert('Failed to upload files. Please try again.');
+      toast.error('Failed to upload files. Please try again.');
     } finally {
       setUploadingFiles(false);
       // Reset file input
@@ -255,7 +264,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, isF
       setShowEmojiPicker(false);
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('Failed to send message. Please try again.');
+      toast.error('Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -584,13 +593,15 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, isF
                 height: '435px'
               }}
             >
-              <EmojiPicker 
-                onEmojiClick={onEmojiClick}
-                width={352}
-                height={435}
-                previewConfig={{ showPreview: false }}
-                skinTonesDisabled
-              />
+              <Suspense fallback={<div className="p-4 text-gray-500">Loading emoji picker...</div>}>
+                <EmojiPicker 
+                  onEmojiClick={onEmojiClick}
+                  width={352}
+                  height={435}
+                  previewConfig={{ showPreview: false }}
+                  skinTonesDisabled
+                />
+              </Suspense>
             </div>,
             document.body
           )}

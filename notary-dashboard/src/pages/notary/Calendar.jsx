@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfWeek, endOfWeek, addMonths, subMonths, isSameMonth, isToday } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfWeek, endOfWeek, addMonths, subMonths, isSameMonth, isToday, startOfDay, endOfDay, addDays, subDays, addWeeks, subWeeks } from 'date-fns';
 import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
 
 const Calendar = () => {
@@ -12,10 +12,16 @@ const Calendar = () => {
   const [notaryTimezone, setNotaryTimezone] = useState(null);
   const [notaryServiceIds, setNotaryServiceIds] = useState([]);
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'table'
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [calendarView, setCalendarView] = useState('month'); // 'day', 'week', or 'month'
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [acceptedAppointments, setAcceptedAppointments] = useState([]);
+  const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Filters
+  const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'confirmed', 'accepted', 'completed', 'in_progress'
 
   useEffect(() => {
     fetchNotaryInfo();
@@ -25,7 +31,36 @@ const Calendar = () => {
     if (notaryId !== null) {
       fetchAcceptedAppointments();
     }
-  }, [notaryId, currentMonth]);
+  }, [notaryId]);
+
+  // Filter appointments based on filters
+  useEffect(() => {
+    let filtered = [...acceptedAppointments];
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(apt => apt.status === statusFilter);
+    }
+
+    // Filter by date range
+    if (dateFilter.startDate) {
+      const startDate = parseISO(dateFilter.startDate);
+      filtered = filtered.filter(apt => {
+        const aptDate = parseISO(apt.appointment_date);
+        return aptDate >= startOfDay(startDate);
+      });
+    }
+
+    if (dateFilter.endDate) {
+      const endDate = parseISO(dateFilter.endDate);
+      filtered = filtered.filter(apt => {
+        const aptDate = parseISO(apt.appointment_date);
+        return aptDate <= endOfDay(endDate);
+      });
+    }
+
+    setFilteredAppointments(filtered);
+  }, [acceptedAppointments, statusFilter, dateFilter]);
 
   const fetchNotaryInfo = async () => {
     try {
@@ -123,13 +158,20 @@ const Calendar = () => {
     }
   };
 
-  const getAppointmentsForMonth = () => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const getAppointmentsForDay = (date) => {
+    return filteredAppointments.filter(apt => {
+      const aptDate = parseISO(apt.appointment_date);
+      return isSameDay(aptDate, date);
+    });
+  };
 
-    return monthDays.map(day => {
-      const dayAppointments = acceptedAppointments.filter(apt => {
+  const getAppointmentsForWeek = () => {
+    const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+    const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
+    return weekDays.map(day => {
+      const dayAppointments = filteredAppointments.filter(apt => {
         const aptDate = parseISO(apt.appointment_date);
         return isSameDay(aptDate, day);
       });
@@ -137,15 +179,45 @@ const Calendar = () => {
     });
   };
 
+  const getAppointmentsForMonth = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+    return monthDays.map(day => {
+      const dayAppointments = filteredAppointments.filter(apt => {
+        const aptDate = parseISO(apt.appointment_date);
+        return isSameDay(aptDate, day);
+      });
+      return { date: day, appointments: dayAppointments };
+    });
+  };
+
+  const navigateDate = (direction) => {
+    if (calendarView === 'day') {
+      setCurrentDate(prev => direction === 'next' ? addDays(prev, 1) : subDays(prev, 1));
+    } else if (calendarView === 'week') {
+      setCurrentDate(prev => direction === 'next' ? addWeeks(prev, 1) : subWeeks(prev, 1));
+    } else if (calendarView === 'month') {
+      setCurrentDate(prev => direction === 'next' ? addMonths(prev, 1) : subMonths(prev, 1));
+    }
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
   const formatDate = (dateString) => {
     return format(parseISO(dateString), 'MMM dd, yyyy');
   };
 
   const formatTime = (timeString, appointmentDate, clientTimezone) => {
-    if (!notaryTimezone || !clientTimezone) {
+    if (!notaryTimezone) {
       return timeString.substring(0, 5);
     }
-    const convertedTime = convertTimeToNotaryTimezone(timeString, appointmentDate, clientTimezone, notaryTimezone);
+    // Time stored is in Florida/Eastern Time (America/New_York)
+    // Convert from Florida time to notary timezone
+    const convertedTime = convertTimeToNotaryTimezone(timeString, appointmentDate, 'America/New_York', notaryTimezone);
     return convertedTime;
   };
 
@@ -186,6 +258,24 @@ const Calendar = () => {
     );
   };
 
+  // Pagination for table view
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAppointments = filteredAppointments.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
+
+  const getDateRangeLabel = () => {
+    if (calendarView === 'day') {
+      return format(currentDate, 'EEEE, MMMM d, yyyy');
+    } else if (calendarView === 'week') {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+      return `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
+    } else {
+      return format(currentDate, 'MMMM yyyy');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -194,22 +284,11 @@ const Calendar = () => {
     );
   }
 
-  const monthDays = getAppointmentsForMonth();
-  const weekStart = startOfWeek(monthDays[0].date);
-  const weekEnd = endOfWeek(monthDays[monthDays.length - 1].date);
-  const calendarDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
-
-  // Pagination for table view
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedAppointments = acceptedAppointments.slice(startIndex, endIndex);
-  const totalPages = Math.ceil(acceptedAppointments.length / itemsPerPage);
-
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Calendar</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Appointment</h1>
         <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
           View and manage your appointments
           {notaryTimezone && (
@@ -218,11 +297,68 @@ const Calendar = () => {
         </p>
       </div>
 
+      {/* Filters */}
+      <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Status Filter */}
+          <div className="flex-1">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+            >
+              <option value="all">All Statuses</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="accepted">Accepted</option>
+              <option value="completed">Completed</option>
+              <option value="in_progress">In Progress</option>
+            </select>
+          </div>
+
+          {/* Start Date Filter */}
+          <div className="flex-1">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">Start Date</label>
+            <input
+              type="date"
+              value={dateFilter.startDate}
+              onChange={(e) => setDateFilter(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+            />
+          </div>
+
+          {/* End Date Filter */}
+          <div className="flex-1">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">End Date</label>
+            <input
+              type="date"
+              value={dateFilter.endDate}
+              onChange={(e) => setDateFilter(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
+            />
+          </div>
+
+          {/* Clear Filters */}
+          <div className="flex items-end">
+            <button
+              onClick={() => {
+                setDateFilter({ startDate: '', endDate: '' });
+                setStatusFilter('all');
+              }}
+              className="px-4 py-2 sm:py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors whitespace-nowrap"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Calendar/Table View */}
       <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900">Appointments</h2>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+            {/* View Mode Toggle */}
             <div className="flex gap-2 bg-white rounded-lg p-1">
               <button
                 onClick={() => setViewMode('calendar')}
@@ -241,84 +377,241 @@ const Calendar = () => {
                 Table
               </button>
             </div>
+            
             {viewMode === 'calendar' && (
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  <Icon icon="heroicons:chevron-left" className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-                <span className="font-semibold text-sm sm:text-base text-gray-900 min-w-[120px] sm:min-w-[150px] text-center">
-                  {format(currentMonth, 'MMMM yyyy')}
-                </span>
-                <button
-                  onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  <Icon icon="heroicons:chevron-right" className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              </div>
+              <>
+                {/* Calendar View Toggle (Day/Week/Month) */}
+                <div className="flex gap-2 bg-white rounded-lg p-1">
+                  <button
+                    onClick={() => setCalendarView('day')}
+                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors ${
+                      calendarView === 'day' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Day
+                  </button>
+                  <button
+                    onClick={() => setCalendarView('week')}
+                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors ${
+                      calendarView === 'week' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Week
+                  </button>
+                  <button
+                    onClick={() => setCalendarView('month')}
+                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors ${
+                      calendarView === 'month' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Month
+                  </button>
+                </div>
+
+                {/* Date Navigation */}
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => navigateDate('prev')}
+                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Icon icon="heroicons:chevron-left" className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                  <button
+                    onClick={goToToday}
+                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Today
+                  </button>
+                  <span className="font-semibold text-sm sm:text-base text-gray-900 min-w-[150px] sm:min-w-[200px] text-center">
+                    {getDateRangeLabel()}
+                  </span>
+                  <button
+                    onClick={() => navigateDate('next')}
+                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Icon icon="heroicons:chevron-right" className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
 
         {viewMode === 'calendar' ? (
-          <div className="bg-white rounded-xl overflow-hidden">
-            <div className="grid grid-cols-7 border-b border-gray-200">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0">
-                  {day}
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day, idx) => {
-                const dayData = monthDays.find(d => isSameDay(d.date, day));
-                const appointments = dayData?.appointments || [];
-                const isCurrentMonth = isSameMonth(day, currentMonth);
-                
-                return (
-                  <div
-                    key={idx}
-                    className={`min-h-[60px] sm:min-h-[100px] p-1 sm:p-2 border-r border-b border-gray-200 last:border-r-0 ${
-                      !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
-                    }`}
-                  >
-                    <div className={`text-xs sm:text-sm font-semibold mb-1 ${isCurrentMonth ? 'text-gray-900' : 'text-gray-400'}`}>
-                      {format(day, 'd')}
-                    </div>
-                    <div className="space-y-0.5 sm:space-y-1">
-                      {appointments.slice(0, 1).map((apt) => {
+          <>
+            {calendarView === 'day' ? (
+              <div className="bg-white rounded-xl overflow-hidden">
+                <div className="border-b border-gray-200 p-3 sm:p-4">
+                  <div className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
+                    {format(currentDate, 'EEEE, MMMM d, yyyy')}
+                  </div>
+                  <div className="space-y-2">
+                    {(() => {
+                      const dayAppointments = getAppointmentsForDay(currentDate);
+                      if (dayAppointments.length === 0) {
+                        return (
+                          <div className="text-center py-8 text-sm text-gray-600">
+                            No appointments scheduled for this day
+                          </div>
+                        );
+                      }
+                      return dayAppointments.map((apt) => {
                         const statusColors = {
-                          pending: 'bg-yellow-500 text-yellow-900',
-                          confirmed: 'bg-green-500 text-white',
-                          completed: 'bg-purple-500 text-white',
-                          cancelled: 'bg-red-500 text-white'
+                          pending: 'bg-yellow-100 border-yellow-300 text-yellow-900',
+                          confirmed: 'bg-green-100 border-green-300 text-green-900',
+                          completed: 'bg-purple-100 border-purple-300 text-purple-900',
+                          in_progress: 'bg-blue-100 border-blue-300 text-blue-900',
+                          cancelled: 'bg-red-100 border-red-300 text-red-900'
                         };
-                        const colorClass = statusColors[apt.status] || 'bg-gray-500 text-white';
+                        const colorClass = statusColors[apt.status] || 'bg-gray-100 border-gray-300 text-gray-900';
                         return (
                           <div
                             key={apt.id}
-                            className={`text-[10px] sm:text-xs ${colorClass} p-0.5 sm:p-1 rounded cursor-pointer hover:opacity-80 transition-opacity truncate`}
+                            className={`${colorClass} border-2 rounded-lg p-3 sm:p-4 cursor-pointer hover:opacity-80 transition-opacity`}
                             onClick={() => navigate(`/submission/${apt.id}`)}
-                            title={`${formatTime(apt.appointment_time, apt.appointment_date, apt.timezone)} - ${apt.first_name}`}
                           >
-                            {formatTime(apt.appointment_time, apt.appointment_date, apt.timezone)}
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-semibold text-sm sm:text-base mb-1">
+                                  {formatTime(apt.appointment_time, apt.appointment_date, apt.timezone)}
+                                </div>
+                                <div className="text-xs sm:text-sm">
+                                  {apt.first_name} {apt.last_name}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {getStatusBadge(apt.status)}
+                                <Icon icon="heroicons:chevron-right" className="w-5 h-5" />
+                              </div>
+                            </div>
                           </div>
                         );
-                      })}
-                      {appointments.length > 1 && (
-                        <div className="text-[10px] sm:text-xs text-gray-600">
-                          +{appointments.length - 1}
-                        </div>
-                      )}
-                    </div>
+                      });
+                    })()}
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+              </div>
+            ) : calendarView === 'week' ? (
+              <div className="bg-white rounded-xl overflow-hidden">
+                <div className="grid grid-cols-7 border-b border-gray-200">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7">
+                  {getAppointmentsForWeek().map((dayData, idx) => {
+                    const { date, appointments } = dayData;
+                    const isTodayDate = isToday(date);
+                    
+                    return (
+                      <div
+                        key={idx}
+                        className={`min-h-[200px] sm:min-h-[300px] p-2 sm:p-3 border-r border-b border-gray-200 last:border-r-0 ${
+                          isTodayDate ? 'bg-blue-50' : 'bg-white'
+                        }`}
+                      >
+                        <div className={`text-xs sm:text-sm font-semibold mb-2 ${isTodayDate ? 'text-blue-900' : 'text-gray-900'}`}>
+                          {format(date, 'd')}
+                        </div>
+                        <div className="space-y-1 sm:space-y-2">
+                          {appointments.map((apt) => {
+                            const statusColors = {
+                              pending: 'bg-yellow-500 text-yellow-900',
+                              confirmed: 'bg-green-500 text-white',
+                              completed: 'bg-purple-500 text-white',
+                              in_progress: 'bg-blue-500 text-white',
+                              cancelled: 'bg-red-500 text-white'
+                            };
+                            const colorClass = statusColors[apt.status] || 'bg-gray-500 text-white';
+                            return (
+                              <div
+                                key={apt.id}
+                                className={`text-[10px] sm:text-xs ${colorClass} p-1 sm:p-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity`}
+                                onClick={() => navigate(`/submission/${apt.id}`)}
+                                title={`${formatTime(apt.appointment_time, apt.appointment_date, apt.timezone)} - ${apt.first_name} ${apt.last_name}`}
+                              >
+                                <div className="font-semibold">{formatTime(apt.appointment_time, apt.appointment_date, apt.timezone)}</div>
+                                <div className="truncate">{apt.first_name}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl overflow-hidden">
+                <div className="grid grid-cols-7 border-b border-gray-200">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7">
+                  {(() => {
+                    const monthDays = getAppointmentsForMonth();
+                    const weekStart = startOfWeek(monthDays[0].date, { weekStartsOn: 0 });
+                    const weekEnd = endOfWeek(monthDays[monthDays.length - 1].date, { weekStartsOn: 0 });
+                    const calendarDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+                    
+                    return calendarDays.map((day, idx) => {
+                      const dayData = monthDays.find(d => isSameDay(d.date, day));
+                      const appointments = dayData?.appointments || [];
+                      const isCurrentMonth = isSameMonth(day, currentDate);
+                      const isTodayDate = isToday(day);
+                      
+                      return (
+                        <div
+                          key={idx}
+                          className={`min-h-[60px] sm:min-h-[100px] p-1 sm:p-2 border-r border-b border-gray-200 last:border-r-0 ${
+                            !isCurrentMonth ? 'bg-gray-50' : isTodayDate ? 'bg-blue-50' : 'bg-white'
+                          }`}
+                        >
+                          <div className={`text-xs sm:text-sm font-semibold mb-1 ${
+                            isCurrentMonth ? (isTodayDate ? 'text-blue-900' : 'text-gray-900') : 'text-gray-400'
+                          }`}>
+                            {format(day, 'd')}
+                          </div>
+                          <div className="space-y-0.5 sm:space-y-1">
+                            {appointments.slice(0, 2).map((apt) => {
+                              const statusColors = {
+                                pending: 'bg-yellow-500 text-yellow-900',
+                                confirmed: 'bg-green-500 text-white',
+                                completed: 'bg-purple-500 text-white',
+                                in_progress: 'bg-blue-500 text-white',
+                                cancelled: 'bg-red-500 text-white'
+                              };
+                              const colorClass = statusColors[apt.status] || 'bg-gray-500 text-white';
+                              return (
+                                <div
+                                  key={apt.id}
+                                  className={`text-[10px] sm:text-xs ${colorClass} p-0.5 sm:p-1 rounded cursor-pointer hover:opacity-80 transition-opacity truncate`}
+                                  onClick={() => navigate(`/submission/${apt.id}`)}
+                                  title={`${formatTime(apt.appointment_time, apt.appointment_date, apt.timezone)} - ${apt.first_name}`}
+                                >
+                                  {formatTime(apt.appointment_time, apt.appointment_date, apt.timezone)}
+                                </div>
+                              );
+                            })}
+                            {appointments.length > 2 && (
+                              <div className="text-[10px] sm:text-xs text-gray-600">
+                                +{appointments.length - 2} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div>
             <div className="bg-white rounded-xl overflow-hidden">
@@ -369,7 +662,7 @@ const Calendar = () => {
             {totalPages > 1 && (
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0 mt-4">
                 <div className="text-xs sm:text-sm text-gray-600 order-2 sm:order-1">
-                  Showing {startIndex + 1} to {Math.min(endIndex, acceptedAppointments.length)} of {acceptedAppointments.length} appointments
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredAppointments.length)} of {filteredAppointments.length} appointments
                 </div>
                 <div className="flex items-center gap-2 order-1 sm:order-2">
                   <button

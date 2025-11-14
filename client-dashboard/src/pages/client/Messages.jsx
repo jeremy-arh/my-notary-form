@@ -4,8 +4,10 @@ import { Icon } from '@iconify/react';
 import ClientLayout from '../../components/ClientLayout';
 import Chat from '../../components/Chat';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 
 const Messages = () => {
+  const toast = useToast();
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [clientInfo, setClientInfo] = useState(null);
@@ -112,7 +114,7 @@ const Messages = () => {
       }
     } catch (error) {
       console.error('Error fetching conversations:', error);
-      alert(`Error loading conversations: ${error.message}`);
+      toast.error(`Error loading conversations: ${error.message}`);
       setConversations([]);
     } finally {
       setLoading(false);

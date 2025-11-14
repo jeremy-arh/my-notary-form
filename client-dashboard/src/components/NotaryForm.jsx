@@ -7,6 +7,7 @@ import Logo from '../assets/Logo';
 import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
+import Signatories from './steps/Signatories';
 import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
@@ -28,6 +29,9 @@ const NotaryForm = () => {
 
     // Documents (step 2) - organized by service
     serviceDocuments: {}, // { serviceId: [files] }
+
+    // Signatories (step 3) - organized by document
+    signatoriesByDocument: {}, // { "serviceId_docIndex": [signatories] }
 
     // Appointment
     appointmentDate: '',
@@ -56,9 +60,10 @@ const NotaryForm = () => {
   const steps = [
     { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
     { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 3, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/form/book-appointment' },
-    { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
-    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
+    { id: 3, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' },
+    { id: 4, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/form/book-appointment' },
+    { id: 5, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
+    { id: 6, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
 
   // Validation function to check if current step can proceed
@@ -77,10 +82,48 @@ const NotaryForm = () => {
           return docs && docs.length > 0;
         });
 
-      case 3: // Book an appointment
+      case 3: // Add Signatories
+        // Check that all signatories have required fields
+        if (!formData.signatoriesByDocument) return false;
+        if (!formData.serviceDocuments) return false;
+        
+        // First, ensure that every document has at least one signatory
+        for (const [serviceId, documents] of Object.entries(formData.serviceDocuments)) {
+          for (let docIndex = 0; docIndex < documents.length; docIndex++) {
+            const docKey = `${serviceId}_${docIndex}`;
+            const signatories = formData.signatoriesByDocument[docKey];
+            if (!signatories || !Array.isArray(signatories) || signatories.length === 0) {
+              return false;
+            }
+          }
+        }
+        
+        // Then check that all signatories have required fields filled
+        for (const signatories of Object.values(formData.signatoriesByDocument)) {
+          if (!Array.isArray(signatories)) continue;
+          for (const signatory of signatories) {
+            if (!signatory || 
+                !signatory.firstName?.trim() || 
+                !signatory.lastName?.trim() || 
+                !signatory.birthDate?.trim() || 
+                !signatory.birthCity?.trim() || 
+                !signatory.postalAddress?.trim() ||
+                !signatory.email?.trim() ||
+                !signatory.phone?.trim()) {
+              return false;
+            }
+            // Validate email format
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email?.trim())) {
+              return false;
+            }
+          }
+        }
+        return true;
+
+      case 4: // Book an appointment
         return formData.appointmentDate && formData.appointmentTime;
 
-      case 4: // Personal informations
+      case 5: // Personal informations
         const requiredFields = [
           formData.firstName,
           formData.lastName,
@@ -100,7 +143,7 @@ const NotaryForm = () => {
         // Check all required fields are filled
         return requiredFields.every(field => field && field.trim() !== '');
 
-      case 5: // Summary
+      case 6: // Summary
         return true; // No validation needed for summary
 
       default:
@@ -121,6 +164,7 @@ const NotaryForm = () => {
     const stepNameMap = {
       'Choose Services': 'service_selection',
       'Upload Documents': 'document_upload',
+      'Add Signatories': 'signatories',
       'Book an appointment': 'appointment_booking',
       'Your personal informations': 'personal_info',
       'Summary': 'review_summary'
@@ -643,6 +687,17 @@ const NotaryForm = () => {
               path="documents"
               element={
                 <Documents
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                />
+              }
+            />
+            <Route
+              path="signatories"
+              element={
+                <Signatories
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}

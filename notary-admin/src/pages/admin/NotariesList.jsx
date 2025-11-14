@@ -3,9 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirm } from '../../hooks/useConfirm';
 
 const NotariesList = () => {
   const navigate = useNavigate();
+  const toast = useToast();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [notaries, setNotaries] = useState([]);
   const [filteredNotaries, setFilteredNotaries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,7 +106,7 @@ const NotariesList = () => {
       setNotaries(notariesWithUserData);
     } catch (error) {
       console.error('❌ Error fetching notaries:', error);
-      alert(`Error loading notaries: ${error.message}\n\nPlease check:\n1. Database connection\n2. RLS policies\n3. Service role key configuration`);
+      toast.error(`Error loading notaries: ${error.message}. Please check: Database connection, RLS policies, Service role key configuration`);
     } finally {
       setLoading(false);
     }
@@ -214,14 +218,14 @@ const NotariesList = () => {
       
       // Validation
       if (!formData.full_name || !formData.email) {
-        alert('Please fill in all required fields (Full Name and Email are required)');
+        toast.warning('Please fill in all required fields (Full Name and Email are required)');
         return;
       }
 
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
-        alert('Please enter a valid email address');
+        toast.warning('Please enter a valid email address');
         return;
       }
 
@@ -265,7 +269,7 @@ const NotariesList = () => {
         
         console.log('✅ Notary updated:', data);
         notaryId = selectedNotary.id;
-        alert('Notary updated successfully!');
+        toast.success('Notary updated successfully!');
       } else {
         // Create new notary
         console.log('➕ Creating new notary...');
@@ -318,7 +322,7 @@ const NotariesList = () => {
         
         console.log('✅ Notary created:', data);
         notaryId = data.id;
-        alert('Notary created successfully! You can now send an invitation.');
+        toast.success('Notary created successfully! You can now send an invitation.');
       }
 
       // Update notary services
@@ -373,7 +377,7 @@ const NotariesList = () => {
     } catch (error) {
       console.error('❌ Error saving notary:', error);
       const errorMessage = error.message || 'Unknown error occurred';
-      alert(`Error: ${errorMessage}\n\nPlease check:\n1. All required fields are filled\n2. Service Role Key is configured\n3. Database schema is up to date\n4. RLS policies allow admin operations\n\nCheck browser console for details.`);
+      toast.error(`Error: ${errorMessage}. Please check: All required fields are filled, Service Role Key is configured, Database schema is up to date, RLS policies allow admin operations. Check browser console for details.`);
     }
   };
 
@@ -382,7 +386,7 @@ const NotariesList = () => {
       console.log('📧 Sending invitation to notary:', notary.email);
       
       if (notary.user_id) {
-        alert('This notary already has an account.');
+        toast.info('This notary already has an account.');
         return;
       }
 
@@ -420,7 +424,7 @@ const NotariesList = () => {
         }
         
         console.log('✅ Account linked successfully');
-        alert('Notary account linked successfully! The notary can reset their password from their dashboard if needed.');
+        toast.success('Notary account linked successfully! The notary can reset their password from their dashboard if needed.');
         await fetchNotaries();
         return;
       }
@@ -485,7 +489,7 @@ const NotariesList = () => {
         if (updateError) {
           console.error('❌ Error updating notary with user_id:', updateError);
           // Don't throw - invitation was sent, just the link failed
-          alert(`Invitation sent successfully, but failed to link user_id: ${updateError.message}`);
+          toast.warning(`Invitation sent successfully, but failed to link user_id: ${updateError.message}`);
         } else {
           console.log('✅ User_id linked successfully');
         }
@@ -493,16 +497,24 @@ const NotariesList = () => {
         console.warn('⚠️ No user ID in invitation response');
       }
 
-      alert('Notary account created and invitation email sent successfully! The notary will receive an email to set their password.');
+      toast.success('Notary account created and invitation email sent successfully! The notary will receive an email to set their password.');
       await fetchNotaries();
     } catch (error) {
       console.error('❌ Error sending invitation:', error);
-      alert(`Error: ${error.message}\n\nTroubleshooting:\n1. Check that VITE_SUPABASE_SERVICE_ROLE_KEY is set in Cloudflare Pages\n2. Verify email service is configured in Supabase\n3. Check Supabase logs for detailed error messages`);
+      toast.error(`Error: ${error.message}. Troubleshooting: Check that VITE_SUPABASE_SERVICE_ROLE_KEY is set in Cloudflare Pages, Verify email service is configured in Supabase, Check Supabase logs for detailed error messages`);
     }
   };
 
   const handleDeleteNotary = async (notary) => {
-    if (!window.confirm(`Are you sure you want to delete ${notary.full_name || notary.name}? This will remove their access and unassign their incomplete submissions.`)) {
+    const confirmed = await confirm({
+      title: 'Delete Notary',
+      message: `Are you sure you want to delete ${notary.full_name || notary.name}? This will remove their access and unassign their incomplete submissions.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -548,11 +560,11 @@ const NotariesList = () => {
 
       if (deleteError) throw deleteError;
 
-      alert(`Notary deleted successfully. ${submissions?.length || 0} submission(s) have been set back to pending.`);
+      toast.success(`Notary deleted successfully. ${submissions?.length || 0} submission(s) have been set back to pending.`);
       await fetchNotaries();
     } catch (error) {
       console.error('Error deleting notary:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
@@ -586,6 +598,7 @@ const NotariesList = () => {
 
   return (
     <div className="space-y-6">
+      <ConfirmComponent />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

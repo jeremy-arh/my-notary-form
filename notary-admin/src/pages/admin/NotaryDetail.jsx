@@ -3,10 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirm } from '../../hooks/useConfirm';
 
 const NotaryDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [notary, setNotary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submissions, setSubmissions] = useState([]);
@@ -97,7 +101,7 @@ const NotaryDetail = () => {
       }
     } catch (error) {
       console.error('Error fetching notary detail:', error);
-      alert('Error loading notary details');
+      toast.error('Error loading notary details');
       navigate('/notary');
     } finally {
       setLoading(false);
@@ -154,7 +158,7 @@ const NotaryDetail = () => {
   const handleCreatePayout = async () => {
     try {
       if (!payoutFormData.payment_amount || !payoutFormData.payment_date) {
-        alert('Please fill in all required fields');
+        toast.warning('Please fill in all required fields');
         return;
       }
 
@@ -200,10 +204,10 @@ const NotaryDetail = () => {
         description: ''
       });
       await fetchPayouts();
-      alert('Payout created successfully!');
+      toast.success('Payout created successfully!');
     } catch (error) {
       console.error('Error creating payout:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
@@ -232,6 +236,79 @@ const NotaryDetail = () => {
       style: 'currency',
       currency: 'USD'
     }).format(amount || 0);
+  };
+
+  // Convert time from Florida/Eastern Time to another timezone
+  const convertTimeFromFlorida = (time, date, targetTimezone) => {
+    if (!time || !date || !targetTimezone) return time;
+    
+    try {
+      const floridaTimezone = 'America/New_York';
+      
+      // Convert UTC offset to IANA timezone if needed
+      let targetTz = targetTimezone;
+      if (targetTimezone.startsWith('UTC')) {
+        const offsetMatch = targetTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+        if (offsetMatch) {
+          const sign = offsetMatch[1] === '+' ? 1 : -1;
+          const hours = parseInt(offsetMatch[2]);
+          const minutes = parseInt(offsetMatch[3] || '0');
+          const offsetMinutes = sign * (hours * 60 + minutes);
+          
+          // Map common UTC offsets to IANA timezones
+          if (offsetMinutes === -300) targetTz = 'America/New_York';
+          else if (offsetMinutes === -240) targetTz = 'America/New_York';
+          else if (offsetMinutes === 60) targetTz = 'Europe/Paris';
+          else if (offsetMinutes === 0) targetTz = 'Europe/London';
+          else if (offsetMinutes === 120) targetTz = 'Europe/Berlin';
+          else targetTz = 'UTC';
+        }
+      }
+      
+      const [hours, minutes] = time.split(':').map(Number);
+      const dateTimeString = `${date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      const tempDate = new Date(dateTimeString);
+      
+      // Format in Florida timezone to see what UTC time it represents
+      const floridaFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: floridaTimezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const floridaParts = floridaFormatter.formatToParts(tempDate);
+      const floridaHour = parseInt(floridaParts.find(p => p.type === 'hour').value);
+      const floridaMinute = parseInt(floridaParts.find(p => p.type === 'minute').value);
+      
+      // Calculate difference and adjust
+      const desiredMinutes = hours * 60 + minutes;
+      const actualMinutes = floridaHour * 60 + floridaMinute;
+      const diffMinutes = desiredMinutes - actualMinutes;
+      
+      const utcTimestamp = tempDate.getTime() + diffMinutes * 60 * 1000;
+      const adjustedDate = new Date(utcTimestamp);
+      
+      // Format in target timezone
+      const targetFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: targetTz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const targetParts = targetFormatter.formatToParts(adjustedDate);
+      const targetHour = targetParts.find(p => p.type === 'hour').value;
+      const targetMinute = targetParts.find(p => p.type === 'minute').value;
+      
+      return `${targetHour.padStart(2, '0')}:${targetMinute.padStart(2, '0')}`;
+    } catch (error) {
+      console.error('Error converting time:', error);
+      return time;
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -287,7 +364,15 @@ const NotaryDetail = () => {
   };
 
   const handleMarkAsPaid = async (payoutId) => {
-    if (!confirm('Are you sure you want to mark this payout as paid?')) {
+    const confirmed = await confirm({
+      title: 'Mark as Paid',
+      message: 'Are you sure you want to mark this payout as paid?',
+      confirmText: 'Mark as Paid',
+      cancelText: 'Cancel',
+      type: 'warning',
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -300,10 +385,10 @@ const NotaryDetail = () => {
       if (error) throw error;
 
       await fetchPayouts();
-      alert('Payout marked as paid successfully!');
+      toast.success('Payout marked as paid successfully!');
     } catch (error) {
       console.error('Error updating payout status:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
@@ -553,7 +638,22 @@ const NotaryDetail = () => {
                           {submission.first_name} {submission.last_name}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
-                          {formatDate(submission.appointment_date)}
+                          {submission.appointment_date ? (
+                            <div>
+                              <div>{formatDate(submission.appointment_date)}</div>
+                              {submission.appointment_time && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  <div>Florida: {submission.appointment_time}</div>
+                                  {notary?.timezone && (
+                                    <div>Notary ({notary.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, notary.timezone)}</div>
+                                  )}
+                                  {submission.timezone && (
+                                    <div>Client ({submission.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.timezone)}</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : 'N/A'}
                         </td>
                         <td className="px-6 py-4">
                           {getStatusBadge(submission.status)}
@@ -854,9 +954,20 @@ const NotaryDetail = () => {
                       {selectedPayout.submission.appointment_date && (
                         <div>
                           <span className="text-sm text-gray-600">Appointment: </span>
-                          <span className="text-sm text-gray-900">
-                            {formatDate(selectedPayout.submission.appointment_date)} at {selectedPayout.submission.appointment_time}
-                          </span>
+                          <div className="text-sm text-gray-900 mt-1">
+                            <div>{formatDate(selectedPayout.submission.appointment_date)}</div>
+                            {selectedPayout.submission.appointment_time && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                <div>Florida: {selectedPayout.submission.appointment_time}</div>
+                                {notary?.timezone && (
+                                  <div>Notary ({notary.timezone}): {convertTimeFromFlorida(selectedPayout.submission.appointment_time, selectedPayout.submission.appointment_date, notary.timezone)}</div>
+                                )}
+                                {selectedPayout.submission.timezone && (
+                                  <div>Client ({selectedPayout.submission.timezone}): {convertTimeFromFlorida(selectedPayout.submission.appointment_time, selectedPayout.submission.appointment_date, selectedPayout.submission.timezone)}</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                       {selectedPayout.submission.total_price && (

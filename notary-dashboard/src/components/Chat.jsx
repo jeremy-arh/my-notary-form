@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../lib/supabase';
 import { playNotificationSoundIfNeeded } from '../utils/soundNotification';
+import { useToast } from '../contexts/ToastContext';
 
 const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, clientFirstName, clientLastName, isFullscreen = false }) => {
   const [messages, setMessages] = useState([]);
@@ -103,10 +104,12 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const toast = useToast();
+  
   const sendMessage = async () => {
     if (!newMessage.trim() && attachments.length === 0) return;
     if (!currentUserId) {
-      alert('User ID not available');
+      toast.error('User ID not available');
       return;
     }
 
@@ -174,7 +177,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
       setAttachments([]);
     } catch (error) {
       console.error('Error sending message:', error);
-      alert(`Failed to send message: ${error.message}`);
+      toast.error(`Failed to send message: ${error.message}`);
     } finally {
       setSending(false);
     }
@@ -215,7 +218,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
       setAttachments(prev => [...prev, ...uploadedAttachments]);
     } catch (error) {
       console.error('Error handling files:', error);
-      alert('Failed to upload files');
+      toast.error('Failed to upload files');
     } finally {
       setUploadingFiles(false);
     }

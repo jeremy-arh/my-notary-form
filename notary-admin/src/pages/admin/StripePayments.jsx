@@ -31,34 +31,112 @@ const StripePayments = () => {
 
   const fetchPayments = async () => {
     try {
-      // Récupérer toutes les soumissions avec leurs données de paiement
+      // Récupérer toutes les soumissions avec leurs données de paiement depuis Supabase
       const { data: submissions, error } = await supabase
         .from('submission')
-        .select('*, data')
-        .order('created_at', { ascending: false });
+        .select('id, email, first_name, last_name, created_at, data, total_price')
+        .not('data->payment', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(500);
 
       if (error) throw error;
 
-      // Extraire les paiements depuis les données
-      const paymentsData = (submissions || [])
-        .filter(sub => sub.data?.payment)
-        .map(sub => ({
-          id: sub.id,
-          submissionId: sub.id,
-          sessionId: sub.data.payment.stripe_session_id,
-          amount: sub.data.payment.amount_paid / 100, // Convert from cents
-          currency: sub.data.payment.currency || 'usd',
-          status: sub.data.payment.payment_status,
-          paidAt: sub.data.payment.paid_at,
-          invoiceUrl: sub.data.payment.invoice_url,
-          customerEmail: sub.email,
-          customerName: `${sub.first_name} ${sub.last_name}`,
-          createdAt: sub.created_at
-        }));
+      const allTransactions = [];
 
-      setPayments(paymentsData);
+      // Traiter chaque soumission pour extraire les transactions
+      for (const submission of submissions || []) {
+        const paymentData = submission.data?.payment;
+
+        if (!paymentData) continue;
+
+        // Transaction de paiement initiale
+        if (paymentData.payment_intent_id && paymentData.amount_paid) {
+          const paymentDate = paymentData.paid_at 
+            ? new Date(paymentData.paid_at).getTime() / 1000 
+            : submission.created_at 
+              ? new Date(submission.created_at).getTime() / 1000 
+              : Date.now() / 1000;
+
+          allTransactions.push({
+            id: paymentData.payment_intent_id,
+            type: 'payment',
+            submissionId: submission.id,
+            paymentIntentId: paymentData.payment_intent_id,
+            amount: paymentData.amount_paid / 100, // Convert from cents
+            currency: paymentData.currency || 'usd',
+            status: paymentData.payment_status === 'paid' ? 'succeeded' : paymentData.payment_status || 'pending',
+            created: paymentDate,
+            customerEmail: submission.email,
+            customerName: `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || null,
+            stripeUrl: paymentData.payment_intent_id 
+              ? `https://dashboard.stripe.com/test/payments/${paymentData.payment_intent_id}` 
+              : null,
+            receiptUrl: paymentData.invoice_url || null,
+            stripeSessionId: paymentData.stripe_session_id
+          });
+
+          // Paiements supplémentaires
+          if (paymentData.additional_payments && Array.isArray(paymentData.additional_payments)) {
+            for (const additionalPayment of paymentData.additional_payments) {
+              const paymentDate = additionalPayment.created_at 
+                ? new Date(additionalPayment.created_at).getTime() / 1000 
+                : Date.now() / 1000;
+
+              allTransactions.push({
+                id: additionalPayment.payment_intent_id,
+                type: 'payment',
+                submissionId: submission.id,
+                paymentIntentId: additionalPayment.payment_intent_id,
+                amount: additionalPayment.amount / 100,
+                currency: additionalPayment.currency || paymentData.currency || 'usd',
+                status: additionalPayment.status || 'succeeded',
+                created: paymentDate,
+                customerEmail: submission.email,
+                customerName: `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || null,
+                stripeUrl: additionalPayment.payment_intent_id 
+                  ? `https://dashboard.stripe.com/test/payments/${additionalPayment.payment_intent_id}` 
+                  : null,
+                receiptUrl: null,
+                stripeSessionId: null
+              });
+            }
+          }
+
+          // Remboursements
+          if (paymentData.refunds && Array.isArray(paymentData.refunds)) {
+            for (const refund of paymentData.refunds) {
+              const refundDate = refund.created_at 
+                ? new Date(refund.created_at).getTime() / 1000 
+                : Date.now() / 1000;
+
+              allTransactions.push({
+                id: refund.id || `refund_${paymentData.payment_intent_id}_${refundDate}`,
+                type: 'refund',
+                submissionId: submission.id,
+                paymentIntentId: paymentData.payment_intent_id,
+                amount: refund.amount / 100,
+                currency: refund.currency || paymentData.currency || 'usd',
+                status: refund.status || 'succeeded',
+                created: refundDate,
+                customerEmail: submission.email,
+                customerName: `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || null,
+                stripeUrl: refund.id 
+                  ? `https://dashboard.stripe.com/test/refunds/${refund.id}` 
+                  : null,
+                reason: refund.reason || null
+              });
+            }
+          }
+        }
+      }
+
+      // Trier par date (plus récent en premier)
+      allTransactions.sort((a, b) => b.created - a.created);
+
+      setPayments(allTransactions);
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('Error fetching transactions:', error);
+      setPayments([]);
     } finally {
       setLoading(false);
     }
@@ -69,7 +147,11 @@ const StripePayments = () => {
 
     // Status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(p => p.status === statusFilter);
+      if (statusFilter === 'refund') {
+        filtered = filtered.filter(p => p.type === 'refund');
+      } else {
+        filtered = filtered.filter(p => p.type === 'payment' && p.status === statusFilter);
+      }
     }
 
     // Search filter
@@ -77,7 +159,8 @@ const StripePayments = () => {
       filtered = filtered.filter(p =>
         p.customerEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.sessionId?.toLowerCase().includes(searchTerm.toLowerCase())
+        p.paymentIntentId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.id?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -89,15 +172,24 @@ const StripePayments = () => {
       switch (dateFilter) {
         case 'today':
           filterDate.setHours(0, 0, 0, 0);
-          filtered = filtered.filter(p => new Date(p.paidAt || p.createdAt) >= filterDate);
+          filtered = filtered.filter(p => {
+            const txDate = new Date(p.created * 1000); // Convert Unix timestamp to Date
+            return txDate >= filterDate;
+          });
           break;
         case 'week':
           filterDate.setDate(filterDate.getDate() - 7);
-          filtered = filtered.filter(p => new Date(p.paidAt || p.createdAt) >= filterDate);
+          filtered = filtered.filter(p => {
+            const txDate = new Date(p.created * 1000);
+            return txDate >= filterDate;
+          });
           break;
         case 'month':
           filterDate.setMonth(filterDate.getMonth() - 1);
-          filtered = filtered.filter(p => new Date(p.paidAt || p.createdAt) >= filterDate);
+          filtered = filtered.filter(p => {
+            const txDate = new Date(p.created * 1000);
+            return txDate >= filterDate;
+          });
           break;
         default:
           break;
@@ -108,24 +200,33 @@ const StripePayments = () => {
   };
 
   const calculateStats = () => {
-    const successful = payments.filter(p => p.status === 'paid').length;
-    const failed = payments.filter(p => p.status !== 'paid').length;
-    const totalRev = payments
-      .filter(p => p.status === 'paid')
+    const paymentsOnly = payments.filter(p => p.type === 'payment');
+    const successful = paymentsOnly.filter(p => p.status === 'succeeded').length;
+    const failed = paymentsOnly.filter(p => p.status !== 'succeeded' && p.status !== 'processing').length;
+    const totalPayments = paymentsOnly
+      .filter(p => p.status === 'succeeded')
       .reduce((sum, p) => sum + p.amount, 0);
-    const avgAmount = successful > 0 ? totalRev / successful : 0;
+    const totalRefunds = payments
+      .filter(p => p.type === 'refund' && p.status === 'succeeded')
+      .reduce((sum, p) => sum + p.amount, 0);
+    const netRevenue = totalPayments - totalRefunds;
+    const avgAmount = successful > 0 ? totalPayments / successful : 0;
 
     setStats({
-      totalRevenue: totalRev,
+      totalRevenue: netRevenue,
       successfulPayments: successful,
       failedPayments: failed,
       averageAmount: avgAmount
     });
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+  const formatDate = (dateStringOrTimestamp) => {
+    if (!dateStringOrTimestamp) return 'N/A';
+    // Handle Unix timestamp (from Stripe)
+    const date = typeof dateStringOrTimestamp === 'number' 
+      ? new Date(dateStringOrTimestamp * 1000)
+      : new Date(dateStringOrTimestamp);
+    return date.toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -141,17 +242,28 @@ const StripePayments = () => {
     }).format(amount);
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, type) => {
     const badges = {
+      succeeded: 'bg-green-100 text-green-700',
       paid: 'bg-green-100 text-green-700',
       unpaid: 'bg-yellow-100 text-yellow-700',
       failed: 'bg-red-100 text-red-700',
-      pending: 'bg-gray-100 text-gray-700'
+      pending: 'bg-gray-100 text-gray-700',
+      processing: 'bg-blue-100 text-blue-700',
+      requires_action: 'bg-orange-100 text-orange-700',
+      canceled: 'bg-gray-100 text-gray-700',
     };
 
+    const displayStatus = type === 'refund' ? 'REFUND' : (status?.toUpperCase() || 'UNKNOWN');
+    
+    // Use purple color for refunds
+    const badgeClass = type === 'refund' 
+      ? 'bg-purple-100 text-purple-700'
+      : (badges[status] || badges.pending);
+
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badges[status] || badges.pending}`}>
-        {status?.toUpperCase() || 'UNKNOWN'}
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}`}>
+        {displayStatus}
       </span>
     );
   };
@@ -256,10 +368,10 @@ const StripePayments = () => {
                 className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
               >
                 <option value="all">Tous les statuts</option>
-                <option value="paid">Payé</option>
-                <option value="unpaid">Non payé</option>
+                <option value="succeeded">Réussi</option>
                 <option value="pending">En attente</option>
                 <option value="failed">Échoué</option>
+                <option value="refund">Remboursement</option>
               </select>
             </div>
 
@@ -292,7 +404,7 @@ const StripePayments = () => {
                     Client
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Session ID
+                    Type / ID
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Montant
@@ -301,7 +413,7 @@ const StripePayments = () => {
                     Statut
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Date de paiement
+                    Date
                   </th>
                   <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Actions
@@ -325,34 +437,56 @@ const StripePayments = () => {
                   }
                   
                   return paginatedPayments.map((payment) => (
-                    <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={`${payment.type}-${payment.id}`} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-semibold text-gray-900">{payment.customerName}</div>
-                        <div className="text-sm text-gray-600">{payment.customerEmail}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
-                        {payment.sessionId?.substring(0, 20)}...
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        {formatCurrency(payment.amount, payment.currency)}
+                        <div className="font-semibold text-gray-900">{payment.customerName || 'N/A'}</div>
+                        <div className="text-sm text-gray-600">{payment.customerEmail || 'N/A'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(payment.status)}
+                        <div className="text-sm">
+                          <div className="font-semibold text-gray-900 mb-1">
+                            {payment.type === 'refund' ? 'Remboursement' : 'Paiement'}
+                          </div>
+                          <div className="text-xs text-gray-600 font-mono">
+                            {payment.type === 'payment' ? payment.paymentIntentId : payment.id}
+                          </div>
+                          {payment.submissionId && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Submission: {payment.submissionId.substring(0, 8)}...
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`text-sm font-semibold ${payment.type === 'refund' ? 'text-red-600' : 'text-gray-900'}`}>
+                          {payment.type === 'refund' ? '-' : ''}{formatCurrency(payment.amount, payment.currency)}
+                        </div>
+                        {payment.refunded && payment.type === 'payment' && (
+                          <div className="text-xs text-red-600">
+                            Remboursé: {formatCurrency(payment.refundAmount, payment.currency)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(payment.status, payment.type)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {formatDate(payment.paidAt || payment.createdAt)}
+                        {formatDate(payment.created)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {payment.invoiceUrl && (
-                          <a
-                            href={payment.invoiceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-gray-600 hover:text-gray-900 transition-colors"
-                          >
-                            <Icon icon="heroicons:arrow-top-right-on-square" className="w-5 h-5" />
-                          </a>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {payment.receiptUrl && (
+                            <a
+                              href={payment.receiptUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-600 hover:text-gray-900 transition-colors"
+                              title="Voir le reçu"
+                            >
+                              <Icon icon="heroicons:document-text" className="w-5 h-5" />
+                            </a>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ));

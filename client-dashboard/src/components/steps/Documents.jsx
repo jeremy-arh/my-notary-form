@@ -149,7 +149,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Content Area - Scrollable */}
-      <div className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-y-auto" style={{ minHeight: 0 }}>
+      <div className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-x-hidden" style={{ minHeight: 0 }}>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>

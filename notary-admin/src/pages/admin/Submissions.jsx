@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 
 const Submissions = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const [submissions, setSubmissions] = useState([]);
   const [filteredSubmissions, setFilteredSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,7 @@ const Submissions = () => {
         .from('submission')
         .select(`
           *,
-          notary:assigned_notary_id(id, full_name, email)
+          notary:assigned_notary_id(id, full_name, email, timezone)
         `)
         .order('created_at', { ascending: false });
 
@@ -167,14 +169,14 @@ const Submissions = () => {
         // Don't block the assignment if email fails
       }
 
-      alert('Notary assigned successfully!');
+      toast.success('Notary assigned successfully!');
       setIsAssignModalOpen(false);
       setSelectedSubmissionForAssign(null);
       setSelectedNotaryId('');
       await fetchSubmissions();
     } catch (error) {
       console.error('Error assigning notary:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
@@ -192,20 +194,20 @@ const Submissions = () => {
 
       if (error) throw error;
 
-      alert('Notary removed successfully!');
+      toast.success('Notary removed successfully!');
       setIsAssignModalOpen(false);
       setSelectedSubmissionForAssign(null);
       setSelectedNotaryId('');
       await fetchSubmissions();
     } catch (error) {
       console.error('Error removing notary:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
   const handleCreatePayout = async () => {
     if (!selectedSubmissionForPayout || !payoutFormData.payment_amount || !payoutFormData.payment_date) {
-      alert('Please fill in all required fields');
+      toast.warning('Please fill in all required fields');
       return;
     }
 
@@ -245,7 +247,7 @@ const Submissions = () => {
         }
       }
 
-      alert('Payout created successfully!');
+      toast.success('Payout created successfully!');
       setIsPayoutModalOpen(false);
       setSelectedSubmissionForPayout(null);
       setPayoutFormData({
@@ -256,7 +258,7 @@ const Submissions = () => {
       await fetchSubmissions();
     } catch (error) {
       console.error('Error creating payout:', error);
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     }
   };
 
@@ -264,10 +266,81 @@ const Submissions = () => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
+  };
+
+  // Convert time from Florida/Eastern Time to another timezone
+  const convertTimeFromFlorida = (time, date, targetTimezone) => {
+    if (!time || !date || !targetTimezone) return time;
+    
+    try {
+      const floridaTimezone = 'America/New_York';
+      
+      // Convert UTC offset to IANA timezone if needed
+      let targetTz = targetTimezone;
+      if (targetTimezone.startsWith('UTC')) {
+        const offsetMatch = targetTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+        if (offsetMatch) {
+          const sign = offsetMatch[1] === '+' ? 1 : -1;
+          const hours = parseInt(offsetMatch[2]);
+          const minutes = parseInt(offsetMatch[3] || '0');
+          const offsetMinutes = sign * (hours * 60 + minutes);
+          
+          // Map common UTC offsets to IANA timezones
+          if (offsetMinutes === -300) targetTz = 'America/New_York';
+          else if (offsetMinutes === -240) targetTz = 'America/New_York';
+          else if (offsetMinutes === 60) targetTz = 'Europe/Paris';
+          else if (offsetMinutes === 0) targetTz = 'Europe/London';
+          else if (offsetMinutes === 120) targetTz = 'Europe/Berlin';
+          else targetTz = 'UTC';
+        }
+      }
+      
+      const [hours, minutes] = time.split(':').map(Number);
+      const dateTimeString = `${date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      const tempDate = new Date(dateTimeString);
+      
+      // Format in Florida timezone to see what UTC time it represents
+      const floridaFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: floridaTimezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const floridaParts = floridaFormatter.formatToParts(tempDate);
+      const floridaHour = parseInt(floridaParts.find(p => p.type === 'hour').value);
+      const floridaMinute = parseInt(floridaParts.find(p => p.type === 'minute').value);
+      
+      // Calculate difference and adjust
+      const desiredMinutes = hours * 60 + minutes;
+      const actualMinutes = floridaHour * 60 + floridaMinute;
+      const diffMinutes = desiredMinutes - actualMinutes;
+      
+      const utcTimestamp = tempDate.getTime() + diffMinutes * 60 * 1000;
+      const adjustedDate = new Date(utcTimestamp);
+      
+      // Format in target timezone
+      const targetFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: targetTz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const targetParts = targetFormatter.formatToParts(adjustedDate);
+      const targetHour = targetParts.find(p => p.type === 'hour').value;
+      const targetMinute = targetParts.find(p => p.type === 'minute').value;
+      
+      return `${targetHour.padStart(2, '0')}:${targetMinute.padStart(2, '0')}`;
+    } catch (error) {
+      console.error('Error converting time:', error);
+      return time;
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -445,7 +518,22 @@ const Submissions = () => {
                         {submission.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {submission.appointment_date ? formatDate(submission.appointment_date) : 'N/A'}
+                        {submission.appointment_date ? (
+                          <div>
+                            <div>{formatDate(submission.appointment_date)}</div>
+                            {submission.appointment_time && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                <div>Florida: {submission.appointment_time}</div>
+                                {submission.notary?.timezone && (
+                                  <div>Notary ({submission.notary.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.notary.timezone)}</div>
+                                )}
+                                {submission.timezone && (
+                                  <div>Client ({submission.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.timezone)}</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {submission.notary ? (

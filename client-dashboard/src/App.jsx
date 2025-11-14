@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
+import { ToastProvider } from './contexts/ToastContext'
 import Home from './components/Home'
 import Login from './pages/client/Login'
 import ResetPassword from './pages/client/ResetPassword'
@@ -23,8 +24,9 @@ const LoadingSpinner = () => (
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <ToastProvider>
+      <BrowserRouter>
+        <Routes>
         {/* Smart redirect based on authentication */}
         <Route path="/" element={<Home />} />
 
@@ -81,6 +83,7 @@ function App() {
         />
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   )
 }
 

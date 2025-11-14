@@ -8,10 +8,29 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
   const [documents, setDocuments] = useState([]);
   const [services, setServices] = useState([]);
   const [options, setOptions] = useState([]);
+  const [notaryTimezone, setNotaryTimezone] = useState(null);
 
   useEffect(() => {
     fetchSubmissionDetails();
+    fetchNotaryTimezone();
   }, [submission.id]);
+
+  const fetchNotaryTimezone = async () => {
+    if (submission.assigned_notary_id) {
+      try {
+        const { data } = await supabase
+          .from('notary')
+          .select('timezone')
+          .eq('id', submission.assigned_notary_id)
+          .single();
+        if (data?.timezone) {
+          setNotaryTimezone(data.timezone);
+        }
+      } catch (error) {
+        console.error('Error fetching notary timezone:', error);
+      }
+    }
+  };
 
   const fetchSubmissionDetails = async () => {
     try {
@@ -95,10 +114,81 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
       weekday: 'long',
       year: 'numeric',
       month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
+  };
+
+  // Convert time from Florida/Eastern Time to another timezone
+  const convertTimeFromFlorida = (time, date, targetTimezone) => {
+    if (!time || !date || !targetTimezone) return time;
+    
+    try {
+      const floridaTimezone = 'America/New_York';
+      
+      // Convert UTC offset to IANA timezone if needed
+      let targetTz = targetTimezone;
+      if (targetTimezone.startsWith('UTC')) {
+        const offsetMatch = targetTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+        if (offsetMatch) {
+          const sign = offsetMatch[1] === '+' ? 1 : -1;
+          const hours = parseInt(offsetMatch[2]);
+          const minutes = parseInt(offsetMatch[3] || '0');
+          const offsetMinutes = sign * (hours * 60 + minutes);
+          
+          // Map common UTC offsets to IANA timezones
+          if (offsetMinutes === -300) targetTz = 'America/New_York';
+          else if (offsetMinutes === -240) targetTz = 'America/New_York';
+          else if (offsetMinutes === 60) targetTz = 'Europe/Paris';
+          else if (offsetMinutes === 0) targetTz = 'Europe/London';
+          else if (offsetMinutes === 120) targetTz = 'Europe/Berlin';
+          else targetTz = 'UTC';
+        }
+      }
+      
+      const [hours, minutes] = time.split(':').map(Number);
+      const dateTimeString = `${date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      const tempDate = new Date(dateTimeString);
+      
+      // Format in Florida timezone to see what UTC time it represents
+      const floridaFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: floridaTimezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const floridaParts = floridaFormatter.formatToParts(tempDate);
+      const floridaHour = parseInt(floridaParts.find(p => p.type === 'hour').value);
+      const floridaMinute = parseInt(floridaParts.find(p => p.type === 'minute').value);
+      
+      // Calculate difference and adjust
+      const desiredMinutes = hours * 60 + minutes;
+      const actualMinutes = floridaHour * 60 + floridaMinute;
+      const diffMinutes = desiredMinutes - actualMinutes;
+      
+      const utcTimestamp = tempDate.getTime() + diffMinutes * 60 * 1000;
+      const adjustedDate = new Date(utcTimestamp);
+      
+      // Format in target timezone
+      const targetFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: targetTz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const targetParts = targetFormatter.formatToParts(adjustedDate);
+      const targetHour = targetParts.find(p => p.type === 'hour').value;
+      const targetMinute = targetParts.find(p => p.type === 'minute').value;
+      
+      return `${targetHour.padStart(2, '0')}:${targetMinute.padStart(2, '0')}`;
+    } catch (error) {
+      console.error('Error converting time:', error);
+      return time;
+    }
   };
 
   const getStatusColor = (status) => {
@@ -219,15 +309,37 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Appointment Details</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Date & Time</span>
+                    <span className="text-sm text-gray-600">Date</span>
                     <span className="text-sm font-medium text-gray-900">
                       {formatDate(submission.appointment_date)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Timezone</span>
-                    <span className="text-sm font-medium text-gray-900">{submission.timezone || 'N/A'}</span>
-                  </div>
+                  {submission.appointment_time && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Time (Florida - Eastern Time)</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {submission.appointment_time}
+                        </span>
+                      </div>
+                      {notaryTimezone && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Time (Notary - {notaryTimezone})</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, notaryTimezone)}
+                          </span>
+                        </div>
+                      )}
+                      {submission.timezone && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Time (Client - {submission.timezone})</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.timezone)}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 

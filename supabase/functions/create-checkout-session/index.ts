@@ -9,6 +9,8 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 }
 
 serve(async (req) => {
@@ -17,8 +19,26 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Declare variables outside try block for access in catch
+  let formData: any = null
+  let submissionId: string | undefined = undefined
+  let stripeCustomerId: string | null = null
+
   try {
-    const { formData, submissionId } = await req.json()
+    try {
+      const body = await req.json()
+      formData = body.formData
+      submissionId = body.submissionId
+    } catch (jsonError: any) {
+      console.error('❌ [ERROR] Failed to parse request body:', jsonError)
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body', details: jsonError.message }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      )
+    }
 
     if (!formData) {
       throw new Error('Missing required field: formData')
@@ -106,14 +126,14 @@ serve(async (req) => {
       }
       }
 
-      // Get or create client record
+      // Get or create client record and Stripe customer
       console.log('🔍 [CLIENT] userId:', userId, 'accountCreated:', accountCreated)
 
       if (userId) {
       // Try to get existing client
       const { data: existingClient, error: fetchError } = await supabase
         .from('client')
-        .select('id')
+        .select('id, stripe_customer_id')
         .eq('user_id', userId)
         .maybeSingle() // Use maybeSingle() instead of single() to avoid error when not found
 
@@ -121,7 +141,8 @@ serve(async (req) => {
 
       if (existingClient) {
         clientId = existingClient.id
-        console.log('✅ [CLIENT] Found existing client:', clientId)
+        stripeCustomerId = existingClient.stripe_customer_id || null
+        console.log('✅ [CLIENT] Found existing client:', clientId, 'Stripe customer:', stripeCustomerId || 'None')
       } else if (!fetchError || fetchError.code === 'PGRST116') {
         // Create new client record (PGRST116 = no rows returned, which is expected)
         console.log('🆕 [CLIENT] Creating new client for userId:', userId)
@@ -172,6 +193,46 @@ serve(async (req) => {
         console.warn('⚠️ [CLIENT] No userId - submission will have null client_id')
       }
 
+      // Create or retrieve Stripe customer if we have a client
+      if (clientId && !stripeCustomerId) {
+        console.log('💳 [STRIPE] Creating Stripe customer for client:', clientId)
+        
+        const clientEmail = formData.email || user?.email
+        const clientName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Guest User'
+        
+        try {
+          const customer = await stripe.customers.create({
+            email: clientEmail,
+            name: clientName,
+            phone: formData.phone || undefined,
+            metadata: {
+              client_id: clientId,
+              user_id: userId || '',
+            }
+          })
+          
+          stripeCustomerId = customer.id
+          console.log('✅ [STRIPE] Created Stripe customer:', stripeCustomerId)
+          
+          // Update client record with Stripe customer ID
+          const { error: updateError } = await supabase
+            .from('client')
+            .update({ stripe_customer_id: stripeCustomerId })
+            .eq('id', clientId)
+          
+          if (updateError) {
+            console.error('⚠️ [STRIPE] Could not update client with Stripe customer ID:', updateError)
+          } else {
+            console.log('✅ [STRIPE] Updated client with Stripe customer ID')
+          }
+        } catch (stripeError: any) {
+          console.error('❌ [STRIPE] Error creating Stripe customer:', stripeError.message)
+          // Don't throw - continue without Stripe customer (will use customer_email instead)
+        }
+      } else if (stripeCustomerId) {
+        console.log('✅ [STRIPE] Using existing Stripe customer:', stripeCustomerId)
+      }
+
       console.log('📋 [CLIENT] Final clientId for submission:', clientId)
 
       // Service documents are already uploaded and converted to metadata in NotaryForm.jsx
@@ -196,6 +257,7 @@ serve(async (req) => {
         data: {
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments, // Already converted
+          signatoriesByDocument: formData.signatoriesByDocument || {}, // Signatories data
         },
       }
 
@@ -368,6 +430,41 @@ serve(async (req) => {
       console.log(`⚠️ [OPTIONS] No options selected`)
     }
 
+    // Calculate additional signatories cost (10$ per additional signatory, first one is included)
+    let additionalSignatoriesCount = 0
+    if (formData.signatoriesByDocument) {
+      console.log('📋 [SIGNATORIES] Processing signatories:', Object.keys(formData.signatoriesByDocument).length, 'documents')
+      for (const [docKey, signatories] of Object.entries(formData.signatoriesByDocument)) {
+        if (signatories && signatories.length > 1) {
+          // First signatory is included, count additional ones
+          additionalSignatoriesCount += signatories.length - 1
+          console.log(`   Document ${docKey}: ${signatories.length} signatories (${signatories.length - 1} additional)`)
+        } else if (signatories && signatories.length === 1) {
+          console.log(`   Document ${docKey}: 1 signatory (included)`)
+        }
+      }
+      
+      if (additionalSignatoriesCount > 0) {
+        const additionalSignatoriesPrice = 10.00 // 10$ per additional signatory
+        lineItems.push({
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? 'ies' : ''})`,
+              description: 'Fee for additional signatories (the first signatory of each document is included)',
+            },
+            unit_amount: Math.round(additionalSignatoriesPrice * 100), // Convert to cents
+          },
+          quantity: additionalSignatoriesCount,
+        })
+        console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = $${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(2)}`)
+      } else {
+        console.log(`ℹ️ [SIGNATORIES] No additional signatories (only first signatory per document)`)
+      }
+    } else {
+      console.log(`⚠️ [SIGNATORIES] No signatories data found`)
+    }
+
     // Ensure we have at least one line item
     if (lineItems.length === 0) {
       console.error('❌ [SERVICES] No valid services with documents selected')
@@ -375,19 +472,43 @@ serve(async (req) => {
     }
 
     // Create Stripe Checkout Session with minimal metadata
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams: any = {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
       success_url: `${req.headers.get('origin')}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get('origin')}/payment/failed`,
-      customer_email: formData.email || user?.email,
       metadata: {
         submission_id: submission.id,
         client_id: clientId || 'guest',
         account_created: accountCreated ? 'true' : 'false',
       },
-    })
+    }
+
+    // Use Stripe customer ID if available, otherwise use customer_email
+    if (stripeCustomerId) {
+      sessionParams.customer = stripeCustomerId
+      // Enable saving payment method for future use
+      sessionParams.payment_method_options = {
+        card: {
+          setup_future_usage: 'off_session'
+        }
+      }
+      console.log('💳 [STRIPE] Using Stripe customer for checkout session:', stripeCustomerId)
+      console.log('💳 [STRIPE] Payment method will be saved for future off_session charges')
+    } else {
+      sessionParams.customer_email = formData.email || user?.email
+      // Even without customer, we can save payment method for future use
+      sessionParams.payment_method_options = {
+        card: {
+          setup_future_usage: 'off_session'
+        }
+      }
+      console.log('💳 [STRIPE] Using customer_email for checkout session')
+      console.log('💳 [STRIPE] Payment method will be saved (will be attached when customer is created)')
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams)
 
     return new Response(
       JSON.stringify({ url: session.url, submissionId: submission.id }),
@@ -396,33 +517,42 @@ serve(async (req) => {
         status: 200,
       }
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [ERROR] Error creating checkout session:', error)
     console.error('❌ [ERROR] Error type:', error?.constructor?.name)
     console.error('❌ [ERROR] Error message:', error?.message)
     console.error('❌ [ERROR] Error stack:', error?.stack)
     
     // Log formData for debugging (without sensitive info)
-    if (formData) {
-      console.error('❌ [ERROR] FormData received:', {
-        selectedServices: formData.selectedServices,
-        serviceDocumentsKeys: formData.serviceDocuments ? Object.keys(formData.serviceDocuments) : null,
-        hasEmail: !!formData.email,
-        hasAppointmentDate: !!formData.appointmentDate,
-      })
+    try {
+      if (formData) {
+        console.error('❌ [ERROR] FormData received:', {
+          selectedServices: formData.selectedServices,
+          serviceDocumentsKeys: formData.serviceDocuments ? Object.keys(formData.serviceDocuments) : null,
+          hasEmail: !!formData.email,
+          hasAppointmentDate: !!formData.appointmentDate,
+        })
+      }
+    } catch (logError) {
+      console.error('❌ [ERROR] Could not log formData:', logError)
     }
     
-    // Return more detailed error information
+    // Return more detailed error information with CORS headers
     const errorMessage = error?.message || 'Unknown error occurred'
     const errorDetails = {
       error: errorMessage,
       type: error?.constructor?.name || 'Error',
+      stack: error?.stack || undefined,
     }
     
     return new Response(
       JSON.stringify(errorDetails),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        },
         status: 400,
       }
     )

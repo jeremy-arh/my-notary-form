@@ -279,11 +279,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     { value: 'UTC+14', label: 'Line Islands Time - Kiritimati, Tabuaeran, Teraina (UTC+14)', offset: 14 },
   ];
 
-  // Generate time slots - Base hours are 9 AM to 5 PM Eastern Time (UTC-5)
-  // Convert to selected timezone
+  // Generate time slots - Base hours are 8 AM to 8 PM Florida time (Eastern Time, UTC-5)
+  // Convert to selected timezone for display
   const generateTimeSlots = () => {
     const slots = [];
-    const baseOffsetHours = -5; // Eastern Time is UTC-5
+    const baseOffsetHours = -5; // Eastern Time (Florida) is UTC-5
 
     // Find the selected timezone's offset
     const selectedTz = timezones.find(tz => tz.value === timezone);
@@ -292,9 +292,10 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     // Calculate the offset difference
     const offsetDiff = selectedOffsetHours - baseOffsetHours;
 
-    for (let hour = 9; hour < 17; hour++) {
+    // Generate slots from 8 AM to 8 PM in Florida time (Eastern Time)
+    for (let hour = 8; hour < 20; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        // Calculate the converted time
+        // Calculate the converted time in user's timezone
         let convertedHour = hour + offsetDiff;
         let convertedMinute = minute;
 
@@ -305,10 +306,10 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           convertedHour -= 24;
         }
 
-        // Store the time in 24-hour format for the value
-        const time = `${Math.floor(convertedHour).toString().padStart(2, '0')}:${convertedMinute.toString().padStart(2, '0')}`;
+        // Store the time in 24-hour format for the value (Florida time - always stored in Florida time)
+        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
-        // Display in 12-hour AM/PM format
+        // Display in 12-hour AM/PM format (converted to user's timezone)
         const displayHourValue = Math.floor(convertedHour);
         const period = displayHourValue >= 12 ? 'PM' : 'AM';
         const displayHour = displayHourValue > 12 ? displayHourValue - 12 : displayHourValue === 0 ? 12 : displayHourValue;
@@ -378,6 +379,17 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   };
 
   const handleDateClick = (date) => {
+    // Check if date is today or in the past
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date < tomorrow) {
+      // Don't allow selection of today or past dates
+      return;
+    }
+
     // Format date in local timezone (not UTC) to avoid timezone offset issues
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -436,7 +448,9 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const isPast = (date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return date < today;
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return date < tomorrow;
   };
 
   const isSelected = (date) => {
@@ -460,7 +474,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-2 sm:px-3 md:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6">
+      <div className="flex-1 overflow-x-hidden px-2 sm:px-3 md:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6">
         <div className="space-y-3 sm:space-y-4 md:space-y-6 max-w-full">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">

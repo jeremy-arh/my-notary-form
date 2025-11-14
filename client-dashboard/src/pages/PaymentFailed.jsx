@@ -53,97 +53,113 @@ const PaymentFailed = () => {
     navigate('/form/summary');
   };
 
-  const handleContactSupport = () => {
-    window.location.href = 'mailto:support@example.com?subject=Payment Issue';
-  };
-
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+    <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex flex-col items-center justify-center p-3 md:p-4 overflow-y-auto">
+      <div className="w-full max-w-2xl flex flex-col items-center justify-center space-y-3 md:space-y-4">
         {/* Logo */}
-        <div className="mb-10 flex items-center justify-center">
-          <Logo width={150} height={150} />
+        <div className="w-full flex items-center justify-center">
+          <Logo width={80} height={80} className="md:w-[100px] md:h-[100px]" />
         </div>
 
-        {/* Failed Card */}
-        <div className="bg-red-50 border-2 border-red-200 rounded-3xl p-8 md:p-12">
-          {/* Failed Icon */}
-          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Icon icon="heroicons:x-circle" className="w-12 h-12 text-red-600" />
+        {/* Failed Icon with Animation */}
+        <div className="w-full flex justify-center">
+          <div className="relative">
+            <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-red-50 to-rose-50 rounded-full flex items-center justify-center animate-scale-in shadow-lg">
+              <div className="absolute inset-0 bg-red-500 rounded-full opacity-20 animate-ping"></div>
+              <Icon icon="heroicons:x-circle" className="w-10 h-10 md:w-12 md:h-12 text-red-600 relative z-10" />
+            </div>
           </div>
+        </div>
 
-          {/* Failed Message */}
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3 text-center">
+        {/* Failed Message */}
+        <div className="w-full text-center">
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             Payment Failed
           </h1>
-          <p className="text-lg text-gray-700 mb-8 text-center">
+          <p className="text-sm md:text-base lg:text-lg text-gray-600 leading-relaxed px-2">
             Unfortunately, your payment could not be processed. This could be due to insufficient funds,
             incorrect card details, or a temporary issue with your payment method.
           </p>
+        </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-white border-2 border-red-300 rounded-xl p-4 mb-6">
+        {/* Error Message */}
+        {error && (
+          <div className="w-full">
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 md:p-4">
               <div className="flex items-start">
-                <Icon icon="heroicons:exclamation-circle" className="w-5 h-5 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-800">{error}</p>
+                <Icon icon="heroicons:exclamation-circle" className="w-5 h-5 md:w-6 md:h-6 text-red-600 mr-2 md:mr-3 mt-0.5 flex-shrink-0" />
+                <p className="text-xs md:text-sm text-red-800 font-medium">{error}</p>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Information Box */}
-          <div className="bg-white rounded-2xl p-6 mb-8">
+        {/* Information Box */}
+        <div className="w-full">
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 md:p-6 border border-amber-200">
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                <Icon icon="heroicons:information-circle" className="w-6 h-6 text-blue-600" />
+              <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 bg-amber-100 rounded-xl flex items-center justify-center mr-3">
+                <Icon icon="heroicons:information-circle" className="w-6 h-6 md:w-7 md:h-7 text-amber-600" />
               </div>
-              <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Common reasons for payment failure:</h3>
-                <ul className="text-sm text-gray-700 space-y-2">
+              <div className="flex-1">
+                <h3 className="text-base md:text-lg font-bold text-gray-900 mb-2 md:mb-3">Common reasons for payment failure:</h3>
+                <ul className="space-y-1.5 md:space-y-2">
                   <li className="flex items-start">
-                    <Icon icon="heroicons:minus" className="w-5 h-5 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Insufficient funds in your account</span>
+                    <div className="flex-shrink-0 w-5 h-5 md:w-6 md:h-6 bg-white rounded-full flex items-center justify-center mr-2 mt-0.5 border-2 border-amber-300">
+                      <Icon icon="heroicons:minus" className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
+                    </div>
+                    <span className="text-xs md:text-sm text-gray-700">Insufficient funds in your account</span>
                   </li>
                   <li className="flex items-start">
-                    <Icon icon="heroicons:minus" className="w-5 h-5 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Incorrect card number or CVV</span>
+                    <div className="flex-shrink-0 w-5 h-5 md:w-6 md:h-6 bg-white rounded-full flex items-center justify-center mr-2 mt-0.5 border-2 border-amber-300">
+                      <Icon icon="heroicons:minus" className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
+                    </div>
+                    <span className="text-xs md:text-sm text-gray-700">Incorrect card number or CVV</span>
                   </li>
                   <li className="flex items-start">
-                    <Icon icon="heroicons:minus" className="w-5 h-5 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Card expired or blocked</span>
+                    <div className="flex-shrink-0 w-5 h-5 md:w-6 md:h-6 bg-white rounded-full flex items-center justify-center mr-2 mt-0.5 border-2 border-amber-300">
+                      <Icon icon="heroicons:minus" className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
+                    </div>
+                    <span className="text-xs md:text-sm text-gray-700">Card expired or blocked</span>
                   </li>
                   <li className="flex items-start">
-                    <Icon icon="heroicons:minus" className="w-5 h-5 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Billing address mismatch</span>
+                    <div className="flex-shrink-0 w-5 h-5 md:w-6 md:h-6 bg-white rounded-full flex items-center justify-center mr-2 mt-0.5 border-2 border-amber-300">
+                      <Icon icon="heroicons:minus" className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
+                    </div>
+                    <span className="text-xs md:text-sm text-gray-700">Billing address mismatch</span>
                   </li>
                   <li className="flex items-start">
-                    <Icon icon="heroicons:minus" className="w-5 h-5 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Temporary bank or network issue</span>
+                    <div className="flex-shrink-0 w-5 h-5 md:w-6 md:h-6 bg-white rounded-full flex items-center justify-center mr-2 mt-0.5 border-2 border-amber-300">
+                      <Icon icon="heroicons:minus" className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
+                    </div>
+                    <span className="text-xs md:text-sm text-gray-700">Temporary bank or network issue</span>
                   </li>
                 </ul>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="space-y-3">
+        {/* Action Buttons - In a row */}
+        <div className="w-full">
+          <div className="flex flex-col sm:flex-row gap-2 md:gap-3 justify-center">
             <button
               onClick={handleRetryPayment}
               disabled={retrying}
-              className="btn-glassy w-full px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="flex-1 px-6 md:px-8 py-3 md:py-4 bg-black text-white font-semibold rounded-xl transition-all hover:bg-gray-800 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 md:gap-3 shadow-lg hover:shadow-xl text-sm md:text-base"
             >
               {retrying ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-4 w-4 md:h-5 md:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Redirecting to payment...
+                  <span>Redirecting...</span>
                 </>
               ) : (
                 <>
-                  <Icon icon="heroicons:arrow-path" className="w-5 h-5 mr-2" />
-                  Retry Payment
+                  <Icon icon="heroicons:arrow-path" className="w-4 h-4 md:w-5 md:h-5" />
+                  <span>Retry Payment</span>
                 </>
               )}
             </button>
@@ -151,28 +167,29 @@ const PaymentFailed = () => {
             <button
               onClick={handleBackToForm}
               disabled={retrying}
-              className="btn-glassy-secondary w-full px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="flex-1 px-6 md:px-8 py-3 md:py-4 bg-white border-2 border-gray-300 text-gray-700 font-semibold rounded-xl transition-all hover:bg-gray-50 hover:border-gray-400 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 md:gap-3 text-sm md:text-base"
             >
-              <Icon icon="heroicons:arrow-left" className="w-5 h-5 mr-2" />
-              Back to Summary
-            </button>
-
-            <button
-              onClick={handleContactSupport}
-              disabled={retrying}
-              className="w-full px-8 py-3 text-gray-600 hover:text-gray-900 font-medium rounded-full transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Icon icon="heroicons:envelope" className="w-5 h-5 mr-2" />
-              Contact Support
+              <Icon icon="heroicons:arrow-left" className="w-4 h-4 md:w-5 md:h-5" />
+              <span>Back to Summary</span>
             </button>
           </div>
+        </div>
 
-          {/* Note */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Your form data has been saved. You can retry the payment at any time.
+        {/* Note */}
+        <div className="w-full">
+          <div className="flex items-start bg-blue-50 rounded-xl p-3 md:p-4 border border-blue-200">
+            <Icon icon="heroicons:information-circle" className="w-4 h-4 md:w-5 md:h-5 text-blue-600 mr-2 md:mr-3 mt-0.5 flex-shrink-0" />
+            <p className="text-xs md:text-sm text-blue-800">
+              <strong className="font-semibold">Note:</strong> Your form data has been saved. You can retry the payment at any time.
             </p>
           </div>
+        </div>
+
+        {/* Decorative Elements */}
+        <div className="text-center pt-1">
+          <p className="text-xs md:text-sm text-gray-500">
+            Need help? <a href="mailto:support@mynotary.io" className="text-gray-900 font-medium hover:underline">Contact our support</a>
+          </p>
         </div>
       </div>
     </div>

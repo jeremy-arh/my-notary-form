@@ -3,11 +3,14 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import ClientLayout from '../../components/ClientLayout';
 import Chat from '../../components/Chat';
+import SignatoriesList from '../../components/SignatoriesList';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 
 const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const [submission, setSubmission] = useState(null);
   const [clientInfo, setClientInfo] = useState(null);
@@ -16,6 +19,7 @@ const SubmissionDetail = () => {
   const [optionsMap, setOptionsMap] = useState({});
   const [notarizedFiles, setNotarizedFiles] = useState([]);
   const [fileComments, setFileComments] = useState({});
+  const [signatories, setSignatories] = useState([]);
   const [isRetryingPayment, setIsRetryingPayment] = useState(false);
   const [activeTab, setActiveTab] = useState('services');
 
@@ -129,9 +133,20 @@ const SubmissionDetail = () => {
         }
       }
 
+      // Fetch signatories
+      const { data: signatoriesData, error: signatoriesError } = await supabase
+        .from('signatories')
+        .select('*')
+        .eq('submission_id', id)
+        .order('created_at', { ascending: true });
+
+      if (!signatoriesError && signatoriesData) {
+        setSignatories(signatoriesData || []);
+      }
+
     } catch (error) {
       console.error('Error fetching submission detail:', error);
-      alert('Error loading submission details');
+      toast.error('Error loading submission details');
       navigate('/dashboard');
     } finally {
       setLoading(false);
@@ -213,7 +228,7 @@ const SubmissionDetail = () => {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading document:', error);
-      alert('Failed to download document');
+      toast.error('Failed to download document');
     }
   };
 
@@ -261,7 +276,7 @@ const SubmissionDetail = () => {
       }
     } catch (error) {
       console.error('❌ Error retrying payment:', error);
-      alert(`Failed to create payment session.\n\nError: ${error.message}\n\nPlease try again or contact support.`);
+      toast.error(`Failed to create payment session. ${error.message}. Please try again or contact support.`);
     } finally {
       setIsRetryingPayment(false);
     }
@@ -336,6 +351,19 @@ const SubmissionDetail = () => {
               >
                 Services & Documents
                 {activeTab === 'services' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('signatories')}
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
+                  activeTab === 'signatories'
+                    ? 'text-black'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Signatories
+                {activeTab === 'signatories' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
@@ -422,6 +450,28 @@ const SubmissionDetail = () => {
                             {documents.map((doc, index) => {
                               const docOptions = doc.selectedOptions || [];
                               let optionsTotal = 0;
+                              const docKey = `${serviceId}_${index}`;
+                              
+                              // Calculate signatories cost for this document
+                              let signatoriesCost = 0;
+                              let signatoriesCount = 0;
+                              
+                              // Try to get signatories from database first
+                              if (signatories.length > 0) {
+                                const docSignatories = signatories.filter(sig => sig.document_key === docKey);
+                                signatoriesCount = docSignatories.length;
+                                if (signatoriesCount > 1) {
+                                  signatoriesCost = (signatoriesCount - 1) * 10; // $10 per additional signatory
+                                }
+                              } else {
+                                // Use signatories from submission.data
+                                const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+                                const docSignatories = signatoriesFromData[docKey];
+                                if (Array.isArray(docSignatories) && docSignatories.length > 1) {
+                                  signatoriesCount = docSignatories.length;
+                                  signatoriesCost = (docSignatories.length - 1) * 10; // $10 per additional signatory
+                                }
+                              }
 
                               return (
                                 <div key={index} className="bg-gray-50 rounded-lg p-2 sm:p-3">
@@ -474,6 +524,20 @@ const SubmissionDetail = () => {
                                       )}
                                     </div>
                                   )}
+                                  
+                                  {/* Signatories cost for this document */}
+                                  {signatoriesCost > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[10px] sm:text-xs text-gray-600 italic">
+                                          Additional Signatories ({signatoriesCount - 1} signatory{signatoriesCount - 1 > 1 ? 'ies' : ''})
+                                        </span>
+                                        <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
+                                          ${signatoriesCost.toFixed(2)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -518,6 +582,8 @@ const SubmissionDetail = () => {
                     <span className="text-xl sm:text-2xl font-bold text-gray-900">
                       ${(() => {
                         let grandTotal = 0;
+                        
+                        // Calculate services and options costs
                         selectedServices.forEach(serviceId => {
                           const service = servicesMap[serviceId];
                           const documents = serviceDocuments[serviceId] || [];
@@ -535,6 +601,37 @@ const SubmissionDetail = () => {
                             });
                           }
                         });
+                        
+                        // Calculate additional signatories cost ($10 per additional signatory)
+                        // First, try to get signatories from database (if payment completed)
+                        if (signatories.length > 0) {
+                          // Group signatories by document_key
+                          const signatoriesByDoc = {};
+                          signatories.forEach(sig => {
+                            if (!signatoriesByDoc[sig.document_key]) {
+                              signatoriesByDoc[sig.document_key] = [];
+                            }
+                            signatoriesByDoc[sig.document_key].push(sig);
+                          });
+                          
+                          // Calculate cost for each document
+                          Object.values(signatoriesByDoc).forEach(docSignatories => {
+                            if (docSignatories.length > 1) {
+                              // First signatory is included, count additional ones
+                              grandTotal += (docSignatories.length - 1) * 10;
+                            }
+                          });
+                        } else {
+                          // Use signatories from submission.data (if not yet paid)
+                          const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+                          Object.values(signatoriesFromData).forEach(docSignatories => {
+                            if (Array.isArray(docSignatories) && docSignatories.length > 1) {
+                              // First signatory is included, count additional ones
+                              grandTotal += (docSignatories.length - 1) * 10;
+                            }
+                          });
+                        }
+                        
                         return grandTotal.toFixed(2);
                       })()}
                     </span>
@@ -542,6 +639,104 @@ const SubmissionDetail = () => {
                 </div>
               </div>
               )}
+
+              {/* Signatories Tab */}
+              {activeTab === 'signatories' && (() => {
+                // Get signatories from database (if payment completed) or from submission.data (if not yet paid)
+                const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+                const hasSignatoriesInDB = signatories.length > 0;
+                const hasSignatoriesInData = Object.keys(signatoriesFromData).length > 0 && 
+                  Object.values(signatoriesFromData).some(sigs => sigs && sigs.length > 0);
+
+                if (!hasSignatoriesInDB && !hasSignatoriesInData) {
+                  return (
+                    <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                      <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                          <Icon icon="heroicons:user-group" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                        </div>
+                        <span className="text-base sm:text-xl">Signatories</span>
+                      </h2>
+                      <p className="text-sm sm:text-base text-gray-600">No signatories added for this submission.</p>
+                    </div>
+                  );
+                }
+
+                // Convert database signatories to the format expected by SignatoriesList
+                const signatoriesByDoc = {};
+                
+                if (hasSignatoriesInDB) {
+                  // Use database signatories (after payment)
+                  signatories.forEach(sig => {
+                    if (!signatoriesByDoc[sig.document_key]) {
+                      signatoriesByDoc[sig.document_key] = [];
+                    }
+                    signatoriesByDoc[sig.document_key].push({
+                      first_name: sig.first_name,
+                      last_name: sig.last_name,
+                      birth_date: sig.birth_date,
+                      birth_city: sig.birth_city,
+                      postal_address: sig.postal_address
+                    });
+                  });
+                } else {
+                  // Use signatories from submission.data (before payment)
+                  Object.entries(signatoriesFromData).forEach(([docKey, sigs]) => {
+                    if (sigs && sigs.length > 0) {
+                      signatoriesByDoc[docKey] = sigs.map(sig => ({
+                        first_name: sig.firstName || sig.first_name,
+                        last_name: sig.lastName || sig.last_name,
+                        birth_date: sig.birthDate || sig.birth_date,
+                        birth_city: sig.birthCity || sig.birth_city,
+                        postal_address: sig.postalAddress || sig.postal_address
+                      }));
+                    }
+                  });
+                }
+
+                if (Object.keys(signatoriesByDoc).length === 0) {
+                  return (
+                    <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                      <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                          <Icon icon="heroicons:user-group" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                        </div>
+                        <span className="text-base sm:text-xl">Signatories</span>
+                      </h2>
+                      <p className="text-sm sm:text-base text-gray-600">No signatories added for this submission.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                        <Icon icon="heroicons:user-group" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                      </div>
+                      <span className="text-base sm:text-xl">Signatories</span>
+                    </h2>
+                    <div className="space-y-3 sm:space-y-4">
+                      {Object.entries(signatoriesByDoc).map(([docKey, docSignatories]) => {
+                        // Extract serviceId and docIndex from docKey (format: "serviceId_docIndex")
+                        const [serviceId, docIndex] = docKey.split('_');
+                        const documents = serviceDocuments[serviceId] || [];
+                        const document = documents[parseInt(docIndex)] || {};
+                        const documentName = document.name || `Document ${parseInt(docIndex) + 1}`;
+
+                        return (
+                          <SignatoriesList
+                            key={docKey}
+                            signatories={docSignatories}
+                            documentKey={docKey}
+                            documentName={documentName}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Appointment Details Tab */}
               {activeTab === 'appointment' && (

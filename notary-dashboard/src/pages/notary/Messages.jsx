@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Chat from '../../components/Chat';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 import { playNotificationSound } from '../../utils/soundNotification';
 
 const Messages = () => {
+  const toast = useToast();
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [notaryId, setNotaryId] = useState(null);
@@ -207,7 +209,7 @@ const Messages = () => {
       }
     } catch (error) {
       console.error('Error fetching conversations:', error);
-      alert(`Error loading conversations: ${error.message}`);
+      toast.error(`Error loading conversations: ${error.message}`);
       setConversations([]);
     } finally {
       setLoading(false);
