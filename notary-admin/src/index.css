@@ -302,6 +302,59 @@ select {
   align-items: center;
 }
 
+/* Remove ALL default focus styles from react-phone-number-input for integrated style */
+.phone-input-integrated .PhoneInputInput:focus,
+.phone-input-integrated .PhoneInputInput:focus-visible,
+.phone-input-integrated .PhoneInputInput:active,
+.phone-input-integrated .PhoneInputCountrySelect:focus,
+.phone-input-integrated .PhoneInputCountrySelect:focus-visible,
+.phone-input-integrated .PhoneInputCountrySelect:active,
+.phone-input-integrated .PhoneInputInput,
+.phone-input-integrated .PhoneInputCountrySelect {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.phone-input-integrated .PhoneInputCountryIcon,
+.phone-input-integrated .PhoneInputCountryIcon:focus,
+.phone-input-integrated .PhoneInputCountryIcon:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.phone-input-integrated .PhoneInputCountryIconImg,
+.phone-input-integrated .PhoneInputCountryIconImg:focus,
+.phone-input-integrated .PhoneInputCountryIconImg:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove any blue focus ring from react-phone-number-input - Most aggressive override */
+.phone-input-integrated *:focus,
+.phone-input-integrated *:focus-visible,
+.phone-input-integrated *:focus-within,
+.phone-input-integrated input:focus,
+.phone-input-integrated input:focus-visible,
+.phone-input-integrated select:focus,
+.phone-input-integrated select:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-shadow: none !important;
+}
+
+/* Ensure the container handles focus styling, not the inner elements */
+.phone-input-integrated {
+  outline: none !important;
+}
+
 /* Responsive Typography */
 @media (max-width: 768px) {
   html {

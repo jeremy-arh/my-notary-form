@@ -147,74 +147,74 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-6 md:pt-10 pb-44 lg:pb-6">
-        <div className="space-y-6">
+      <div className="flex-1 overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6">
+        <div className="space-y-4 sm:space-y-6 max-w-full">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
               Your Personal Information
             </h2>
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600">
               Please fill in your contact details
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
         {/* First Name & Last Name */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
-            <label htmlFor="firstName" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:user" className="w-4 h-4 mr-2 text-gray-400" />
-              First Name <span className="text-red-500 ml-1">*</span>
+            <label htmlFor="firstName" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+              <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+              <span>First Name <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="text"
               id="firstName"
               value={formData.firstName || ''}
               onChange={(e) => handleChange('firstName', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                 errors.firstName ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder="John"
             />
             {errors.firstName && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.firstName}
+              <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                <span>{errors.firstName}</span>
               </p>
             )}
           </div>
 
           <div>
-            <label htmlFor="lastName" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:user" className="w-4 h-4 mr-2 text-gray-400" />
-              Last Name <span className="text-red-500 ml-1">*</span>
+            <label htmlFor="lastName" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+              <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+              <span>Last Name <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="text"
               id="lastName"
               value={formData.lastName || ''}
               onChange={(e) => handleChange('lastName', e.target.value)}
-              className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                 errors.lastName ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder="Doe"
             />
             {errors.lastName && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.lastName}
+              <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                <span>{errors.lastName}</span>
               </p>
             )}
           </div>
         </div>
 
         {/* Email & Phone */}
-        <div className={`grid grid-cols-1 ${!isAuthenticated ? 'md:grid-cols-2' : ''} gap-4`}>
+        <div className={`grid grid-cols-1 ${!isAuthenticated ? 'sm:grid-cols-2' : ''} gap-3 sm:gap-4`}>
           {!isAuthenticated && (
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-                <Icon icon="heroicons:envelope" className="w-4 h-4 mr-2 text-gray-400" />
-                Email Address <span className="text-red-500 ml-1">*</span>
+              <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+                <Icon icon="heroicons:envelope" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+                <span>Email Address <span className="text-red-500 ml-1">*</span></span>
               </label>
               <input
                 type="email"
@@ -222,54 +222,54 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 value={formData.email || ''}
                 onChange={(e) => handleChange('email', e.target.value)}
                 onBlur={(e) => checkEmailExists(e.target.value)}
-                className={`w-full px-4 py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                   errors.email || emailExists ? 'border-red-500' : 'border-gray-200'
                 }`}
                 placeholder="john.doe@example.com"
               />
               {errors.email && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                  {errors.email}
+                <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                  <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                  <span>{errors.email}</span>
                 </p>
               )}
               {emailExists && !errors.email && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                  This email is already registered. Please login or use a different email.
+                <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-start">
+                  <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5" />
+                  <span className="break-words">This email is already registered. Please login or use a different email.</span>
                 </p>
               )}
             </div>
           )}
 
           <div>
-            <label htmlFor="phone" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:phone" className="w-4 h-4 mr-2 text-gray-400" />
-              Phone Number <span className="text-red-500 ml-1">*</span>
+            <label htmlFor="phone" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+              <Icon icon="heroicons:phone" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+              <span>Phone Number <span className="text-red-500 ml-1">*</span></span>
             </label>
             <div className={`flex items-center bg-gray-50 border ${
               errors.phone ? 'border-red-500' : 'border-gray-200'
             } rounded-xl overflow-hidden transition-all focus-within:ring-2 ${
               errors.phone ? 'focus-within:ring-red-500' : 'focus-within:ring-black'
-            } focus-within:border-black pl-4 pr-4`}>
+            } focus-within:border-black pl-2 sm:pl-4 pr-2 sm:pr-4`}>
               <PhoneInput
                 international
                 defaultCountry="US"
                 value={formData.phone || ''}
                 onChange={handlePhoneChange}
-                className="phone-input-integrated w-full flex"
+                className="phone-input-integrated w-full flex text-sm sm:text-base"
                 countrySelectProps={{
-                  className: "pr-2 py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none"
+                  className: "pr-1 sm:pr-2 py-2 sm:py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none text-xs sm:text-sm"
                 }}
                 numberInputProps={{
-                  className: "flex-1 pl-2 py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0"
+                  className: "flex-1 pl-1 sm:pl-2 py-2 sm:py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-sm sm:text-base"
                 }}
               />
             </div>
             {errors.phone && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.phone}
+              <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                <span>{errors.phone}</span>
               </p>
             )}
           </div>
@@ -277,11 +277,11 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
 
         {/* Password & Confirm Password - Only show for non-authenticated users */}
         {!isAuthenticated && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-                <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
-                Mot de passe <span className="text-red-500 ml-1">*</span>
+              <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+                <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+                <span>Mot de passe <span className="text-red-500 ml-1">*</span></span>
               </label>
               <div className="relative">
                 <input
@@ -289,7 +289,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                   id="password"
                   value={formData.password || ''}
                   onChange={(e) => handleChange('password', e.target.value)}
-                  className={`w-full px-4 py-3 pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                     errors.password ? 'border-red-500' : 'border-gray-200'
                   }`}
                   placeholder="••••••••"
@@ -297,26 +297,27 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   <Icon
                     icon={showPassword ? "heroicons:eye-slash" : "heroicons:eye"}
-                    className="w-5 h-5"
+                    className="w-4 h-4 sm:w-5 sm:h-5"
                   />
                 </button>
               </div>
               {errors.password && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                  {errors.password}
+                <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                  <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                  <span>{errors.password}</span>
                 </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-                <Icon icon="heroicons:lock-closed" className="w-4 h-4 mr-2 text-gray-400" />
-                Confirmer le mot de passe <span className="text-red-500 ml-1">*</span>
+              <label htmlFor="confirmPassword" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+                <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+                <span>Confirmer le mot de passe <span className="text-red-500 ml-1">*</span></span>
               </label>
               <div className="relative">
                 <input
@@ -324,7 +325,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                   id="confirmPassword"
                   value={formData.confirmPassword || ''}
                   onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                  className={`w-full px-4 py-3 pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                     errors.confirmPassword ? 'border-red-500' : 'border-gray-200'
                   }`}
                   placeholder="••••••••"
@@ -332,18 +333,19 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                 >
                   <Icon
                     icon={showConfirmPassword ? "heroicons:eye-slash" : "heroicons:eye"}
-                    className="w-5 h-5"
+                    className="w-4 h-4 sm:w-5 sm:h-5"
                   />
                 </button>
               </div>
               {errors.confirmPassword && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                  {errors.confirmPassword}
+                <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                  <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                  <span>{errors.confirmPassword}</span>
                 </p>
               )}
             </div>
@@ -352,9 +354,9 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
 
         {/* Address */}
         <div>
-          <label htmlFor="address" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-            <Icon icon="heroicons:map-pin" className="w-4 h-4 mr-2 text-gray-400" />
-            Street Address <span className="text-red-500 ml-1">*</span>
+          <label htmlFor="address" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+            <Icon icon="heroicons:map-pin" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+            <span>Street Address <span className="text-red-500 ml-1">*</span></span>
           </label>
           <div className={errors.address ? 'border-2 border-red-500 rounded-xl' : ''}>
             <AddressAutocomplete
@@ -366,40 +368,40 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             />
           </div>
           {errors.address && (
-            <p className="mt-1 text-sm text-red-600 flex items-center">
-              <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-              {errors.address}
+            <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+              <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+              <span>{errors.address}</span>
             </p>
           )}
         </div>
 
         {/* City, Postal Code & Country */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <div>
-            <label htmlFor="city" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:building-office-2" className="w-4 h-4 mr-2 text-gray-400" />
-              City <span className="text-red-500 ml-1">*</span>
+            <label htmlFor="city" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+              <Icon icon="heroicons:building-office-2" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+              <span>City <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="text"
               id="city"
               value={formData.city || ''}
               disabled
-              className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
                 errors.city ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder="Auto-filled from address"
             />
             {errors.city && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.city}
+              <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                <span>{errors.city}</span>
               </p>
             )}
           </div>
 
           <div>
-            <label htmlFor="postalCode" className="block text-sm font-semibold text-gray-900 mb-2">
+            <label htmlFor="postalCode" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2">
               Postal Code <span className="text-red-500 ml-1">*</span>
             </label>
             <input
@@ -407,38 +409,38 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               id="postalCode"
               value={formData.postalCode || ''}
               disabled
-              className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
                 errors.postalCode ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder="Auto-filled from address"
             />
             {errors.postalCode && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.postalCode}
+              <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                <span>{errors.postalCode}</span>
               </p>
             )}
           </div>
 
-          <div>
-            <label htmlFor="country" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-              <Icon icon="heroicons:globe-americas" className="w-4 h-4 mr-2 text-gray-400" />
-              Country <span className="text-red-500 ml-1">*</span>
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label htmlFor="country" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+              <Icon icon="heroicons:globe-americas" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+              <span>Country <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="text"
               id="country"
               value={formData.country || ''}
               disabled
-              className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
                 errors.country ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder="Auto-filled from address"
             />
             {errors.country && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-                {errors.country}
+              <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+                <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+                <span>{errors.country}</span>
               </p>
             )}
           </div>
@@ -446,40 +448,40 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
 
         {/* Timezone */}
         <div>
-          <label htmlFor="timezone" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-            <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-400" />
-            Timezone <span className="text-red-500 ml-1">*</span>
+          <label htmlFor="timezone" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+            <Icon icon="heroicons:clock" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+            <span>Timezone <span className="text-red-500 ml-1">*</span></span>
           </label>
           <input
             type="text"
             id="timezone"
             value={formData.timezone || ''}
             disabled
-            className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed ${
+            className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
               errors.timezone ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="Auto-filled from address (precise timezone)"
           />
           {errors.timezone && (
-            <p className="mt-1 text-sm text-red-600 flex items-center">
-              <Icon icon="heroicons:exclamation-circle" className="w-4 h-4 mr-1" />
-              {errors.timezone}
+            <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
+              <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
+              <span>{errors.timezone}</span>
             </p>
           )}
         </div>
 
         {/* Additional Notes */}
         <div>
-          <label htmlFor="notes" className="block text-sm font-semibold text-gray-900 mb-2 flex items-center">
-            <Icon icon="heroicons:pencil-square" className="w-4 h-4 mr-2 text-gray-400" />
-            Additional Notes (Optional)
+          <label htmlFor="notes" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
+            <Icon icon="heroicons:pencil-square" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
+            <span>Additional Notes (Optional)</span>
           </label>
           <textarea
             id="notes"
             value={formData.notes || ''}
             onChange={(e) => handleChange('notes', e.target.value)}
             rows="4"
-            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all resize-none"
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all resize-none text-sm sm:text-base"
             placeholder="Any additional information or special requests..."
           />
         </div>

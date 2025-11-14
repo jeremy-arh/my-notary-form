@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import ClientLayout from '../../components/ClientLayout';
+import { useToast } from '../../contexts/ToastContext';
 
 const Profile = () => {
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' or 'invoices'
@@ -119,11 +121,11 @@ const Profile = () => {
 
       if (error) throw error;
 
-      alert('Profile updated successfully!');
+      toast.success('Profile updated successfully!');
       fetchClientInfo(); // Refresh data
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Error updating profile. Please try again.');
+      toast.error('Error updating profile. Please try again.');
     } finally {
       setSaving(false);
     }

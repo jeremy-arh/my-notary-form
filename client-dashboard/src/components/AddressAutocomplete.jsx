@@ -82,7 +82,7 @@ const AddressAutocomplete = ({
       const input = document.createElement('input');
       input.type = 'text';
       input.placeholder = placeholder;
-      input.className = `w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all ${className}`;
+      input.className = `w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${className}`;
       if (inputValue) {
         input.value = inputValue;
       }

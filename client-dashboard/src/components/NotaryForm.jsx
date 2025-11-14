@@ -4,8 +4,10 @@ import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
+import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
+import Signatories from './steps/Signatories';
 import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
@@ -18,6 +20,7 @@ const NotaryForm = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -26,6 +29,9 @@ const NotaryForm = () => {
 
     // Documents (step 2) - organized by service
     serviceDocuments: {}, // { serviceId: [files] }
+
+    // Signatories (step 3) - organized by document
+    signatoriesByDocument: {}, // { "serviceId_docIndex": [signatories] }
 
     // Appointment
     appointmentDate: '',
@@ -54,9 +60,10 @@ const NotaryForm = () => {
   const steps = [
     { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
     { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 3, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/form/book-appointment' },
-    { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
-    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
+    { id: 3, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' },
+    { id: 4, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/form/book-appointment' },
+    { id: 5, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
+    { id: 6, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
 
   // Validation function to check if current step can proceed
@@ -75,10 +82,48 @@ const NotaryForm = () => {
           return docs && docs.length > 0;
         });
 
-      case 3: // Book an appointment
+      case 3: // Add Signatories
+        // Check that all signatories have required fields
+        if (!formData.signatoriesByDocument) return false;
+        if (!formData.serviceDocuments) return false;
+        
+        // First, ensure that every document has at least one signatory
+        for (const [serviceId, documents] of Object.entries(formData.serviceDocuments)) {
+          for (let docIndex = 0; docIndex < documents.length; docIndex++) {
+            const docKey = `${serviceId}_${docIndex}`;
+            const signatories = formData.signatoriesByDocument[docKey];
+            if (!signatories || !Array.isArray(signatories) || signatories.length === 0) {
+              return false;
+            }
+          }
+        }
+        
+        // Then check that all signatories have required fields filled
+        for (const signatories of Object.values(formData.signatoriesByDocument)) {
+          if (!Array.isArray(signatories)) continue;
+          for (const signatory of signatories) {
+            if (!signatory || 
+                !signatory.firstName?.trim() || 
+                !signatory.lastName?.trim() || 
+                !signatory.birthDate?.trim() || 
+                !signatory.birthCity?.trim() || 
+                !signatory.postalAddress?.trim() ||
+                !signatory.email?.trim() ||
+                !signatory.phone?.trim()) {
+              return false;
+            }
+            // Validate email format
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email?.trim())) {
+              return false;
+            }
+          }
+        }
+        return true;
+
+      case 4: // Book an appointment
         return formData.appointmentDate && formData.appointmentTime;
 
-      case 4: // Personal informations
+      case 5: // Personal informations
         const requiredFields = [
           formData.firstName,
           formData.lastName,
@@ -98,7 +143,7 @@ const NotaryForm = () => {
         // Check all required fields are filled
         return requiredFields.every(field => field && field.trim() !== '');
 
-      case 5: // Summary
+      case 6: // Summary
         return true; // No validation needed for summary
 
       default:
@@ -114,12 +159,41 @@ const NotaryForm = () => {
 
   const currentStep = getCurrentStepFromPath();
 
-  // Validate step access
+  // Map step names to GTM format
+  const getStepNameForGTM = (stepName) => {
+    const stepNameMap = {
+      'Choose Services': 'service_selection',
+      'Upload Documents': 'document_upload',
+      'Add Signatories': 'signatories',
+      'Book an appointment': 'appointment_booking',
+      'Your personal informations': 'personal_info',
+      'Summary': 'review_summary'
+    };
+    return stepNameMap[stepName] || stepName.toLowerCase().replace(/\s+/g, '_');
+  };
+
+  // Validate step access and track page views
   useEffect(() => {
     // Redirect to /form/choose-services if at /form root
     if (location.pathname === '/form' || location.pathname === '/form/') {
       navigate('/form/choose-services', { replace: true });
       return;
+    }
+
+    // Track page view (GTM)
+    const currentStepData = steps.find(s => s.path === location.pathname);
+    if (currentStepData) {
+      trackPageView(currentStepData.name, location.pathname);
+      
+      // Track form_start when user arrives on first step (Choose Services)
+      if (currentStepData.id === 1 && completedSteps.length === 0) {
+        trackFormStart({
+          formName: 'notarization_form',
+          serviceType: 'Document Notarization',
+          ctaLocation: 'homepage_hero',
+          ctaText: 'Commencer ma notarisation'
+        });
+      }
     }
 
     // Check if user is trying to access a step they haven't completed yet
@@ -203,6 +277,11 @@ const NotaryForm = () => {
   const markStepCompleted = (stepId) => {
     if (!completedSteps.includes(stepId)) {
       setCompletedSteps([...completedSteps, stepId]);
+      // Track step completion (GTM)
+      const step = steps.find(s => s.id === stepId);
+      if (step) {
+        trackFormStep(stepId, getStepNameForGTM(step.name));
+      }
     }
   };
 
@@ -241,8 +320,15 @@ const NotaryForm = () => {
   };
 
   const handleSubmit = async () => {
+    setIsSubmitting(true);
     try {
       console.log('Creating payment session for form data:', formData);
+
+      // Track form submission start (GTM)
+      trackFormSubmissionStart({
+        selectedOptions: formData.selectedServices || [],
+        documents: formData.serviceDocuments ? Object.values(formData.serviceDocuments).flat() : []
+      });
 
       // Upload documents to Supabase Storage, organized by service
       const uploadedServiceDocuments = {};
@@ -360,6 +446,8 @@ const NotaryForm = () => {
         type: 'error',
         message: errorMessage
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -367,14 +455,17 @@ const NotaryForm = () => {
   return (
     <div className="flex min-h-screen bg-white">
       {/* Mobile Header - Fixed at top */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-16">
-        <div className="flex items-center justify-between h-full px-4">
-          <Logo width={100} height={100} />
+      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-14 sm:h-16 safe-area-inset-top">
+        <div className="flex items-center justify-between h-full px-3 sm:px-4">
+          <div className="w-20 h-8 sm:w-24 sm:h-10 flex items-center">
+            <Logo width={80} height={80} />
+          </div>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
           >
-            <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-6 h-6 text-gray-900" />
+            <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-900" />
           </button>
         </div>
       </header>
@@ -382,17 +473,17 @@ const NotaryForm = () => {
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-16"
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-14 sm:top-16"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
-            className="bg-[#F3F4F6] w-80 h-full flex flex-col"
+            className="bg-[#F3F4F6] w-72 sm:w-80 h-full flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Steps Navigation - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Form Steps</h3>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="space-y-1.5 sm:space-y-2">
+                <h3 className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 sm:mb-3">Form Steps</h3>
               {steps.map((step) => {
                 const isCompleted = completedSteps.includes(step.id);
                 const isCurrent = currentStep === step.id;
@@ -407,7 +498,7 @@ const NotaryForm = () => {
                         setIsMobileMenuOpen(false);
                       }
                     }}
-                    className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
+                    className={`flex items-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 ${
                       canAccess ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                     } ${
                       isCurrent
@@ -417,7 +508,7 @@ const NotaryForm = () => {
                         : 'bg-white text-gray-400'
                     }`}
                   >
-                    <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                    <div className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg transition-all duration-300 flex-shrink-0 ${
                       isCurrent
                         ? 'bg-white/20'
                         : isCompleted
@@ -425,20 +516,20 @@ const NotaryForm = () => {
                         : 'bg-gray-100'
                     }`}>
                       {isCompleted ? (
-                        <Icon icon="heroicons:check" className="w-4 h-4 text-gray-600" />
+                        <Icon icon="heroicons:check" className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
                       ) : (
-                        <Icon icon={step.icon} className={`w-4 h-4 ${
+                        <Icon icon={step.icon} className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
                           isCurrent ? 'text-white' : 'text-gray-400'
                         }`} />
                       )}
                     </div>
-                    <div className="ml-2.5 flex-1">
-                      <div className={`text-[10px] font-semibold uppercase tracking-wide ${
+                    <div className="ml-2 sm:ml-2.5 flex-1 min-w-0">
+                      <div className={`text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide ${
                         isCurrent ? 'text-white/80' : 'text-gray-500'
                       }`}>
                         Step {step.id}
                       </div>
-                      <div className={`text-xs font-medium mt-0.5 ${
+                      <div className={`text-[11px] sm:text-xs font-medium mt-0.5 truncate ${
                         isCurrent ? 'text-white' : 'text-gray-900'
                       }`}>
                         {step.name}
@@ -451,23 +542,23 @@ const NotaryForm = () => {
             </div>
 
             {/* Navigation Link - Fixed at bottom */}
-            <div className="p-6 border-t border-gray-200">
+            <div className="p-4 sm:p-6 border-t border-gray-200">
               {isAuthenticated ? (
                 <Link
                   to="/dashboard"
-                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium text-sm sm:text-base"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
+                  <Icon icon="heroicons:squares-2x2" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                   Dashboard
                 </Link>
               ) : (
                 <Link
                   to="/login"
-                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium text-sm sm:text-base"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                   Connexion
                 </Link>
               )}
@@ -578,9 +669,9 @@ const NotaryForm = () => {
       </aside>
 
       {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5 pt-16 lg:pt-5">
+      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5 pt-14 sm:pt-16 lg:pt-5 pb-28 sm:pb-28 lg:pb-5">
         {/* Form Content - 95vh centered with full width and side margins */}
-        <div className="w-full h-[calc(100vh-4rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative">
+        <div className="w-full max-w-full h-[calc(100vh-6.5rem)] sm:h-[calc(100vh-7rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-y-auto overflow-x-hidden relative mx-0 lg:mx-auto">
           <Routes>
             <Route
               path="choose-services"
@@ -596,6 +687,17 @@ const NotaryForm = () => {
               path="documents"
               element={
                 <Documents
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                />
+              }
+            />
+            <Route
+              path="signatories"
+              element={
+                <Signatories
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}
@@ -642,24 +744,24 @@ const NotaryForm = () => {
 
       {/* Mobile Footer - Navigation Buttons + Progress Bar in ONE fixed container */}
       {!isMobileMenuOpen && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] z-50">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] border-t border-gray-200 z-50 safe-area-inset-bottom">
           {/* Navigation Buttons */}
-          <div className="px-4 pt-4 pb-3 flex justify-between border-b border-gray-200">
+          <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2 sm:pb-3 flex justify-between items-center gap-2 sm:gap-4">
             {currentStep > 1 ? (
               <button
                 type="button"
                 onClick={prevStep}
-                className="btn-glassy-secondary px-6 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+                className="btn-glassy-secondary px-4 sm:px-6 py-2.5 sm:py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 text-sm sm:text-base flex-shrink-0"
               >
                 Back
               </button>
-            ) : <div></div>}
+            ) : <div className="w-16 sm:w-20"></div>}
             {currentStep < steps.length ? (
               <button
                 type="button"
                 onClick={nextStep}
                 disabled={!canProceedFromCurrentStep()}
-                className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="btn-glassy px-4 sm:px-6 py-2.5 sm:py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm sm:text-base flex-1 sm:flex-none min-w-0"
               >
                 Continue
               </button>
@@ -667,20 +769,31 @@ const NotaryForm = () => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+                disabled={isSubmitting}
+                className="btn-glassy px-4 sm:px-6 py-2.5 sm:py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center text-sm sm:text-base flex-1 sm:flex-none min-w-0"
               >
-                Confirm & Pay
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="truncate">Processing...</span>
+                  </>
+                ) : (
+                  <span className="truncate">Confirm & Pay</span>
+                )}
               </button>
             )}
           </div>
 
           {/* Progress Bar */}
-          <div className="px-4 py-3">
-            <div className="flex justify-between text-sm text-gray-600 mb-2">
+          <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
+            <div className="flex justify-between text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">
               <span className="font-medium">Step {currentStep} of {steps.length}</span>
               <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
             </div>
-            <div className="h-2 bg-gray-300 rounded-full overflow-hidden">
+            <div className="h-1.5 sm:h-2 bg-gray-300 rounded-full overflow-hidden">
               <div
                 className="h-full transition-all duration-500"
                 style={{

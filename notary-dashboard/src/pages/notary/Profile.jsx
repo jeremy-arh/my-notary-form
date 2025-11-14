@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 
 const Profile = () => {
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notaryInfo, setNotaryInfo] = useState(null);
@@ -102,11 +104,11 @@ const Profile = () => {
 
       if (error) throw error;
 
-      alert('Profile updated successfully!');
+      toast.success('Profile updated successfully!');
       fetchNotaryInfo();
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Error updating profile. Please try again.');
+      toast.error('Error updating profile. Please try again.');
     } finally {
       setSaving(false);
     }

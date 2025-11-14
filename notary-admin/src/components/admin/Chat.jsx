@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * Reusable Chat component for messaging between clients, notaries, and admins
@@ -15,6 +16,7 @@ import { supabase } from '../../lib/supabase';
  * @param {string} clientLastName - Last name of the client (optional)
  */
 const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, clientFirstName, clientLastName }) => {
+  const toast = useToast();
   const [clientInfo, setClientInfo] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -194,7 +196,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
       setAttachments((prev) => [...prev, ...uploadedAttachments]);
     } catch (error) {
       console.error('Error handling files:', error);
-      alert('Failed to upload files. Please try again.');
+      toast.error('Failed to upload files. Please try again.');
     } finally {
       setUploadingFiles(false);
       // Reset file input
@@ -214,7 +216,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
 
     if (!currentUserId) {
       console.error('No currentUserId provided');
-      alert('Error: Missing user ID. Please refresh the page.');
+      toast.error('Error: Missing user ID. Please refresh the page.');
       return;
     }
 
@@ -296,7 +298,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage = error.message || 'Unknown error';
-      alert(`Failed to send message: ${errorMessage}\n\nPlease check that you have the necessary permissions.`);
+      toast.error(`Failed to send message: ${errorMessage}. Please check that you have the necessary permissions.`);
     } finally {
       setSending(false);
     }

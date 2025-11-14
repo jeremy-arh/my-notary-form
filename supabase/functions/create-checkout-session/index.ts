@@ -9,6 +9,8 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 }
 
 serve(async (req) => {
@@ -17,8 +19,26 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Declare variables outside try block for access in catch
+  let formData: any = null
+  let submissionId: string | undefined = undefined
+  let stripeCustomerId: string | null = null
+
   try {
-    const { formData, submissionId } = await req.json()
+    try {
+      const body = await req.json()
+      formData = body.formData
+      submissionId = body.submissionId
+    } catch (jsonError: any) {
+      console.error('❌ [ERROR] Failed to parse request body:', jsonError)
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body', details: jsonError.message }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      )
+    }
 
     if (!formData) {
       throw new Error('Missing required field: formData')
@@ -106,14 +126,14 @@ serve(async (req) => {
       }
       }
 
-      // Get or create client record
+      // Get or create client record and Stripe customer
       console.log('🔍 [CLIENT] userId:', userId, 'accountCreated:', accountCreated)
 
       if (userId) {
       // Try to get existing client
       const { data: existingClient, error: fetchError } = await supabase
         .from('client')
-        .select('id')
+        .select('id, stripe_customer_id')
         .eq('user_id', userId)
         .maybeSingle() // Use maybeSingle() instead of single() to avoid error when not found
 
@@ -121,7 +141,8 @@ serve(async (req) => {
 
       if (existingClient) {
         clientId = existingClient.id
-        console.log('✅ [CLIENT] Found existing client:', clientId)
+        stripeCustomerId = existingClient.stripe_customer_id || null
+        console.log('✅ [CLIENT] Found existing client:', clientId, 'Stripe customer:', stripeCustomerId || 'None')
       } else if (!fetchError || fetchError.code === 'PGRST116') {
         // Create new client record (PGRST116 = no rows returned, which is expected)
         console.log('🆕 [CLIENT] Creating new client for userId:', userId)
@@ -172,6 +193,46 @@ serve(async (req) => {
         console.warn('⚠️ [CLIENT] No userId - submission will have null client_id')
       }
 
+      // Create or retrieve Stripe customer if we have a client
+      if (clientId && !stripeCustomerId) {
+        console.log('💳 [STRIPE] Creating Stripe customer for client:', clientId)
+        
+        const clientEmail = formData.email || user?.email
+        const clientName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Guest User'
+        
+        try {
+          const customer = await stripe.customers.create({
+            email: clientEmail,
+            name: clientName,
+            phone: formData.phone || undefined,
+            metadata: {
+              client_id: clientId,
+              user_id: userId || '',
+            }
+          })
+          
+          stripeCustomerId = customer.id
+          console.log('✅ [STRIPE] Created Stripe customer:', stripeCustomerId)
+          
+          // Update client record with Stripe customer ID
+          const { error: updateError } = await supabase
+            .from('client')
+            .update({ stripe_customer_id: stripeCustomerId })
+            .eq('id', clientId)
+          
+          if (updateError) {
+            console.error('⚠️ [STRIPE] Could not update client with Stripe customer ID:', updateError)
+          } else {
+            console.log('✅ [STRIPE] Updated client with Stripe customer ID')
+          }
+        } catch (stripeError: any) {
+          console.error('❌ [STRIPE] Error creating Stripe customer:', stripeError.message)
+          // Don't throw - continue without Stripe customer (will use customer_email instead)
+        }
+      } else if (stripeCustomerId) {
+        console.log('✅ [STRIPE] Using existing Stripe customer:', stripeCustomerId)
+      }
+
       console.log('📋 [CLIENT] Final clientId for submission:', clientId)
 
       // Service documents are already uploaded and converted to metadata in NotaryForm.jsx
@@ -196,6 +257,7 @@ serve(async (req) => {
         data: {
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments, // Already converted
+          signatoriesByDocument: formData.signatoriesByDocument || {}, // Signatories data
         },
       }
 
@@ -215,84 +277,8 @@ serve(async (req) => {
       submission = newSubmission
       console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
 
-      // Send email notification to all active notaries about the new submission
-      try {
-        console.log('📧 [NOTIFICATIONS] Sending new submission notifications to all active notaries...')
-        
-        // Fetch all active notaries
-        const { data: activeNotaries, error: notariesError } = await supabase
-          .from('notary')
-          .select('id, email, full_name, user_id')
-          .eq('is_active', true)
-
-        if (notariesError) {
-          console.error('❌ [NOTIFICATIONS] Error fetching active notaries:', notariesError)
-        } else if (activeNotaries && activeNotaries.length > 0) {
-          console.log(`📧 [NOTIFICATIONS] Found ${activeNotaries.length} active notaries to notify`)
-
-          // Get submission details for email
-          const clientName = `${submission.first_name || ''} ${submission.last_name || ''}`.trim() || 'Client'
-          const submissionNumber = submission.id.substring(0, 8)
-
-          // Send email to each notary
-          const emailPromises = activeNotaries.map(async (notary) => {
-            if (!notary.email) {
-              console.warn(`⚠️ [NOTIFICATIONS] Notary ${notary.id} has no email, skipping`)
-              return
-            }
-
-            try {
-              const notaryName = notary.full_name || 'Notary'
-              
-              // Call send-transactional-email Edge Function
-              const functionUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-transactional-email`
-              const functionResponse = await fetch(functionUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
-                  'apikey': Deno.env.get('SUPABASE_ANON_KEY') || ''
-                },
-                body: JSON.stringify({
-                  email_type: 'new_submission_available',
-                  recipient_email: notary.email,
-                  recipient_name: notaryName,
-                  recipient_type: 'notary',
-                  data: {
-                    submission_id: submission.id,
-                    submission_number: submissionNumber,
-                    client_name: clientName,
-                    appointment_date: submission.appointment_date,
-                    appointment_time: submission.appointment_time,
-                    timezone: submission.timezone,
-                    address: submission.address,
-                    city: submission.city,
-                    country: submission.country
-                  }
-                })
-              })
-
-              if (!functionResponse.ok) {
-                const errorText = await functionResponse.text()
-                console.error(`❌ [NOTIFICATIONS] Failed to send email to ${notary.email}:`, errorText)
-              } else {
-                console.log(`✅ [NOTIFICATIONS] Email sent to notary: ${notary.email}`)
-              }
-            } catch (emailError) {
-              console.error(`❌ [NOTIFICATIONS] Error sending email to ${notary.email}:`, emailError)
-            }
-          })
-
-          // Wait for all emails to be sent (don't block if some fail)
-          await Promise.allSettled(emailPromises)
-          console.log('✅ [NOTIFICATIONS] Finished sending new submission notifications')
-        } else {
-          console.log('⚠️ [NOTIFICATIONS] No active notaries found to notify')
-        }
-      } catch (notificationError) {
-        console.error('❌ [NOTIFICATIONS] Error in notification process:', notificationError)
-        // Don't throw - submission creation should not fail if notifications fail
-      }
+      // NOTE: Notifications to notaries are now sent only after payment is successful
+      // See verify-payment function for notification logic
     }
 
     // Fetch services from database to get pricing
@@ -366,18 +352,43 @@ serve(async (req) => {
             console.log(`📋 [OPTIONS DEBUG] Checking documents for service ${service.name}:`)
             documentsForService.forEach((doc, idx) => {
               console.log(`   Document ${idx}: ${doc.name}`)
-              console.log(`   selectedOptions:`, doc.selectedOptions)
-              console.log(`   Has selectedOptions:`, !!doc.selectedOptions)
-              console.log(`   Is Array:`, Array.isArray(doc.selectedOptions))
+              console.log(`   selectedOptions (raw):`, doc.selectedOptions, typeof doc.selectedOptions)
+              
+              // Handle selectedOptions - could be array, string, or null/undefined
+              let optionsArray = []
+              
+              if (doc.selectedOptions) {
+                if (Array.isArray(doc.selectedOptions)) {
+                  optionsArray = doc.selectedOptions
+                } else if (typeof doc.selectedOptions === 'string') {
+                  // Try to parse as JSON string
+                  try {
+                    const parsed = JSON.parse(doc.selectedOptions)
+                    if (Array.isArray(parsed)) {
+                      optionsArray = parsed
+                    } else {
+                      console.warn(`   ⚠️ Parsed selectedOptions is not an array:`, parsed)
+                    }
+                  } catch (parseError) {
+                    console.warn(`   ⚠️ Failed to parse selectedOptions as JSON:`, parseError)
+                    // If it's a single string value, treat it as a single-item array
+                    optionsArray = [doc.selectedOptions]
+                  }
+                } else {
+                  console.warn(`   ⚠️ selectedOptions is neither array nor string:`, typeof doc.selectedOptions)
+                }
+              }
 
-              if (doc.selectedOptions && Array.isArray(doc.selectedOptions)) {
-                console.log(`   Options count:`, doc.selectedOptions.length)
-                doc.selectedOptions.forEach(optionId => {
+              console.log(`   Options array:`, optionsArray)
+              console.log(`   Options count:`, optionsArray.length)
+
+              if (optionsArray.length > 0) {
+                optionsArray.forEach(optionId => {
                   console.log(`   Adding option: ${optionId}`)
                   optionCounts[optionId] = (optionCounts[optionId] || 0) + 1
                 })
               } else {
-                console.log(`   ⚠️ No selectedOptions or not an array`)
+                console.log(`   ⚠️ No options to add`)
               }
             })
           } else {
@@ -419,6 +430,41 @@ serve(async (req) => {
       console.log(`⚠️ [OPTIONS] No options selected`)
     }
 
+    // Calculate additional signatories cost (10$ per additional signatory, first one is included)
+    let additionalSignatoriesCount = 0
+    if (formData.signatoriesByDocument) {
+      console.log('📋 [SIGNATORIES] Processing signatories:', Object.keys(formData.signatoriesByDocument).length, 'documents')
+      for (const [docKey, signatories] of Object.entries(formData.signatoriesByDocument)) {
+        if (signatories && signatories.length > 1) {
+          // First signatory is included, count additional ones
+          additionalSignatoriesCount += signatories.length - 1
+          console.log(`   Document ${docKey}: ${signatories.length} signatories (${signatories.length - 1} additional)`)
+        } else if (signatories && signatories.length === 1) {
+          console.log(`   Document ${docKey}: 1 signatory (included)`)
+        }
+      }
+      
+      if (additionalSignatoriesCount > 0) {
+        const additionalSignatoriesPrice = 10.00 // 10$ per additional signatory
+        lineItems.push({
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? 'ies' : ''})`,
+              description: 'Fee for additional signatories (the first signatory of each document is included)',
+            },
+            unit_amount: Math.round(additionalSignatoriesPrice * 100), // Convert to cents
+          },
+          quantity: additionalSignatoriesCount,
+        })
+        console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = $${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(2)}`)
+      } else {
+        console.log(`ℹ️ [SIGNATORIES] No additional signatories (only first signatory per document)`)
+      }
+    } else {
+      console.log(`⚠️ [SIGNATORIES] No signatories data found`)
+    }
+
     // Ensure we have at least one line item
     if (lineItems.length === 0) {
       console.error('❌ [SERVICES] No valid services with documents selected')
@@ -426,19 +472,43 @@ serve(async (req) => {
     }
 
     // Create Stripe Checkout Session with minimal metadata
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams: any = {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
       success_url: `${req.headers.get('origin')}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get('origin')}/payment/failed`,
-      customer_email: formData.email || user?.email,
       metadata: {
         submission_id: submission.id,
         client_id: clientId || 'guest',
         account_created: accountCreated ? 'true' : 'false',
       },
-    })
+    }
+
+    // Use Stripe customer ID if available, otherwise use customer_email
+    if (stripeCustomerId) {
+      sessionParams.customer = stripeCustomerId
+      // Enable saving payment method for future use
+      sessionParams.payment_method_options = {
+        card: {
+          setup_future_usage: 'off_session'
+        }
+      }
+      console.log('💳 [STRIPE] Using Stripe customer for checkout session:', stripeCustomerId)
+      console.log('💳 [STRIPE] Payment method will be saved for future off_session charges')
+    } else {
+      sessionParams.customer_email = formData.email || user?.email
+      // Even without customer, we can save payment method for future use
+      sessionParams.payment_method_options = {
+        card: {
+          setup_future_usage: 'off_session'
+        }
+      }
+      console.log('💳 [STRIPE] Using customer_email for checkout session')
+      console.log('💳 [STRIPE] Payment method will be saved (will be attached when customer is created)')
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams)
 
     return new Response(
       JSON.stringify({ url: session.url, submissionId: submission.id }),
@@ -447,12 +517,42 @@ serve(async (req) => {
         status: 200,
       }
     )
-  } catch (error) {
-    console.error('Error creating checkout session:', error)
+  } catch (error: any) {
+    console.error('❌ [ERROR] Error creating checkout session:', error)
+    console.error('❌ [ERROR] Error type:', error?.constructor?.name)
+    console.error('❌ [ERROR] Error message:', error?.message)
+    console.error('❌ [ERROR] Error stack:', error?.stack)
+    
+    // Log formData for debugging (without sensitive info)
+    try {
+      if (formData) {
+        console.error('❌ [ERROR] FormData received:', {
+          selectedServices: formData.selectedServices,
+          serviceDocumentsKeys: formData.serviceDocuments ? Object.keys(formData.serviceDocuments) : null,
+          hasEmail: !!formData.email,
+          hasAppointmentDate: !!formData.appointmentDate,
+        })
+      }
+    } catch (logError) {
+      console.error('❌ [ERROR] Could not log formData:', logError)
+    }
+    
+    // Return more detailed error information with CORS headers
+    const errorMessage = error?.message || 'Unknown error occurred'
+    const errorDetails = {
+      error: errorMessage,
+      type: error?.constructor?.name || 'Error',
+      stack: error?.stack || undefined,
+    }
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify(errorDetails),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        },
         status: 400,
       }
     )

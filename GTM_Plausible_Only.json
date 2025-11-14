@@ -1,0 +1,151 @@
+{
+  "exportFormatVersion": 2,
+  "exportTime": "2024-01-01T00:00:00.000Z",
+  "containerVersion": {
+    "path": "accounts/0/containers/0/versions/0",
+    "accountId": "0",
+    "containerId": "0",
+    "containerVersionId": "0",
+    "name": "GTM Plausible Analytics Configuration",
+    "description": "Configuration Plausible Analytics avec server-side tagging",
+    "fingerprint": "",
+    "tag": [
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "tagId": "1",
+        "name": "Plausible Analytics - Server-Side",
+        "type": "http",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "url",
+            "value": "https://plausible.io/api/event"
+          },
+          {
+            "type": "TEMPLATE",
+            "key": "httpMethod",
+            "value": "POST"
+          },
+          {
+            "type": "TEMPLATE",
+            "key": "requestBody",
+            "value": "{\n  \"domain\": \"mynotary.io\",\n  \"name\": \"{{Event Name}}\",\n  \"url\": \"{{Page URL}}\",\n  \"referrer\": \"{{Page Referrer}}\",\n  \"screen_width\": {{Screen Width}}\n}"
+          },
+          {
+            "type": "TEMPLATE",
+            "key": "headers",
+            "value": "{\n  \"Content-Type\": \"application/json\",\n  \"User-Agent\": \"{{User Agent}}\"\n}"
+          }
+        ],
+        "firingTriggerId": ["1"]
+      }
+    ],
+    "variable": [
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "1",
+        "name": "Page URL",
+        "type": "r",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "requestPath",
+            "value": "{{Request Path}}"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "2",
+        "name": "Page Referrer",
+        "type": "h",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "headerName",
+            "value": "Referer"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "3",
+        "name": "User Agent",
+        "type": "h",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "headerName",
+            "value": "User-Agent"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "4",
+        "name": "Event Name",
+        "type": "v",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "dataLayerVersion",
+            "value": "2"
+          },
+          {
+            "type": "TEMPLATE",
+            "key": "name",
+            "value": "event"
+          }
+        ]
+      },
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "variableId": "5",
+        "name": "Screen Width",
+        "type": "j",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "javascript",
+            "value": "function() {\n  return window.screen ? window.screen.width : null;\n}"
+          }
+        ]
+      }
+    ],
+    "trigger": [
+      {
+        "accountId": "0",
+        "containerId": "0",
+        "triggerId": "1",
+        "name": "Page View",
+        "type": "c",
+        "customEventFilter": [
+          {
+            "type": "EQUALS",
+            "parameter": [
+              {
+                "type": "TEMPLATE",
+                "key": "arg0",
+                "value": "{{Event Name}}"
+              },
+              {
+                "type": "TEMPLATE",
+                "key": "arg1",
+                "value": "page_view"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "builtInVariable": [],
+    "folder": [],
+    "zone": []
+  }
+}

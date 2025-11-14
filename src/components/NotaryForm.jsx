@@ -4,6 +4,8 @@ import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Logo } from '../../shared/assets';
+import { trackPageView as trackPageViewPlausible, trackFormStep as trackFormStepPlausible, trackFormSubmissionStart as trackFormSubmissionStartPlausible } from '../utils/plausible';
+import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import BookAppointment from './steps/BookAppointment';
@@ -61,12 +63,29 @@ const NotaryForm = () => {
 
   const currentStep = getCurrentStepFromPath();
 
-  // Validate step access
+  // Track page views and validate step access
   useEffect(() => {
     // Redirect to /documents if at root
     if (location.pathname === '/') {
       navigate('/documents', { replace: true });
       return;
+    }
+
+    // Track page view (Plausible + GTM)
+    const currentStepData = steps.find(s => s.path === location.pathname);
+    if (currentStepData) {
+      trackPageViewPlausible(currentStepData.name, location.pathname);
+      trackPageView(currentStepData.name, location.pathname);
+      
+      // Track form_start when user arrives on first step (Documents)
+      if (currentStepData.id === 1 && completedSteps.length === 0) {
+        trackFormStart({
+          formName: 'notarization_form',
+          serviceType: 'Document Notarization',
+          ctaLocation: 'homepage_hero',
+          ctaText: 'Commencer ma notarisation'
+        });
+      }
     }
 
     // Check if user is trying to access a step they haven't completed yet
@@ -146,9 +165,27 @@ const NotaryForm = () => {
     setFormData(prev => ({ ...prev, ...data }));
   };
 
+  // Map step names to GTM format
+  const getStepNameForGTM = (stepName) => {
+    const stepNameMap = {
+      'Documents': 'document_upload',
+      'Choose option': 'service_selection',
+      'Book an appointment': 'appointment_booking',
+      'Your personal informations': 'personal_info',
+      'Summary': 'review_summary'
+    };
+    return stepNameMap[stepName] || stepName.toLowerCase().replace(/\s+/g, '_');
+  };
+
   const markStepCompleted = (stepId) => {
     if (!completedSteps.includes(stepId)) {
       setCompletedSteps([...completedSteps, stepId]);
+      // Track step completion (Plausible + GTM)
+      const step = steps.find(s => s.id === stepId);
+      if (step) {
+        trackFormStepPlausible(stepId, step.name);
+        trackFormStep(stepId, getStepNameForGTM(step.name));
+      }
     }
   };
 
@@ -190,9 +227,20 @@ const NotaryForm = () => {
     try {
       console.log('Submitting form data:', formData);
 
+      // Track form submission start (Plausible + GTM)
+      trackFormSubmissionStartPlausible(formData);
+      trackFormSubmissionStart(formData);
+
       const result = await submitNotaryRequest(formData);
 
       if (result.success) {
+        // Track successful form submission (Plausible + GTM)
+        trackFormSubmission({
+          submissionId: result.submissionId,
+          optionsCount: formData.selectedOptions?.length || 0,
+          documentsCount: Array.isArray(formData.documents) ? formData.documents.length : 0
+        });
+
         // Clear localStorage
         localStorage.removeItem('notaryFormData');
         localStorage.removeItem('notaryCompletedSteps');

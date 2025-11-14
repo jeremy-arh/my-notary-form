@@ -3,9 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import ClientLayout from '../../components/ClientLayout';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirm } from '../../hooks/useConfirm';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const toast = useToast();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [clientInfo, setClientInfo] = useState(null);
@@ -144,7 +148,15 @@ const Dashboard = () => {
   }, []);
 
   const deleteSubmission = useCallback(async (submissionId) => {
-    if (!confirm('Are you sure you want to delete this submission? This action cannot be undone.')) {
+    const confirmed = await confirm({
+      title: 'Delete Submission',
+      message: 'Are you sure you want to delete this submission? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -176,15 +188,17 @@ const Dashboard = () => {
 
         return updated;
       });
+
+      toast.success('Submission deleted successfully');
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting submission:', error);
       }
-      alert(`Failed to delete submission.\n\nError: ${error.message}\n\nPlease try again or contact support.`);
+      toast.error(`Failed to delete submission. ${error.message}. Please try again or contact support.`);
       // Refresh on error to ensure consistency
       fetchClientData();
     }
-  }, [currentPage, fetchClientData]);
+  }, [currentPage, fetchClientData, confirm, toast]);
 
   const retryPayment = useCallback(async (submission) => {
     setRetryingPaymentId(submission.id);
@@ -225,11 +239,11 @@ const Dashboard = () => {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error retrying payment:', error);
       }
-      alert(`Failed to create payment session.\n\nError: ${error.message}\n\nPlease try again or contact support.`);
+      toast.error(`Failed to create payment session. ${error.message}. Please try again or contact support.`);
     } finally {
       setRetryingPaymentId(null);
     }
-  }, []);
+  }, [toast]);
 
   // Pagination calculations - memoized for performance
   // MUST be before any conditional returns to follow Rules of Hooks
@@ -258,6 +272,7 @@ const Dashboard = () => {
 
   return (
     <ClientLayout>
+      <ConfirmComponent />
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 overflow-x-hidden">
         {/* Header */}
         <div className="mb-6 sm:mb-8">

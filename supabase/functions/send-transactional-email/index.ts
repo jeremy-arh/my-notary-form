@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 interface EmailRequest {
-  email_type: 'payment_success' | 'payment_failed' | 'notary_assigned' | 'notarized_file_uploaded' | 'message_received' | 'new_submission_available' | 'appointment_reminder_day_before' | 'appointment_reminder_one_hour_before'
+  email_type: 'payment_success' | 'payment_failed' | 'notary_assigned' | 'notarized_file_uploaded' | 'message_received' | 'new_submission_available' | 'appointment_reminder_day_before' | 'appointment_reminder_one_hour_before' | 'submission_updated'
   recipient_email: string
   recipient_name: string
   recipient_type: 'client' | 'notary'
@@ -30,6 +30,16 @@ interface EmailRequest {
     address?: string
     city?: string
     country?: string
+    old_price?: number
+    new_price?: number
+    price_changed?: boolean
+    services?: string
+    updated_fields?: {
+      personal_info?: boolean
+      address?: boolean
+      services?: boolean
+      appointment?: boolean
+    }
   }
 }
 
@@ -231,10 +241,26 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
                 </tr>
               </table>
               
-              <!-- Footer Content -->
-              <p style="margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-                MY NOTARY
-              </p>
+              <!-- Footer Content with Logo and Text -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 20px 0;">
+                <tr>
+                  <td style="padding: 0;">
+                    <!-- Logo and Text -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding: 0 12px 0 0; vertical-align: middle;">
+                          <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="MY NOTARY" width="100" style="width: 100px; max-width: 100px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+                        </td>
+                        <td style="padding: 0; vertical-align: middle;">
+                          <p style="margin: 0; font-size: 18px; font-weight: 700; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                            MY NOTARY
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
               <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
                 This is an automated email from <strong style="color: #000000; font-weight: 600;">MY NOTARY</strong>.<br>
                 Please do not reply to this email.
@@ -494,11 +520,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
           Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}${data.appointment_time ? ` at ${data.appointment_time}` : ''}</strong>
         </p>
         ` : ''}
-        ${data.address ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Location: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}</strong>
-        </p>
-        ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           You can view and accept this submission from your dashboard. If you have any questions, our team is here to help.
         </p>
@@ -542,11 +563,6 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
           Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.client_name}</strong>
         </p>
         ` : ''}
-        ${data.address ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Location: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}</strong>
-        </p>
-        ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Please make sure you are prepared for the appointment. If you have any questions or need to reschedule, please contact us as soon as possible.
         </p>
@@ -571,35 +587,31 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'appointment_reminder_one_hour_before':
-      subject = `🔔 Appointment Reminder - In 1 Hour at ${data.appointment_time || ''}`
+      subject = `⏰ Appointment Reminder - ${data.appointment_date ? new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Your Appointment'}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           Hi ${recipient_name},
         </p>
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          This is a reminder that you have an appointment <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">in 1 hour</strong> for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
+          This is a reminder that your appointment for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> is scheduled in <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">1 hour</strong>.
         </p>
         ${data.appointment_date && data.appointment_time ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Time: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.appointment_time}${data.timezone ? ` (${data.timezone})` : ''}</strong>
-        </p>
-        ` : ''}
-        ${data.client_name ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.client_name}</strong>
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Date:</strong> ${new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br>
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Time:</strong> ${data.appointment_time}${data.timezone ? ` (${data.timezone})` : ''}
         </p>
         ` : ''}
         ${data.address ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Location: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}</strong>
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Location:</strong> ${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}
         </p>
         ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Please make sure you are on your way or ready for the appointment. If you have any issues, please contact us immediately.
+          Please make sure you're ready for your appointment. If you need to reschedule or have any questions, please contact us.
         </p>
         
-        <!-- Call to Action Button - Centered, Rounded, Black -->
+        <!-- Call to Action Button -->
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
           <tr>
             <td align="center" style="padding: 0;">
@@ -608,6 +620,84 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
                   <td align="center" style="border-radius: 30px; background-color: #000000;">
                     <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       View Submission Details
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      `)
+      break
+
+    case 'submission_updated':
+      subject = `📝 Submission Updated - #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      
+      // Build list of changes
+      const changesList = []
+      if (data.updated_fields?.personal_info) {
+        changesList.push('Personal information')
+      }
+      if (data.updated_fields?.address) {
+        changesList.push('Address')
+      }
+      if (data.updated_fields?.services) {
+        changesList.push('Services')
+      }
+      if (data.updated_fields?.appointment) {
+        changesList.push('Appointment date/time')
+      }
+      if (data.price_changed) {
+        changesList.push('Price')
+      }
+      
+      const changesText = changesList.length > 0 
+        ? changesList.join(', ')
+        : 'Various details'
+      html = baseHTML(`
+        <!-- Body Content - Left Aligned -->
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          Hi ${recipient_name},
+        </p>
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          Your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> has been updated.
+        </p>
+        
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Updated fields:</strong> ${changesText}
+        </p>
+        
+        ${data.price_changed && data.old_price !== undefined && data.new_price !== undefined ? `
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Price change:</strong> $${parseFloat(data.old_price.toString()).toFixed(2)} → <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">$${parseFloat(data.new_price.toString()).toFixed(2)}</strong>
+        </p>
+        ` : ''}
+        
+        ${data.services ? `
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Services:</strong> ${data.services}
+        </p>
+        ` : ''}
+        
+        ${data.appointment_date && data.appointment_time ? `
+        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Appointment:</strong> ${new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at ${data.appointment_time}${data.timezone ? ` (${data.timezone})` : ''}
+        </p>
+        ` : ''}
+        
+        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          Please review the updated details in your dashboard. If you have any questions or concerns, please don't hesitate to contact us.
+        </p>
+        
+        <!-- Call to Action Button -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+          <tr>
+            <td align="center" style="padding: 0;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="border-radius: 30px; background-color: #000000;">
+                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                      View Updated Submission
                     </a>
                   </td>
                 </tr>

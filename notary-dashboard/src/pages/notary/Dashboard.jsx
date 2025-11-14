@@ -4,9 +4,11 @@ import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import { format, parseISO } from 'date-fns';
 import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
+import { useToast } from '../../contexts/ToastContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [notaryId, setNotaryId] = useState(null);
   const [notaryTimezone, setNotaryTimezone] = useState(null);
@@ -351,7 +353,7 @@ const Dashboard = () => {
       if (checkError) throw checkError;
 
       if (submission.assigned_notary_id) {
-        alert('This submission has already been accepted by another notary.');
+        toast.warning('This submission has already been accepted by another notary.');
         await fetchNewSubmissions();
         return;
       }
@@ -367,11 +369,11 @@ const Dashboard = () => {
 
       if (error) throw error;
 
-      alert('Submission accepted successfully!');
+      toast.success('Submission accepted successfully!');
       await fetchAllData();
     } catch (error) {
       console.error('Error accepting submission:', error);
-      alert('Failed to accept submission. It may have been taken by another notary.');
+      toast.error('Failed to accept submission. It may have been taken by another notary.');
       await fetchNewSubmissions();
     }
   };
@@ -388,10 +390,12 @@ const Dashboard = () => {
   };
 
   const formatTime = (timeString, appointmentDate, clientTimezone) => {
-    if (!notaryTimezone || !clientTimezone) {
+    if (!notaryTimezone) {
       return timeString.substring(0, 5);
     }
-    const convertedTime = convertTimeToNotaryTimezone(timeString, appointmentDate, clientTimezone, notaryTimezone);
+    // Time stored is in Florida/Eastern Time (America/New_York)
+    // Convert from Florida time to notary timezone
+    const convertedTime = convertTimeToNotaryTimezone(timeString, appointmentDate, 'America/New_York', notaryTimezone);
     return convertedTime;
   };
 
@@ -505,33 +509,51 @@ const Dashboard = () => {
       </div>
 
       {/* New Submissions */}
-      <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">New Submissions</h2>
+      <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-4 sm:p-6 border-2 border-blue-200 shadow-lg">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">New Submissions</h2>
+          {newSubmissions.length > 0 && (
+            <span className="px-2 py-1 bg-blue-500 text-white text-xs font-bold rounded-full">
+              {newSubmissions.length}
+            </span>
+          )}
+        </div>
         {newSubmissions.length === 0 ? (
           <p className="text-sm sm:text-base text-gray-600">No new submissions available.</p>
         ) : (
           <div className="space-y-3">
             {newSubmissions.map((submission) => (
-              <div key={submission.id} className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div 
+                key={submission.id} 
+                className="bg-gradient-to-r from-white to-blue-50 rounded-xl p-3 sm:p-4 border-2 border-blue-300 shadow-md hover:shadow-lg transition-all duration-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:scale-[1.01]"
+              >
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm sm:text-base text-gray-900 truncate">
-                    {submission.first_name} {submission.last_name}
-                  </p>
-                  <p className="text-xs sm:text-sm text-gray-600">
-                    {formatDate(submission.appointment_date)} at {formatTime(submission.appointment_time, submission.appointment_date, submission.timezone)}
-                  </p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon icon="heroicons:sparkles" className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 flex-shrink-0" />
+                    <p className="font-bold text-sm sm:text-base text-gray-900 truncate">
+                      {submission.first_name} {submission.last_name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+                    <Icon icon="heroicons:calendar-days" className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
+                    <span className="font-medium">
+                      {formatDate(submission.appointment_date)} at {formatTime(submission.appointment_time, submission.appointment_date, submission.timezone)}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-2 sm:gap-3">
                   <button
                     onClick={() => navigate(`/submission/${submission.id}`)}
-                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm bg-white text-gray-700 rounded-lg hover:bg-gray-100 border-2 border-gray-300 font-semibold transition-all hover:scale-105 active:scale-95 shadow-sm"
                   >
                     View
                   </button>
                   <button
                     onClick={() => handleAcceptSubmission(submission.id)}
-                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all font-bold shadow-md hover:shadow-lg hover:scale-105 active:scale-95 flex items-center justify-center gap-1"
                   >
+                    <Icon icon="heroicons:check-circle" className="w-4 h-4" />
                     Accept
                   </button>
                 </div>

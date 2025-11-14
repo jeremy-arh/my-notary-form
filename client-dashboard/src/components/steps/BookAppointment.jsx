@@ -279,11 +279,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     { value: 'UTC+14', label: 'Line Islands Time - Kiritimati, Tabuaeran, Teraina (UTC+14)', offset: 14 },
   ];
 
-  // Generate time slots - Base hours are 9 AM to 5 PM Eastern Time (UTC-5)
-  // Convert to selected timezone
+  // Generate time slots - Base hours are 8 AM to 8 PM Florida time (Eastern Time, UTC-5)
+  // Convert to selected timezone for display
   const generateTimeSlots = () => {
     const slots = [];
-    const baseOffsetHours = -5; // Eastern Time is UTC-5
+    const baseOffsetHours = -5; // Eastern Time (Florida) is UTC-5
 
     // Find the selected timezone's offset
     const selectedTz = timezones.find(tz => tz.value === timezone);
@@ -292,9 +292,10 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     // Calculate the offset difference
     const offsetDiff = selectedOffsetHours - baseOffsetHours;
 
-    for (let hour = 9; hour < 17; hour++) {
+    // Generate slots from 8 AM to 8 PM in Florida time (Eastern Time)
+    for (let hour = 8; hour < 20; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        // Calculate the converted time
+        // Calculate the converted time in user's timezone
         let convertedHour = hour + offsetDiff;
         let convertedMinute = minute;
 
@@ -305,10 +306,10 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           convertedHour -= 24;
         }
 
-        // Store the time in 24-hour format for the value
-        const time = `${Math.floor(convertedHour).toString().padStart(2, '0')}:${convertedMinute.toString().padStart(2, '0')}`;
+        // Store the time in 24-hour format for the value (Florida time - always stored in Florida time)
+        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
-        // Display in 12-hour AM/PM format
+        // Display in 12-hour AM/PM format (converted to user's timezone)
         const displayHourValue = Math.floor(convertedHour);
         const period = displayHourValue >= 12 ? 'PM' : 'AM';
         const displayHour = displayHourValue > 12 ? displayHourValue - 12 : displayHourValue === 0 ? 12 : displayHourValue;
@@ -378,6 +379,17 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   };
 
   const handleDateClick = (date) => {
+    // Check if date is today or in the past
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date < tomorrow) {
+      // Don't allow selection of today or past dates
+      return;
+    }
+
     // Format date in local timezone (not UTC) to avoid timezone offset issues
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -436,7 +448,9 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const isPast = (date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return date < today;
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return date < tomorrow;
   };
 
   const isSelected = (date) => {
@@ -460,66 +474,73 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-6 md:pt-10 pb-44 lg:pb-6">
-        <div className="space-y-6">
+      <div className="flex-1 overflow-x-hidden px-2 sm:px-3 md:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6">
+        <div className="space-y-3 sm:space-y-4 md:space-y-6 max-w-full">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
               Book Your Appointment
             </h2>
-            <p className="text-gray-600">
+            <p className="text-xs sm:text-sm text-gray-600">
               Select a date and time that works best for you
             </p>
           </div>
 
       {/* Timezone Selector */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
-        <label className="block text-sm font-semibold text-gray-900 mb-3 flex items-center">
-          <Icon icon="heroicons:globe-alt" className="w-5 h-5 mr-2 text-gray-600" />
-          Your Timezone
+      <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-2.5 sm:p-3 md:p-4 lg:p-6 border border-gray-200 overflow-visible">
+        <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 md:mb-3 flex items-center flex-wrap gap-1 sm:gap-2">
+          <Icon icon="heroicons:globe-alt" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600 flex-shrink-0" />
+          <span>Your Timezone</span>
           {isDetectingTimezone && (
-            <span className="ml-2 text-xs text-gray-500 flex items-center">
-              <Icon icon="heroicons:arrow-path" className="w-4 h-4 mr-1 animate-spin" />
+            <span className="text-[9px] sm:text-[10px] md:text-xs text-gray-500 flex items-center">
+              <Icon icon="heroicons:arrow-path" className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 mr-1 animate-spin" />
               Detecting...
             </span>
           )}
         </label>
-        <div className="relative" ref={timezoneDropdownRef}>
-          <div
+        <div className="relative w-full" ref={timezoneDropdownRef}>
+          <button
+            type="button"
             onClick={() => !isDetectingTimezone && setIsTimezoneDropdownOpen(!isTimezoneDropdownOpen)}
-            className={`w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer flex items-center justify-between transition-all ${
+            disabled={isDetectingTimezone}
+            className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl cursor-pointer flex items-center justify-between gap-1.5 sm:gap-2 transition-all text-left ${
               isDetectingTimezone ? 'opacity-50 cursor-wait' : 'hover:border-gray-300'
             } ${isTimezoneDropdownOpen ? 'ring-2 ring-black border-black' : ''}`}
           >
-            <span className="text-gray-900">
-              {timezones.find(tz => tz.value === timezone)?.label || timezone}
+            <span className="text-gray-900 flex-1 min-w-0 text-[11px] sm:text-xs md:text-sm truncate">
+              <span className="hidden sm:inline-block truncate">
+                {timezones.find(tz => tz.value === timezone)?.label || timezone}
+              </span>
+              <span className="sm:hidden truncate">
+                {timezone}
+              </span>
             </span>
             <Icon 
               icon={isTimezoneDropdownOpen ? "heroicons:chevron-up" : "heroicons:chevron-down"} 
-              className="w-5 h-5 text-gray-500"
+              className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-500 flex-shrink-0 ml-1"
             />
-          </div>
+          </button>
           
           {isTimezoneDropdownOpen && !isDetectingTimezone && (
-            <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-96 overflow-hidden">
+            <div className="absolute z-50 w-full mt-1.5 sm:mt-2 bg-white border-2 border-gray-200 rounded-lg sm:rounded-xl shadow-lg max-h-[60vh] sm:max-h-96 overflow-hidden" style={{ left: 0, right: 0 }}>
               {/* Search Input */}
-              <div className="p-3 border-b border-gray-200 sticky top-0 bg-white">
+              <div className="p-2 sm:p-3 border-b border-gray-200 sticky top-0 bg-white">
                 <div className="relative">
-                  <Icon icon="heroicons:magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Icon icon="heroicons:magnifying-glass" className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-400" />
                   <input
                     type="text"
                     value={timezoneSearchTerm}
                     onChange={(e) => setTimezoneSearchTerm(e.target.value)}
                     placeholder="Search timezone..."
-                    className="w-full pl-10 pr-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all"
+                    className="w-full pl-7 sm:pl-8 md:pl-10 pr-2 sm:pr-3 md:pr-4 py-1 sm:py-1.5 md:py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-xs sm:text-sm"
                     autoFocus
                   />
                 </div>
               </div>
               
               {/* Timezone List */}
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-[50vh] sm:max-h-80 overflow-y-auto">
                 {filteredTimezones.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500 text-sm">
+                  <div className="p-2 sm:p-3 md:p-4 text-center text-gray-500 text-xs sm:text-sm">
                     No timezone found matching "{timezoneSearchTerm}"
                   </div>
                 ) : (
@@ -528,14 +549,14 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
                       key={tz.value}
                       type="button"
                       onClick={() => handleTimezoneChange(tz.value)}
-                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                      className={`w-full text-left px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 hover:bg-gray-50 transition-colors ${
                         timezone === tz.value ? 'bg-gray-100 font-semibold' : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-900">{tz.label}</span>
+                      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                        <span className="text-xs sm:text-sm text-gray-900 break-words flex-1">{tz.label}</span>
                         {timezone === tz.value && (
-                          <Icon icon="heroicons:check" className="w-5 h-5 text-black" />
+                          <Icon icon="heroicons:check" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-black flex-shrink-0" />
                         )}
                       </div>
                     </button>
@@ -546,49 +567,52 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           )}
         </div>
         {!isDetectingTimezone && (
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-1 sm:mt-1.5 md:mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-500 break-words">
             Your timezone has been automatically detected. You can change it if needed.
           </p>
         )}
       </div>
 
-      {/* Calendar and Time Slots Row */}
-      <div className="flex flex-col lg:flex-row gap-4">
-        {/* Calendar */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-200 lg:w-96 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-gray-900">
+      {/* Calendar and Time Slots - Stack on mobile, side by side on desktop */}
+      <div className="flex flex-col lg:flex-row gap-2.5 sm:gap-3 md:gap-4 w-full">
+        {/* Calendar - Full width on mobile, ensure no clipping */}
+        <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-2 sm:p-2.5 md:p-3 lg:p-6 border border-gray-200 lg:w-96 lg:flex-shrink-0 w-full">
+          <div className="flex items-center justify-between mb-2 sm:mb-2.5 md:mb-3 lg:mb-4 gap-1 sm:gap-1.5 md:gap-2">
+            <h3 className="text-[11px] sm:text-xs md:text-sm lg:text-base font-semibold text-gray-900 flex-1 min-w-0">
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h3>
-            <div className="flex space-x-1">
+            <div className="flex space-x-0.5 sm:space-x-1 flex-shrink-0">
               <button
                 type="button"
                 onClick={goToPreviousMonth}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1 sm:p-1.5 md:p-2 hover:bg-gray-100 rounded-md sm:rounded-lg transition-colors"
+                aria-label="Previous month"
               >
-                <Icon icon="heroicons:chevron-left" className="w-5 h-5 text-gray-600" />
+                <Icon icon="heroicons:chevron-left" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600" />
               </button>
               <button
                 type="button"
                 onClick={goToNextMonth}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1 sm:p-1.5 md:p-2 hover:bg-gray-100 rounded-md sm:rounded-lg transition-colors"
+                aria-label="Next month"
               >
-                <Icon icon="heroicons:chevron-right" className="w-5 h-5 text-gray-600" />
+                <Icon icon="heroicons:chevron-right" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600" />
               </button>
             </div>
           </div>
 
-          {/* Day names */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+          {/* Day names - Very compact on mobile */}
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-1 sm:mb-1.5 md:mb-2">
             {dayNames.map((day) => (
-              <div key={day} className="text-center text-xs font-semibold text-gray-500 py-1">
-                {day}
+              <div key={day} className="text-center text-[9px] sm:text-[10px] md:text-xs font-semibold text-gray-500 py-0.5">
+                <span className="hidden sm:inline">{day}</span>
+                <span className="sm:hidden text-[8px]">{day.charAt(0)}</span>
               </div>
             ))}
           </div>
 
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
+          {/* Calendar grid - Compact gaps on mobile to fit all days */}
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-1.5 w-full">
             {calendarDays.map((day, index) => {
               const disabled = !day.isCurrentMonth || isPast(day.date);
               const selected = isSelected(day.date);
@@ -600,14 +624,14 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="button"
                   onClick={() => !disabled && handleDateClick(day.date)}
                   disabled={disabled}
-                  className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                  className={`w-full aspect-square min-w-0 min-h-[28px] sm:min-h-[32px] md:min-h-[36px] lg:min-h-[40px] flex items-center justify-center rounded sm:rounded-md md:rounded-lg text-[10px] sm:text-[11px] md:text-xs lg:text-sm font-medium transition-all ${
                     disabled
-                      ? 'text-gray-300 cursor-not-allowed'
+                      ? 'text-gray-300 cursor-not-allowed bg-transparent'
                       : selected
                       ? 'bg-black text-white shadow-md'
                       : today
                       ? 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      : 'text-gray-700 hover:bg-gray-100 bg-gray-50'
                   }`}
                 >
                   {day.date.getDate()}
@@ -617,29 +641,29 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           </div>
         </div>
 
-        {/* Time Slots */}
-        <div ref={timeSlotsRef} className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
-          <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-            <Icon icon="heroicons:clock" className="w-4 h-4 mr-2 text-gray-600" />
-            Available Time Slots
+        {/* Time Slots - Full width on mobile */}
+        <div ref={timeSlotsRef} className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-2.5 sm:p-3 md:p-4 border border-gray-200 lg:flex-1 w-full overflow-visible">
+          <h3 className="text-xs sm:text-sm md:text-base font-semibold text-gray-900 mb-2 sm:mb-2.5 md:mb-3 flex items-center">
+            <Icon icon="heroicons:clock" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-4 md:h-4 mr-1.5 sm:mr-2 text-gray-600 flex-shrink-0" />
+            <span>Available Time Slots</span>
           </h3>
           {!selectedDate && (
-            <p className="text-sm text-gray-500 italic mb-3">
+            <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 italic mb-2 sm:mb-2.5 md:mb-3">
               Please select a date first to choose a time slot
             </p>
           )}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-1.5 sm:gap-2">
             {timeSlots.map((slot) => (
               <button
                 key={slot.value}
                 type="button"
                 onClick={() => selectedDate && handleTimeClick(slot.value)}
                 disabled={!selectedDate}
-                className={`py-2 px-2 rounded-lg text-xs font-medium transition-all w-full ${
+                className={`py-2 sm:py-2.5 px-2 sm:px-2.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-medium transition-all w-full ${
                   !selectedDate
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : selectedTime === slot.value
-                    ? 'bg-black text-white shadow-md'
+                    ? 'bg-black text-white shadow-md scale-105'
                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
               >

@@ -121,9 +121,16 @@ GRANT EXECUTE ON FUNCTION public.get_appointments_needing_reminders() TO service
 -- ============================================================================
 
 -- Remove existing cron jobs if they exist (to avoid duplicates)
-SELECT cron.unschedule('appointment-reminders-hourly') WHERE EXISTS (
-  SELECT 1 FROM cron.job WHERE jobname = 'appointment-reminders-hourly'
-);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'appointment-reminders-hourly') THEN
+    PERFORM cron.unschedule('appointment-reminders-hourly');
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'appointment-reminders-15min') THEN
+    PERFORM cron.unschedule('appointment-reminders-15min');
+  END IF;
+END $$;
 
 -- Schedule cron job to run every hour
 -- This will check for both day-before and one-hour-before reminders

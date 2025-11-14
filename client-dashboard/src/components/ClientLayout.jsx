@@ -121,7 +121,7 @@ const ClientLayout = ({ children }) => {
       </header>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col overflow-y-auto overflow-x-hidden">
+      <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
         <div className="flex-1 overflow-y-auto p-8 pb-0">
           {/* Logo */}
           <div className="mb-10 animate-fade-in flex flex-col items-center justify-center">
@@ -160,7 +160,7 @@ const ClientLayout = ({ children }) => {
         </div>
 
         {/* Logout Button - Fixed at bottom */}
-        <div className="p-6 border-t border-gray-200">
+        <div className="mt-auto p-6 border-t border-gray-200 bg-[#F3F4F6]">
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
@@ -212,7 +212,7 @@ const ClientLayout = ({ children }) => {
             </div>
 
             {/* Logout Button - Fixed at bottom */}
-            <div className="p-6 border-t border-gray-200">
+            <div className="mt-auto p-6 border-t border-gray-200 bg-[#F3F4F6]">
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"

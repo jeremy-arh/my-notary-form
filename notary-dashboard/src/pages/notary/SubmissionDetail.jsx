@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Chat from '../../components/Chat';
+import SignatoriesList from '../../components/SignatoriesList';
 import { supabase } from '../../lib/supabase';
 import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirm } from '../../hooks/useConfirm';
 
 const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [submission, setSubmission] = useState(null);
   const [notaryId, setNotaryId] = useState(null);
   const [notaryTimezone, setNotaryTimezone] = useState(null);
@@ -17,6 +22,7 @@ const SubmissionDetail = () => {
   const [documents, setDocuments] = useState([]);
   const [notarizedFiles, setNotarizedFiles] = useState([]);
   const [fileComments, setFileComments] = useState({});
+  const [signatories, setSignatories] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
   const [isUnassigned, setIsUnassigned] = useState(false);
@@ -179,10 +185,21 @@ const SubmissionDetail = () => {
           }
         }
       }
+
+      // Fetch signatories
+      const { data: signatoriesData, error: signatoriesError } = await supabase
+        .from('signatories')
+        .select('*')
+        .eq('submission_id', id)
+        .order('created_at', { ascending: true });
+
+      if (!signatoriesError && signatoriesData) {
+        setSignatories(signatoriesData || []);
+      }
     } catch (error) {
       console.error('Error fetching submission detail:', error);
       const errorMessage = error.message || 'Error loading submission details';
-      alert(errorMessage);
+      toast.error(errorMessage);
       setLoading(false);
       // Don't navigate immediately, let user see the error
       setTimeout(() => {
@@ -207,7 +224,7 @@ const SubmissionDetail = () => {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading document:', error);
-      alert('Failed to download document');
+      toast.error('Failed to download document');
     }
   };
 
@@ -263,7 +280,7 @@ const SubmissionDetail = () => {
         appointmentDate.setHours(0, 0, 0, 0);
         
         if (appointmentDate > today) {
-          alert('You cannot mark this submission as completed before the appointment date.');
+          toast.warning('You cannot mark this submission as completed before the appointment date.');
           return;
         }
       }
@@ -275,10 +292,10 @@ const SubmissionDetail = () => {
 
       if (error) throw error;
       setSubmission({ ...submission, status: newStatus });
-      alert('Status updated successfully!');
+      toast.success('Status updated successfully!');
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status');
+      toast.error('Failed to update status');
     }
   };
 
@@ -294,7 +311,7 @@ const SubmissionDetail = () => {
       if (checkError) throw checkError;
 
       if (checkSubmission.assigned_notary_id) {
-        alert('This submission has already been accepted by another notary.');
+        toast.warning('This submission has already been accepted by another notary.');
         navigate('/dashboard');
         return;
       }
@@ -311,12 +328,12 @@ const SubmissionDetail = () => {
 
       if (error) throw error;
 
-      alert('Submission accepted successfully!');
+      toast.success('Submission accepted successfully!');
       setIsUnassigned(false);
       setSubmission({ ...submission, assigned_notary_id: notaryId, status: 'confirmed' });
     } catch (error) {
       console.error('Error accepting submission:', error);
-      alert(`Failed to accept submission: ${error.message}`);
+      toast.error(`Failed to accept submission: ${error.message}`);
     }
   };
 
@@ -339,7 +356,7 @@ const SubmissionDetail = () => {
 
         if (uploadError) {
           console.error('Error uploading file:', uploadError);
-          alert(`Failed to upload ${file.name}: ${uploadError.message}`);
+          toast.error(`Failed to upload ${file.name}: ${uploadError.message}`);
           continue;
         }
 
@@ -365,7 +382,7 @@ const SubmissionDetail = () => {
 
         if (fileError) {
           console.error('Error saving file metadata:', fileError);
-          alert(`Failed to save file metadata for ${file.name}: ${fileError.message}`);
+          toast.error(`Failed to save file metadata for ${file.name}: ${fileError.message}`);
           continue;
         }
 
@@ -438,7 +455,7 @@ const SubmissionDetail = () => {
         }
       }
 
-      alert('Files uploaded successfully!');
+      toast.success('Files uploaded successfully!');
       
       // Reset file input
       if (e.target) {
@@ -446,7 +463,7 @@ const SubmissionDetail = () => {
       }
     } catch (error) {
       console.error('Error uploading files:', error);
-      alert('Failed to upload files. Please try again.');
+      toast.error('Failed to upload files. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -484,12 +501,20 @@ const SubmissionDetail = () => {
       }));
     } catch (error) {
       console.error('Error adding comment:', error);
-      alert('Failed to add comment. Please try again.');
+      toast.error('Failed to add comment. Please try again.');
     }
   };
 
   const handleDeleteFile = async (fileId, storagePath) => {
-    if (!window.confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+    const confirmed = await confirm({
+      title: 'Delete File',
+      message: 'Are you sure you want to delete this file? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -529,10 +554,10 @@ const SubmissionDetail = () => {
         return newComment;
       });
 
-      alert('File deleted successfully');
+      toast.success('File deleted successfully');
     } catch (error) {
       console.error('Error deleting file:', error);
-      alert(`Failed to delete file: ${error.message}`);
+      toast.error(`Failed to delete file: ${error.message}`);
     }
   };
 
@@ -572,6 +597,7 @@ const SubmissionDetail = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <ConfirmComponent />
       {/* Header */}
       <div>
         <button
@@ -657,6 +683,17 @@ const SubmissionDetail = () => {
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('signatories')}
+              className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
+                activeTab === 'signatories' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Signatories
+              {activeTab === 'signatories' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+              )}
+            </button>
             {!isUnassigned && (
               <button
                 onClick={() => setActiveTab('notarized')}
@@ -711,10 +748,16 @@ const SubmissionDetail = () => {
                     <span className="text-sm sm:text-base font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Time:</span>
+                    <span className="text-sm sm:text-base text-gray-600">Time (Florida - Eastern Time):</span>
                     <span className="text-sm sm:text-base font-semibold text-gray-900">
-                      {notaryTimezone && submission.timezone
-                        ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, notaryTimezone)
+                      {submission.appointment_time}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+                    <span className="text-sm sm:text-base text-gray-600">Time ({notaryTimezone || 'Your Timezone'}):</span>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900">
+                      {notaryTimezone
+                        ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, 'America/New_York', notaryTimezone)
                         : submission.appointment_time}
                       {notaryTimezone && (
                         <span className="text-xs text-gray-500 ml-2">({notaryTimezone})</span>
@@ -827,8 +870,110 @@ const SubmissionDetail = () => {
                   </div>
                 </div>
               )}
+
             </div>
           )}
+
+          {/* Signatories Tab */}
+          {activeTab === 'signatories' && (() => {
+            // Get signatories from database (if payment completed) or from submission.data (if not yet paid)
+            const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+            const hasSignatoriesInDB = signatories.length > 0;
+            const hasSignatoriesInData = Object.keys(signatoriesFromData).length > 0 && 
+              Object.values(signatoriesFromData).some(sigs => sigs && sigs.length > 0);
+
+            if (!hasSignatoriesInDB && !hasSignatoriesInData) {
+              return (
+                <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                      <Icon icon="heroicons:user-group" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                    </div>
+                    <span className="text-base sm:text-xl">Signatories</span>
+                  </h2>
+                  <p className="text-sm sm:text-base text-gray-600">No signatories added for this submission.</p>
+                </div>
+              );
+            }
+
+            // Convert database signatories to the format expected by SignatoriesList
+            const signatoriesByDoc = {};
+            const serviceDocuments = submission?.data?.serviceDocuments || {};
+            const selectedServices = submission?.data?.selectedServices || [];
+            
+            if (hasSignatoriesInDB) {
+              // Use database signatories (after payment)
+              signatories.forEach(sig => {
+                if (!signatoriesByDoc[sig.document_key]) {
+                  signatoriesByDoc[sig.document_key] = [];
+                }
+                signatoriesByDoc[sig.document_key].push({
+                  first_name: sig.first_name,
+                  last_name: sig.last_name,
+                  birth_date: sig.birth_date,
+                  birth_city: sig.birth_city,
+                  postal_address: sig.postal_address
+                });
+              });
+            } else {
+              // Use signatories from submission.data (before payment)
+              Object.entries(signatoriesFromData).forEach(([docKey, sigs]) => {
+                if (sigs && sigs.length > 0) {
+                  signatoriesByDoc[docKey] = sigs.map(sig => ({
+                    first_name: sig.firstName || sig.first_name,
+                    last_name: sig.lastName || sig.last_name,
+                    birth_date: sig.birthDate || sig.birth_date,
+                    birth_city: sig.birthCity || sig.birth_city,
+                    postal_address: sig.postalAddress || sig.postal_address
+                  }));
+                }
+              });
+            }
+
+            if (Object.keys(signatoriesByDoc).length === 0) {
+              return (
+                <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                      <Icon icon="heroicons:user-group" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                    </div>
+                    <span className="text-base sm:text-xl">Signatories</span>
+                  </h2>
+                  <p className="text-sm sm:text-base text-gray-600">No signatories added for this submission.</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
+                    <Icon icon="heroicons:user-group" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                  </div>
+                  <span className="text-base sm:text-xl">Signatories</span>
+                </h2>
+                <div className="space-y-3 sm:space-y-4">
+                  {Object.entries(signatoriesByDoc).map(([docKey, docSignatories]) => {
+                    // Extract serviceId and docIndex from docKey (format: "serviceId_docIndex")
+                    const [serviceId, docIndex] = docKey.split('_');
+                    const documents = serviceDocuments[serviceId] || [];
+                    const document = documents[parseInt(docIndex)] || {};
+                    const documentName = document.name || `Document ${parseInt(docIndex) + 1}`;
+
+                    return (
+                      <SignatoriesList
+                        key={docKey}
+                        signatories={docSignatories}
+                        documentKey={docKey}
+                        documentName={documentName}
+                        showPrices={false}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Notarized Files Tab */}
           {activeTab === 'notarized' && !isUnassigned && (

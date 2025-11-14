@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 
 const Users = () => {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ const Users = () => {
         email: client.email,
         created_at: client.created_at,
         last_sign_in_at: client.updated_at,
+        stripe_customer_id: client.stripe_customer_id,
         user_metadata: {
           first_name: client.first_name,
           last_name: client.last_name
@@ -151,9 +153,11 @@ const Users = () => {
     await fetchUserSubmissions(user.id);
   };
 
+  const toast = useToast();
+  
   const handleStartConversation = () => {
     if (!selectedSubmissionId) {
-      alert('Veuillez sélectionner une soumission');
+      toast.warning('Please select a submission');
       return;
     }
     navigate(`/messages?submission_id=${selectedSubmissionId}`);
@@ -348,6 +352,17 @@ const Users = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
+                          {user.stripe_customer_id && (
+                            <a
+                              href={`https://dashboard.stripe.com/test/customers/${user.stripe_customer_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-600 hover:text-gray-900 transition-colors"
+                              title="Voir sur Stripe Dashboard"
+                            >
+                              <Icon icon="heroicons:arrow-top-right-on-square" className="w-5 h-5" />
+                            </a>
+                          )}
                           <button
                             onClick={() => handleOpenMessageModal(user)}
                             className="text-blue-600 hover:text-blue-900 transition-colors"

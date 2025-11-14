@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ToastProvider } from './contexts/ToastContext'
 import PrivateRoute from './components/PrivateRoute'
 import Login from './pages/admin/Login'
 import Dashboard from './pages/admin/Dashboard'
@@ -16,8 +17,9 @@ import './index.css'
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <ToastProvider>
+      <BrowserRouter>
+        <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route
@@ -110,6 +112,7 @@ function App() {
         />
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   )
 }
 
