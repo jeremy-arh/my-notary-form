@@ -159,13 +159,61 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     });
   };
 
-  const formatTime = (time) => {
-    if (!time) return 'Not selected';
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-    return `${displayHour}:${minutes} ${period}`;
+  const formatTime = (time, date, timezone) => {
+    if (!time || !date) return 'Not selected';
+    
+    try {
+      // IMPORTANT: The time stored in formData.appointmentTime is in Florida time (UTC-5)
+      // We need to convert it to the client's timezone for display
+      
+      // Parse the stored time (Florida time, UTC-5)
+      const [floridaHours, floridaMinutes] = time.split(':').map(Number);
+      
+      // Get client timezone offset
+      let clientOffsetHours = 0;
+      if (timezone && timezone.startsWith('UTC')) {
+        const match = timezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+        if (match) {
+          const sign = match[1] === '+' ? 1 : -1;
+          const hours = parseInt(match[2], 10);
+          const minutes = match[3] ? parseInt(match[3], 10) : 0;
+          clientOffsetHours = sign * (hours + minutes / 60);
+        }
+      }
+      
+      // Florida is UTC-5
+      const floridaOffsetHours = -5;
+      
+      // Calculate the difference between client timezone and Florida timezone
+      const offsetDiff = clientOffsetHours - floridaOffsetHours;
+      
+      // Convert Florida time to client timezone
+      let clientHour = floridaHours + offsetDiff;
+      const clientMinutes = floridaMinutes;
+      
+      // Handle day overflow/underflow
+      if (clientHour < 0) {
+        clientHour += 24;
+      } else if (clientHour >= 24) {
+        clientHour -= 24;
+      }
+      
+      // Format in 12-hour format
+      const hour = Math.floor(clientHour);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      
+      // Format with proper padding for minutes
+      return `${displayHour}:${String(clientMinutes).padStart(2, '0')} ${period}`;
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      // Fallback to original format
+      const [hours, minutes] = time.split(':');
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${displayHour}:${minutes} ${period}`;
+    }
   };
 
   return (
@@ -328,7 +376,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
             <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Time</span>
-            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right">{formatTime(formData.appointmentTime)}</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right">{formatTime(formData.appointmentTime, formData.appointmentDate, formData.timezone)}</span>
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
             <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Timezone</span>

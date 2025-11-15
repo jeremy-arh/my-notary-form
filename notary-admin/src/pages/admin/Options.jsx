@@ -1,26 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 
 const Options = () => {
+  const navigate = useNavigate();
   const [options, setOptions] = useState([]);
   const [filteredOptions, setFilteredOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingOption, setEditingOption] = useState(null);
-  const [formData, setFormData] = useState({
-    option_id: '',
-    name: '',
-    description: '',
-    short_description: '',
-    icon: '',
-    additional_price: '',
-    cta: 'Book an appointment',
-    meta_title: '',
-    meta_description: '',
-    is_active: true
-  });
 
   useEffect(() => {
     fetchOptions();
@@ -61,84 +49,11 @@ const Options = () => {
   };
 
   const handleCreate = () => {
-    setEditingOption(null);
-    setFormData({
-      option_id: '',
-      name: '',
-      description: '',
-      short_description: '',
-      icon: '',
-      additional_price: '',
-      cta: 'Book an appointment',
-      meta_title: '',
-      meta_description: '',
-      is_active: true
-    });
-    setIsModalOpen(true);
+    navigate('/cms/option/new');
   };
 
   const handleEdit = (option) => {
-    setEditingOption(option);
-    setFormData({
-      option_id: option.option_id || '',
-      name: option.name || '',
-      description: option.description || '',
-      short_description: option.short_description || '',
-      icon: option.icon || '',
-      additional_price: option.additional_price || '',
-      cta: option.cta || 'Book an appointment',
-      meta_title: option.meta_title || '',
-      meta_description: option.meta_description || '',
-      is_active: option.is_active !== undefined ? option.is_active : true
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      // Champs de base (toujours présents)
-      const optionData = {
-        option_id: formData.option_id,
-        name: formData.name,
-        description: formData.description || null,
-        icon: formData.icon || null,
-        additional_price: parseFloat(formData.additional_price) || 0,
-        is_active: formData.is_active
-      };
-
-      // Ajouter les champs optionnels seulement s'ils ont une valeur
-      // (Ces champs peuvent ne pas exister dans votre table)
-      if (formData.short_description) optionData.short_description = formData.short_description;
-      if (formData.cta) optionData.cta = formData.cta;
-      if (formData.meta_title) optionData.meta_title = formData.meta_title;
-      if (formData.meta_description) optionData.meta_description = formData.meta_description;
-
-      if (editingOption) {
-        const { error } = await supabase
-          .from('options')
-          .update(optionData)
-          .eq('id', editingOption.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('options')
-          .insert([optionData]);
-
-        if (error) throw error;
-      }
-
-      setIsModalOpen(false);
-      fetchOptions();
-    } catch (error) {
-      console.error('Error saving option:', error);
-      // Si erreur de colonne manquante, suggérer d'ajouter la colonne
-      if (error.message.includes('column') && error.message.includes('not found')) {
-        alert('Erreur : Une colonne n\'existe pas dans la table. Vérifiez votre schéma de base de données. Erreur: ' + error.message);
-      } else {
-        alert('Erreur lors de la sauvegarde: ' + error.message);
-      }
-    }
+    navigate(`/cms/option/${option.id}`);
   };
 
   const handleDelete = async (id) => {
@@ -278,159 +193,6 @@ const Options = () => {
           </div>
         )}
       </div>
-
-      {/* Modal */}
-      {isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 my-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingOption ? 'Modifier l\'option' : 'Nouvelle option'}
-                </h2>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <Icon icon="heroicons:x-mark" className="w-6 h-6 text-gray-600" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Option ID *</label>
-                    <input
-                      type="text"
-                      value={formData.option_id}
-                      onChange={(e) => setFormData({ ...formData, option_id: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      placeholder="ex: urgent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Nom *</label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                    rows="3"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Description courte</label>
-                  <textarea
-                    value={formData.short_description}
-                    onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                    rows="2"
-                    placeholder="Description courte pour les aperçus..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Icône (Iconify)</label>
-                  <input
-                    type="text"
-                    value={formData.icon}
-                    onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                    placeholder="ex: heroicons:bolt"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Prix additionnel ($) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.additional_price}
-                      onChange={(e) => setFormData({ ...formData, additional_price: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">CTA (Call to Action)</label>
-                    <input
-                      type="text"
-                      value={formData.cta}
-                      onChange={(e) => setFormData({ ...formData, cta: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      placeholder="Book an appointment"
-                    />
-                  </div>
-                </div>
-
-                {/* SEO Section */}
-                <div className="border-t pt-4">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">SEO</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Meta Title</label>
-                      <input
-                        type="text"
-                        value={formData.meta_title}
-                        onChange={(e) => setFormData({ ...formData, meta_title: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Meta Description</label>
-                      <textarea
-                        value={formData.meta_description}
-                        onChange={(e) => setFormData({ ...formData, meta_description: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                        rows="2"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_active}
-                      onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                      className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black"
-                    />
-                    <span className="ml-2 text-sm font-semibold text-gray-900">Option active</span>
-                  </label>
-                </div>
-
-                <div className="flex gap-4 pt-4">
-                  <button
-                    onClick={handleSave}
-                    className="flex-1 px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-semibold"
-                  >
-                    Enregistrer
-                  </button>
-                  <button
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-semibold"
-                  >
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
     </>
   );
 };

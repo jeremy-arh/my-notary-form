@@ -21,6 +21,8 @@ const SubmissionDetail = () => {
   const [fileComments, setFileComments] = useState({});
   const [signatories, setSignatories] = useState([]);
   const [isRetryingPayment, setIsRetryingPayment] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('services');
 
   useEffect(() => {
@@ -33,6 +35,13 @@ const SubmissionDetail = () => {
   useEffect(() => {
     fetchSubmissionDetail();
   }, [id]);
+
+  // Fetch transactions when transactions tab is active
+  useEffect(() => {
+    if (activeTab === 'transactions' && id) {
+      fetchTransactions();
+    }
+  }, [activeTab, id]);
 
   const fetchSubmissionDetail = async () => {
     try {
@@ -237,6 +246,155 @@ const SubmissionDetail = () => {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  // Convert appointment time from Florida time (UTC-5) to client timezone for display
+  const formatAppointmentTime = (time, date, timezone) => {
+    if (!time || !date) return 'Not selected';
+    
+    try {
+      // IMPORTANT: The time stored in submission.appointment_time is in Florida time (UTC-5)
+      // We need to convert it to the client's timezone for display
+      
+      // Parse the stored time (Florida time, UTC-5)
+      const [floridaHours, floridaMinutes] = time.split(':').map(Number);
+      
+      // Get client timezone offset
+      let clientOffsetHours = 0;
+      if (timezone && timezone.startsWith('UTC')) {
+        const match = timezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+        if (match) {
+          const sign = match[1] === '+' ? 1 : -1;
+          const hours = parseInt(match[2], 10);
+          const minutes = match[3] ? parseInt(match[3], 10) : 0;
+          clientOffsetHours = sign * (hours + minutes / 60);
+        }
+      }
+      
+      // Florida is UTC-5
+      const floridaOffsetHours = -5;
+      
+      // Calculate the difference between client timezone and Florida timezone
+      const offsetDiff = clientOffsetHours - floridaOffsetHours;
+      
+      // Convert Florida time to client timezone
+      let clientHour = floridaHours + offsetDiff;
+      const clientMinutes = floridaMinutes;
+      
+      // Handle day overflow/underflow
+      if (clientHour < 0) {
+        clientHour += 24;
+      } else if (clientHour >= 24) {
+        clientHour -= 24;
+      }
+      
+      // Format in 12-hour format
+      const hour = Math.floor(clientHour);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      
+      // Format with proper padding for minutes
+      return `${displayHour}:${String(clientMinutes).padStart(2, '0')} ${period}`;
+    } catch (error) {
+      console.error('Error formatting appointment time:', error);
+      // Fallback to original format
+      return time;
+    }
+  };
+
+  const fetchTransactions = async () => {
+    if (!id) return;
+    
+    setTransactionsLoading(true);
+    try {
+      // Fetch submission with payment data from Supabase
+      const { data: submissionData, error } = await supabase
+        .from('submission')
+        .select('id, email, phone, first_name, last_name, created_at, data')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
+      const allTransactions = [];
+      const paymentData = submissionData?.data?.payment;
+
+      if (paymentData) {
+        // Initial payment transaction
+        if (paymentData.payment_intent_id && paymentData.amount_paid) {
+          const paymentDate = paymentData.paid_at 
+            ? new Date(paymentData.paid_at).getTime() / 1000 
+            : submissionData.created_at 
+              ? new Date(submissionData.created_at).getTime() / 1000 
+              : Date.now() / 1000;
+
+          allTransactions.push({
+            id: paymentData.payment_intent_id,
+            type: 'payment',
+            amount: paymentData.amount_paid / 100,
+            currency: paymentData.currency || 'usd',
+            status: paymentData.payment_status === 'paid' ? 'succeeded' : paymentData.payment_status || 'pending',
+            created: paymentDate,
+            email: submissionData.email,
+            phone: submissionData.phone,
+            invoiceUrl: paymentData.invoice_url || null
+          });
+
+          // Additional payments
+          if (paymentData.additional_payments && Array.isArray(paymentData.additional_payments)) {
+            for (const additionalPayment of paymentData.additional_payments) {
+              const paymentDate = additionalPayment.created_at 
+                ? new Date(additionalPayment.created_at).getTime() / 1000 
+                : Date.now() / 1000;
+
+              allTransactions.push({
+                id: additionalPayment.payment_intent_id,
+                type: 'payment',
+                amount: additionalPayment.amount / 100,
+                currency: additionalPayment.currency || paymentData.currency || 'usd',
+                status: additionalPayment.status || 'succeeded',
+                created: paymentDate,
+                email: submissionData.email,
+                phone: submissionData.phone,
+                invoiceUrl: additionalPayment.invoice_url || null
+              });
+            }
+          }
+
+          // Refunds
+          if (paymentData.refunds && Array.isArray(paymentData.refunds)) {
+            for (const refund of paymentData.refunds) {
+              const refundDate = refund.created_at 
+                ? new Date(refund.created_at).getTime() / 1000 
+                : Date.now() / 1000;
+
+              allTransactions.push({
+                id: refund.id || `refund_${paymentData.payment_intent_id}_${refundDate}`,
+                type: 'refund',
+                amount: refund.amount / 100,
+                currency: refund.currency || paymentData.currency || 'usd',
+                status: refund.status || 'succeeded',
+                created: refundDate,
+                reason: refund.reason || null,
+                email: submissionData.email,
+                phone: submissionData.phone,
+                invoiceUrl: refund.invoice_url || null
+              });
+            }
+          }
+        }
+      }
+
+      // Sort by date (most recent first)
+      allTransactions.sort((a, b) => b.created - a.created);
+
+      setTransactions(allTransactions);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      setTransactions([]);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
   const retryPayment = async () => {
     setIsRetryingPayment(true);
     try {
@@ -314,7 +472,7 @@ const SubmissionDetail = () => {
 
   return (
     <ClientLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-0 overflow-x-hidden">
+      <div className="w-full px-4 sm:px-6 lg:px-8 overflow-x-hidden">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <button
@@ -336,9 +494,9 @@ const SubmissionDetail = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-          {/* Left Column - Details with Tabs */}
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 lg:gap-8">
+          {/* Main Content - Takes remaining space */}
+          <div className="w-full min-w-0">
             {/* Tabs */}
             <div className="flex space-x-4 sm:space-x-6 mb-4 sm:mb-6 border-b border-gray-200 overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0" style={{ WebkitOverflowScrolling: 'touch' }}>
               <button
@@ -381,15 +539,20 @@ const SubmissionDetail = () => {
                 )}
               </button>
               <button
-                onClick={() => setActiveTab('payment')}
+                onClick={() => setActiveTab('transactions')}
                 className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
-                  activeTab === 'payment'
+                  activeTab === 'transactions'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Payment Information
-                {activeTab === 'payment' && (
+                Transactions
+                {transactions.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-gray-200 rounded-full text-xs">
+                    {transactions.length}
+                  </span>
+                )}
+                {activeTab === 'transactions' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
@@ -676,7 +839,9 @@ const SubmissionDetail = () => {
                       last_name: sig.last_name,
                       birth_date: sig.birth_date,
                       birth_city: sig.birth_city,
-                      postal_address: sig.postal_address
+                      postal_address: sig.postal_address,
+                      email: sig.email,
+                      phone: sig.phone
                     });
                   });
                 } else {
@@ -688,7 +853,9 @@ const SubmissionDetail = () => {
                         last_name: sig.lastName || sig.last_name,
                         birth_date: sig.birthDate || sig.birth_date,
                         birth_city: sig.birthCity || sig.birth_city,
-                        postal_address: sig.postalAddress || sig.postal_address
+                        postal_address: sig.postalAddress || sig.postal_address,
+                        email: sig.email,
+                        phone: sig.phone
                       }));
                     }
                   });
@@ -754,7 +921,9 @@ const SubmissionDetail = () => {
                 </div>
                 <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
                   <span className="text-sm sm:text-base text-gray-600">Time:</span>
-                  <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.appointment_time}</span>
+                  <span className="text-sm sm:text-base font-semibold text-gray-900">
+                    {formatAppointmentTime(submission.appointment_time, submission.appointment_date, submission.timezone)}
+                  </span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
                   <span className="text-sm sm:text-base text-gray-600">Timezone:</span>
@@ -764,79 +933,138 @@ const SubmissionDetail = () => {
               </div>
               )}
 
-              {/* Payment Information Tab */}
-              {activeTab === 'payment' && (submission.data?.payment || submission.status === 'pending_payment') && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-                    <Icon icon="heroicons:credit-card" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                  </div>
-                  <span className="text-base sm:text-xl">Payment Information</span>
-                </h2>
-                <div className="space-y-2 sm:space-y-3">
-                  {submission.data?.payment && (
-                    <>
-                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0">
-                        <span className="text-sm sm:text-base text-gray-600">Status:</span>
-                        <div className="flex-shrink-0">
-                          {getPaymentStatusBadge(submission.data.payment.payment_status)}
-                        </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                        <span className="text-sm sm:text-base text-gray-600">Amount:</span>
-                        <span className="text-sm sm:text-base font-semibold text-gray-900">
-                          ${((submission.data.payment.amount_paid || 0) / 100).toFixed(2)} {(submission.data.payment.currency || 'usd').toUpperCase()}
-                        </span>
-                      </div>
-                      {submission.data.payment.paid_at && (
-                        <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                          <span className="text-sm sm:text-base text-gray-600">Paid on:</span>
-                          <span className="text-sm sm:text-base font-semibold text-gray-900">
-                            {formatDate(submission.data.payment.paid_at)}
-                          </span>
-                        </div>
+              {/* Transactions Tab */}
+              {activeTab === 'transactions' && (
+                <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">Transactions</h2>
+                  
+                  {transactionsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+                    </div>
+                  ) : transactions.length === 0 ? (
+                    <div className="space-y-4">
+                      <p className="text-sm sm:text-base text-gray-600">No transactions found for this submission.</p>
+                      {submission.status === 'pending_payment' && (
+                        <button
+                          onClick={retryPayment}
+                          disabled={isRetryingPayment}
+                          className="w-full flex items-center justify-center bg-black text-white hover:bg-gray-800 font-medium text-xs sm:text-sm py-2 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isRetryingPayment ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Icon icon="heroicons:arrow-path" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                              Retry Payment
+                            </>
+                          )}
+                        </button>
                       )}
-                      {submission.data.payment.invoice_url && (
-                        <div className="pt-3 border-t border-gray-200">
-                          <a
-                            href={submission.data.payment.invoice_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full flex items-center justify-center bg-white text-black hover:bg-gray-100 font-medium text-xs sm:text-sm py-2 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors"
-                          >
-                            <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                            Download Invoice
-                          </a>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {submission.status === 'pending_payment' && (
-                    <div className={submission.data?.payment?.invoice_url ? "mt-3" : (submission.data?.payment ? "pt-3 border-t border-gray-200" : "")}>
-                      <button
-                        onClick={retryPayment}
-                        disabled={isRetryingPayment}
-                        className="w-full flex items-center justify-center bg-black text-white hover:bg-gray-800 font-medium text-xs sm:text-sm py-2 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isRetryingPayment ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <Icon icon="heroicons:arrow-path" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                            Retry Payment
-                          </>
-                        )}
-                      </button>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-200">
+                          <tr>
+                            <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Type</th>
+                            <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Amount</th>
+                            <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
+                            <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Date</th>
+                            <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {transactions.map((tx) => {
+                            const formatTransactionDate = (timestamp) => {
+                              return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              });
+                            };
+
+                            const formatCurrency = (amount, currency = 'usd') => {
+                              return new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: currency.toUpperCase()
+                              }).format(amount);
+                            };
+
+                            const getStatusBadge = (status, type) => {
+                              const badges = {
+                                succeeded: 'bg-green-100 text-green-700',
+                                paid: 'bg-green-100 text-green-700',
+                                failed: 'bg-red-100 text-red-700',
+                                pending: 'bg-gray-100 text-gray-700',
+                                processing: 'bg-blue-100 text-blue-700',
+                                canceled: 'bg-gray-100 text-gray-700',
+                              };
+
+                              const displayStatus = type === 'refund' ? 'REFUND' : (status?.toUpperCase() || 'UNKNOWN');
+                              
+                              // Use purple color for refunds
+                              const badgeClass = type === 'refund' 
+                                ? 'bg-purple-100 text-purple-700'
+                                : (badges[status] || badges.pending);
+
+                              return (
+                                <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}`}>
+                                  {displayStatus}
+                                </span>
+                              );
+                            };
+
+                            return (
+                              <tr key={`${tx.type}-${tx.id}`} className="hover:bg-gray-50">
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                                    {tx.type === 'refund' ? 'Refund' : 'Payment'}
+                                  </div>
+                                  <div className="text-[10px] sm:text-xs text-gray-600 font-mono">
+                                    {tx.id}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className={`text-xs sm:text-sm font-semibold ${tx.type === 'refund' ? 'text-red-600' : 'text-gray-900'}`}>
+                                    {tx.type === 'refund' ? '-' : ''}{formatCurrency(tx.amount, tx.currency)}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  {getStatusBadge(tx.status, tx.type)}
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-xs sm:text-sm text-gray-600">
+                                  {formatTransactionDate(tx.created)}
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-right">
+                                  {tx.invoiceUrl && (
+                                    <a
+                                      href={tx.invoiceUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                                      title="Download invoice"
+                                    >
+                                      <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </a>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
-              </div>
               )}
 
               {/* Notarized Files Tab */}
@@ -950,7 +1178,6 @@ const SubmissionDetail = () => {
           {/* Right Column - Chat */}
           <div className="lg:col-span-1">
             <div className="sticky top-4 sm:top-8">
-              {/* Chat is available if there's a notary OR if there are messages from admin */}
               <Chat
                 submissionId={submission.id}
                 currentUserType="client"

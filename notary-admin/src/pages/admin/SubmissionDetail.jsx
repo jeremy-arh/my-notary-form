@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import TextAlign from '@tiptap/extension-text-align';
+import Color from '@tiptap/extension-color';
+import TextStyle from '@tiptap/extension-text-style';
 import PhoneInputWrapper, { isValidPhoneNumber } from '../../components/PhoneInputWrapper';
 import AdminLayout from '../../components/admin/AdminLayout';
 import Chat from '../../components/admin/Chat';
@@ -32,6 +37,11 @@ const SubmissionDetail = () => {
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [newComment, setNewComment] = useState({});
+  const [timeline, setTimeline] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [internalNotes, setInternalNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [isAddingNote, setIsAddingNote] = useState(false);
   const [editFormData, setEditFormData] = useState({
     appointment_date: '',
     appointment_time: '',
@@ -178,6 +188,38 @@ const SubmissionDetail = () => {
     }
   }, [activeTab, id]);
 
+  // Fetch timeline when timeline tab is active
+  useEffect(() => {
+    if (activeTab === 'timeline' && id) {
+      fetchTimeline();
+    }
+  }, [activeTab, id]);
+
+  // Fetch internal notes when notes tab is active
+  useEffect(() => {
+    if (activeTab === 'notes' && id) {
+      fetchInternalNotes();
+    }
+  }, [activeTab, id]);
+
+  // Initialize Tiptap editor for internal notes
+  const noteEditor = useEditor({
+    extensions: [
+      StarterKit,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      Color,
+      TextStyle,
+    ],
+    content: '',
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[200px] p-4',
+      },
+    },
+  });
+
   const fetchTransactions = async () => {
     if (!id) return;
     
@@ -186,7 +228,7 @@ const SubmissionDetail = () => {
       // Récupérer la soumission avec ses données de paiement depuis Supabase
       const { data: submissionData, error } = await supabase
         .from('submission')
-        .select('id, email, first_name, last_name, created_at, data')
+        .select('id, email, phone, first_name, last_name, created_at, data')
         .eq('id', id)
         .single();
 
@@ -211,6 +253,8 @@ const SubmissionDetail = () => {
             currency: paymentData.currency || 'usd',
             status: paymentData.payment_status === 'paid' ? 'succeeded' : paymentData.payment_status || 'pending',
             created: paymentDate,
+            email: submissionData.email,
+            phone: submissionData.phone,
             stripeUrl: paymentData.payment_intent_id 
               ? `https://dashboard.stripe.com/test/payments/${paymentData.payment_intent_id}` 
               : null
@@ -230,6 +274,8 @@ const SubmissionDetail = () => {
                 currency: additionalPayment.currency || paymentData.currency || 'usd',
                 status: additionalPayment.status || 'succeeded',
                 created: paymentDate,
+                email: submissionData.email,
+                phone: submissionData.phone,
                 stripeUrl: additionalPayment.payment_intent_id 
                   ? `https://dashboard.stripe.com/test/payments/${additionalPayment.payment_intent_id}` 
                   : null
@@ -252,6 +298,8 @@ const SubmissionDetail = () => {
                 status: refund.status || 'succeeded',
                 created: refundDate,
                 reason: refund.reason || null,
+                email: submissionData.email,
+                phone: submissionData.phone,
                 stripeUrl: refund.id 
                   ? `https://dashboard.stripe.com/test/refunds/${refund.id}` 
                   : null
@@ -270,6 +318,140 @@ const SubmissionDetail = () => {
       setTransactions([]);
     } finally {
       setTransactionsLoading(false);
+    }
+  };
+
+  const fetchTimeline = async () => {
+    if (!id) return;
+    
+    setTimelineLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('submission_activity_log')
+        .select('*')
+        .eq('submission_id', id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setTimeline(data || []);
+    } catch (error) {
+      console.error('Error fetching timeline:', error);
+      toast.error('Failed to load timeline');
+      setTimeline([]);
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const fetchInternalNotes = async () => {
+    if (!id) return;
+    
+    setNotesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('submission_internal_notes')
+        .select('*')
+        .eq('submission_id', id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setInternalNotes(data || []);
+    } catch (error) {
+      console.error('Error fetching internal notes:', error);
+      toast.error('Failed to load internal notes');
+      setInternalNotes([]);
+    } finally {
+      setNotesLoading(false);
+    }
+  };
+
+  const createTimelineEntry = async (actionType, actionDescription, oldValue = null, newValue = null, metadata = {}) => {
+    if (!id || !adminInfo) return;
+
+    try {
+      const { error } = await supabase
+        .from('submission_activity_log')
+        .insert({
+          submission_id: id,
+          action_type: actionType,
+          action_description: actionDescription,
+          performed_by_type: 'admin',
+          performed_by_id: adminInfo.id,
+          old_value: oldValue,
+          new_value: newValue,
+          metadata: metadata
+        });
+
+      if (error) throw error;
+
+      // Refresh timeline if tab is active
+      if (activeTab === 'timeline') {
+        fetchTimeline();
+      }
+    } catch (error) {
+      console.error('Error creating timeline entry:', error);
+    }
+  };
+
+  const saveInternalNote = async () => {
+    if (!id || !adminInfo || !noteEditor) return;
+
+    const content = noteEditor.getHTML();
+    if (!content || content.trim() === '<p></p>') {
+      toast.error('Please enter a note');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('submission_internal_notes')
+        .insert({
+          submission_id: id,
+          content: content,
+          created_by_type: 'admin',
+          created_by_id: adminInfo.id
+        });
+
+      if (error) throw error;
+
+      // Clear editor
+      noteEditor.commands.clearContent();
+      setIsAddingNote(false);
+
+      // Refresh notes
+      fetchInternalNotes();
+
+      // Create timeline entry
+      await createTimelineEntry('note_added', 'Internal note added', null, null, { note_preview: content.substring(0, 100) });
+
+      toast.success('Note saved successfully');
+    } catch (error) {
+      console.error('Error saving note:', error);
+      toast.error('Failed to save note');
+    }
+  };
+
+  const deleteInternalNote = async (noteId) => {
+    try {
+      const { error } = await supabase
+        .from('submission_internal_notes')
+        .delete()
+        .eq('id', noteId);
+
+      if (error) throw error;
+
+      // Refresh notes
+      fetchInternalNotes();
+
+      // Create timeline entry
+      await createTimelineEntry('note_deleted', 'Internal note deleted');
+
+      toast.success('Note deleted successfully');
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      toast.error('Failed to delete note');
     }
   };
 
@@ -558,80 +740,67 @@ const SubmissionDetail = () => {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  // Convert time from Florida (Eastern Time) to client timezone for display
+  // Format time in 12-hour format (AM/PM)
+  const formatTime12h = (timeString) => {
+    if (!timeString || timeString === 'N/A') return 'N/A';
+    try {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+    } catch (error) {
+      return timeString;
+    }
+  };
+
+  // Convert time from Florida (Eastern Time, UTC-5) to client timezone for display
   const convertTimeToClientTimezone = (time, date, clientTimezone) => {
     if (!time || !date || !clientTimezone) return time;
     
     try {
-      const floridaTimezone = 'America/New_York';
+      // IMPORTANT: The time stored in submission.appointment_time is in Florida time (UTC-5)
+      // We need to convert it to the client's timezone for display
       
-      // Convert UTC offset to IANA timezone for client
-      let clientTz = clientTimezone;
-      if (clientTimezone.startsWith('UTC')) {
-        const offsetMatch = clientTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
-        if (offsetMatch) {
-          const sign = offsetMatch[1] === '+' ? 1 : -1;
-          const hours = parseInt(offsetMatch[2]);
-          const minutes = parseInt(offsetMatch[3] || '0');
-          const offsetMinutes = sign * (hours * 60 + minutes);
-          
-          // Map common UTC offsets to IANA timezones
-          if (offsetMinutes === -300) clientTz = 'America/New_York'; // UTC-5
-          else if (offsetMinutes === -240) clientTz = 'America/New_York'; // UTC-4 (EDT)
-          else if (offsetMinutes === 60) clientTz = 'Europe/Paris'; // UTC+1
-          else if (offsetMinutes === 0) clientTz = 'Europe/London'; // UTC+0
-          else if (offsetMinutes === 120) clientTz = 'Europe/Berlin'; // UTC+2
-          else clientTz = 'UTC';
+      // Parse the stored time (Florida time, UTC-5)
+      const [floridaHours, floridaMinutes] = time.split(':').map(Number);
+      
+      // Get client timezone offset
+      let clientOffsetHours = 0;
+      if (clientTimezone && clientTimezone.startsWith('UTC')) {
+        const match = clientTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+        if (match) {
+          const sign = match[1] === '+' ? 1 : -1;
+          const hours = parseInt(match[2], 10);
+          const minutes = match[3] ? parseInt(match[3], 10) : 0;
+          clientOffsetHours = sign * (hours + minutes / 60);
         }
       }
       
-      // Parse the time (HH:MM format)
-      const [hours, minutes] = time.split(':').map(Number);
+      // Florida is UTC-5
+      const floridaOffsetHours = -5;
       
-      // Create a date string in ISO format
-      const dateTimeString = `${date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+      // Calculate the difference between client timezone and Florida timezone
+      const offsetDiff = clientOffsetHours - floridaOffsetHours;
       
-      // Create a formatter for Florida timezone to get the UTC timestamp
-      // We'll use a trick: create a date and format it in Florida timezone to see what UTC time it represents
-      const tempDate = new Date(dateTimeString);
+      // Convert Florida time to client timezone
+      let clientHour = floridaHours + offsetDiff;
+      const clientMinutes = floridaMinutes;
       
-      // Format in Florida timezone to see what time it represents there
-      const floridaFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: floridaTimezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
+      // Handle day overflow/underflow
+      if (clientHour < 0) {
+        clientHour += 24;
+      } else if (clientHour >= 24) {
+        clientHour -= 24;
+      }
       
-      const floridaParts = floridaFormatter.formatToParts(tempDate);
-      const floridaHour = parseInt(floridaParts.find(p => p.type === 'hour').value);
-      const floridaMinute = parseInt(floridaParts.find(p => p.type === 'minute').value);
+      // Format in 12-hour format
+      const hour = Math.floor(clientHour);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
       
-      // Calculate the difference and adjust
-      const desiredMinutes = hours * 60 + minutes;
-      const actualMinutes = floridaHour * 60 + floridaMinute;
-      const diffMinutes = desiredMinutes - actualMinutes;
-      
-      // Adjust the UTC timestamp
-      const utcTimestamp = tempDate.getTime() + diffMinutes * 60 * 1000;
-      const adjustedDate = new Date(utcTimestamp);
-      
-      // Format in client's timezone
-      const clientFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: clientTz,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-      
-      const clientParts = clientFormatter.formatToParts(adjustedDate);
-      const clientHour = clientParts.find(p => p.type === 'hour').value;
-      const clientMinute = clientParts.find(p => p.type === 'minute').value;
-      
-      return `${clientHour.padStart(2, '0')}:${clientMinute.padStart(2, '0')}`;
+      // Format with proper padding for minutes
+      return `${displayHour}:${String(clientMinutes).padStart(2, '0')} ${period}`;
     } catch (error) {
       console.error('Error converting time:', error);
       return time;
@@ -986,7 +1155,7 @@ const SubmissionDetail = () => {
           submission.client_id,
           'client',
           'Appointment Updated',
-          `Your appointment has been updated to ${editFormData.appointment_date} at ${editFormData.appointment_time} (${editFormData.timezone}).`,
+          `Your appointment has been updated to ${editFormData.appointment_date} at ${formatTime12h(editFormData.appointment_time)} (${editFormData.timezone}).`,
           'info',
           'appointment_updated',
           {
@@ -1003,7 +1172,7 @@ const SubmissionDetail = () => {
           submission.assigned_notary_id,
           'notary',
           'Appointment Updated',
-          `Appointment for submission #${id.substring(0, 8)} has been updated to ${editFormData.appointment_date} at ${editFormData.appointment_time} (${editFormData.timezone}).`,
+          `Appointment for submission #${id.substring(0, 8)} has been updated to ${editFormData.appointment_date} at ${formatTime12h(editFormData.appointment_time)} (${editFormData.timezone}).`,
           'info',
           'appointment_updated',
           {
@@ -1602,6 +1771,39 @@ const SubmissionDetail = () => {
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
+              <button
+                onClick={() => {
+                  setActiveTab('timeline');
+                  setIsEditingSubmission(false);
+                }}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'timeline' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Timeline
+                {activeTab === 'timeline' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('notes');
+                  setIsEditingSubmission(false);
+                }}
+                className={`pb-3 text-sm font-medium transition-colors relative ${
+                  activeTab === 'notes' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Note interne
+                {internalNotes.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                    {internalNotes.length}
+                  </span>
+                )}
+                {activeTab === 'notes' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
             </div>
 
             {/* Details Tab */}
@@ -1811,7 +2013,15 @@ const SubmissionDetail = () => {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Time (Florida - Eastern Time):</span>
-                        <span className="font-semibold text-gray-900">{submission.appointment_time}</span>
+                        <span className="font-semibold text-gray-900">
+                          {(() => {
+                            const [hours, minutes] = submission.appointment_time.split(':').map(Number);
+                            const hour = parseInt(hours);
+                            const period = hour >= 12 ? 'PM' : 'AM';
+                            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+                            return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+                          })()}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Time (Client Timezone):</span>
@@ -2236,7 +2446,9 @@ const SubmissionDetail = () => {
                     last_name: sig.last_name,
                     birth_date: sig.birth_date,
                     birth_city: sig.birth_city,
-                    postal_address: sig.postal_address
+                    postal_address: sig.postal_address,
+                    email: sig.email || null,
+                    phone: sig.phone || null
                   });
                 });
               } else {
@@ -2248,7 +2460,9 @@ const SubmissionDetail = () => {
                       last_name: sig.lastName || sig.last_name,
                       birth_date: sig.birthDate || sig.birth_date,
                       birth_city: sig.birthCity || sig.birth_city,
-                      postal_address: sig.postalAddress || sig.postal_address
+                      postal_address: sig.postalAddress || sig.postal_address,
+                      email: sig.email || null,
+                      phone: sig.phone || null
                     }));
                   }
                 });
@@ -2416,6 +2630,8 @@ const SubmissionDetail = () => {
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Type</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Montant</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Email</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Téléphone</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Statut</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Date</th>
                           <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
@@ -2471,12 +2687,22 @@ const SubmissionDetail = () => {
                                   {tx.type === 'refund' ? 'Remboursement' : 'Paiement'}
                                 </div>
                                 <div className="text-xs text-gray-600 font-mono">
-                                  {tx.type === 'payment' ? tx.id : tx.id}
+                                  {tx.id}
                                 </div>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap">
                                 <div className={`text-sm font-semibold ${tx.type === 'refund' ? 'text-red-600' : 'text-gray-900'}`}>
                                   {tx.type === 'refund' ? '-' : ''}{formatCurrency(tx.amount, tx.currency)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {tx.email || 'N/A'}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {tx.phone || 'N/A'}
                                 </div>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap">
@@ -2486,12 +2712,321 @@ const SubmissionDetail = () => {
                                 {formatDate(tx.created)}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-right">
+                                {tx.stripeUrl && (
+                                  <a
+                                    href={tx.stripeUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                    title="Voir sur Stripe"
+                                  >
+                                    <Icon icon="heroicons:arrow-top-right-on-square" className="w-4 h-4 mr-1" />
+                                    Stripe
+                                  </a>
+                                )}
                               </td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Timeline Tab */}
+            {activeTab === 'timeline' && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Timeline</h2>
+                
+                {timelineLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+                  </div>
+                ) : timeline.length === 0 ? (
+                  <p className="text-base text-gray-600">Aucune action enregistrée pour cette soumission.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {timeline.map((entry, index) => {
+                      const formatDate = (dateString) => {
+                        return new Date(dateString).toLocaleDateString('fr-FR', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                      };
+
+                      const getActionIcon = (actionType) => {
+                        const icons = {
+                          status_changed: 'heroicons:check-circle',
+                          notary_assigned: 'heroicons:user-plus',
+                          notary_unassigned: 'heroicons:user-minus',
+                          appointment_updated: 'heroicons:calendar',
+                          note_added: 'heroicons:document-plus',
+                          note_deleted: 'heroicons:trash',
+                          submission_created: 'heroicons:plus-circle',
+                          payment_status_changed: 'heroicons:credit-card',
+                          payment_received: 'heroicons:credit-card',
+                          price_updated: 'heroicons:currency-dollar',
+                          notary_cost_updated: 'heroicons:banknotes',
+                          file_uploaded: 'heroicons:document-arrow-up',
+                          file_deleted: 'heroicons:document-x-mark',
+                          message_sent: 'heroicons:chat-bubble-left-right',
+                          default: 'heroicons:information-circle'
+                        };
+                        return icons[actionType] || icons.default;
+                      };
+
+                      const getActionColor = (actionType) => {
+                        const colors = {
+                          status_changed: 'bg-blue-100 text-blue-700',
+                          notary_assigned: 'bg-green-100 text-green-700',
+                          notary_unassigned: 'bg-orange-100 text-orange-700',
+                          appointment_updated: 'bg-yellow-100 text-yellow-700',
+                          note_added: 'bg-purple-100 text-purple-700',
+                          note_deleted: 'bg-red-100 text-red-700',
+                          submission_created: 'bg-gray-100 text-gray-700',
+                          payment_status_changed: 'bg-emerald-100 text-emerald-700',
+                          payment_received: 'bg-green-100 text-green-700',
+                          price_updated: 'bg-indigo-100 text-indigo-700',
+                          notary_cost_updated: 'bg-teal-100 text-teal-700',
+                          file_uploaded: 'bg-cyan-100 text-cyan-700',
+                          file_deleted: 'bg-red-100 text-red-700',
+                          message_sent: 'bg-pink-100 text-pink-700',
+                          default: 'bg-gray-100 text-gray-700'
+                        };
+                        return colors[actionType] || colors.default;
+                      };
+
+                      return (
+                        <div key={entry.id} className="flex gap-4 pb-4 border-b border-gray-200 last:border-0">
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-full ${getActionColor(entry.action_type)} flex items-center justify-center`}>
+                            <Icon icon={getActionIcon(entry.action_type)} className="w-5 h-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-1">
+                              <p className="text-sm font-semibold text-gray-900">{entry.action_description}</p>
+                              <span className="text-xs text-gray-500 whitespace-nowrap ml-4">{formatDate(entry.created_at)}</span>
+                            </div>
+                            <div className="text-xs text-gray-600 capitalize mb-1">
+                              Par {entry.performed_by_type}
+                            </div>
+                            {entry.old_value && entry.new_value && (
+                              <div className="mt-2 text-xs text-gray-600">
+                                <span className="line-through text-red-600">{entry.old_value}</span>
+                                {' → '}
+                                <span className="text-green-600 font-semibold">{entry.new_value}</span>
+                              </div>
+                            )}
+                            {entry.metadata && Object.keys(entry.metadata).length > 0 && (
+                              <div className="mt-2 text-xs text-gray-500 space-y-1">
+                                {entry.action_type === 'file_uploaded' && (
+                                  <div>
+                                    <span className="font-semibold">File:</span> {entry.metadata.file_name}
+                                    {entry.metadata.file_size && (
+                                      <span className="ml-2">({(entry.metadata.file_size / 1024).toFixed(2)} KB)</span>
+                                    )}
+                                  </div>
+                                )}
+                                {entry.action_type === 'file_deleted' && (
+                                  <div>
+                                    <span className="font-semibold">File:</span> {entry.metadata.file_name}
+                                  </div>
+                                )}
+                                {entry.action_type === 'message_sent' && (
+                                  <div>
+                                    <span className="font-semibold">Preview:</span> {entry.metadata.message_preview}
+                                    {entry.metadata.has_attachments && (
+                                      <span className="ml-2 text-blue-600">📎</span>
+                                    )}
+                                  </div>
+                                )}
+                                {entry.action_type === 'appointment_updated' && entry.metadata.old_date && (
+                                  <div className="space-y-1">
+                                    <div>
+                                      <span className="font-semibold">Old:</span> {entry.metadata.old_date} {entry.metadata.old_time} ({entry.metadata.old_timezone})
+                                    </div>
+                                    <div>
+                                      <span className="font-semibold">New:</span> {entry.metadata.new_date} {entry.metadata.new_time} ({entry.metadata.new_timezone})
+                                    </div>
+                                  </div>
+                                )}
+                                {entry.action_type === 'notary_assigned' && entry.metadata.notary_id && (
+                                  <div>
+                                    <span className="font-semibold">Notary ID:</span> {entry.metadata.notary_id.substring(0, 8)}...
+                                  </div>
+                                )}
+                                {entry.action_type === 'payment_status_changed' && (
+                                  <div className="space-y-1">
+                                    {entry.metadata.payment_intent_id && (
+                                      <div>
+                                        <span className="font-semibold">Payment Intent:</span> {entry.metadata.payment_intent_id.substring(0, 20)}...
+                                      </div>
+                                    )}
+                                    {entry.metadata.amount && (
+                                      <div>
+                                        <span className="font-semibold">Amount:</span> ${(parseFloat(entry.metadata.amount) / 100).toFixed(2)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Internal Notes Tab */}
+            {activeTab === 'notes' && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Note interne</h2>
+                  {!isAddingNote && (
+                    <button
+                      onClick={() => setIsAddingNote(true)}
+                      className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
+                    >
+                      <Icon icon="heroicons:plus" className="w-4 h-4" />
+                      Ajouter une note
+                    </button>
+                  )}
+                </div>
+
+                {/* Add Note Form */}
+                {isAddingNote && noteEditor && (
+                  <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="mb-4 border border-gray-300 rounded-lg overflow-hidden">
+                      {/* Toolbar */}
+                      <div className="flex items-center gap-2 p-2 bg-gray-50 border-b border-gray-300 flex-wrap">
+                        <button
+                          onClick={() => noteEditor.chain().focus().toggleBold().run()}
+                          className={`p-2 rounded hover:bg-gray-200 ${noteEditor.isActive('bold') ? 'bg-gray-300' : ''}`}
+                          type="button"
+                        >
+                          <Icon icon="heroicons:bold" className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => noteEditor.chain().focus().toggleItalic().run()}
+                          className={`p-2 rounded hover:bg-gray-200 ${noteEditor.isActive('italic') ? 'bg-gray-300' : ''}`}
+                          type="button"
+                        >
+                          <Icon icon="heroicons:italic" className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => noteEditor.chain().focus().toggleBulletList().run()}
+                          className={`p-2 rounded hover:bg-gray-200 ${noteEditor.isActive('bulletList') ? 'bg-gray-300' : ''}`}
+                          type="button"
+                        >
+                          <Icon icon="heroicons:list-bullet" className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => noteEditor.chain().focus().toggleOrderedList().run()}
+                          className={`p-2 rounded hover:bg-gray-200 ${noteEditor.isActive('orderedList') ? 'bg-gray-300' : ''}`}
+                          type="button"
+                        >
+                          <Icon icon="heroicons:list-numbered" className="w-4 h-4" />
+                        </button>
+                        <div className="border-l border-gray-300 h-6 mx-1"></div>
+                        <button
+                          onClick={() => noteEditor.chain().focus().setParagraph().run()}
+                          className={`p-2 rounded hover:bg-gray-200 ${noteEditor.isActive('paragraph') ? 'bg-gray-300' : ''}`}
+                          type="button"
+                        >
+                          <Icon icon="heroicons:document-text" className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => noteEditor.chain().focus().toggleHeading({ level: 1 }).run()}
+                          className={`p-2 rounded hover:bg-gray-200 ${noteEditor.isActive('heading', { level: 1 }) ? 'bg-gray-300' : ''}`}
+                          type="button"
+                        >
+                          H1
+                        </button>
+                        <button
+                          onClick={() => noteEditor.chain().focus().toggleHeading({ level: 2 }).run()}
+                          className={`p-2 rounded hover:bg-gray-200 ${noteEditor.isActive('heading', { level: 2 }) ? 'bg-gray-300' : ''}`}
+                          type="button"
+                        >
+                          H2
+                        </button>
+                      </div>
+                      {/* Editor */}
+                      <EditorContent editor={noteEditor} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveInternalNote}
+                        className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                      >
+                        Enregistrer
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsAddingNote(false);
+                          noteEditor.commands.clearContent();
+                        }}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes List */}
+                {notesLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+                  </div>
+                ) : internalNotes.length === 0 ? (
+                  <p className="text-base text-gray-600">Aucune note interne pour cette soumission.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {internalNotes.map((note) => {
+                      const formatDate = (dateString) => {
+                        return new Date(dateString).toLocaleDateString('fr-FR', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                      };
+
+                      return (
+                        <div key={note.id} className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="text-xs text-gray-500">
+                              Créé le {formatDate(note.created_at)}
+                              {note.updated_at !== note.created_at && (
+                                <span className="ml-2">• Modifié le {formatDate(note.updated_at)}</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (confirm('Are you sure you want to delete this note?')) {
+                                  deleteInternalNote(note.id);
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              <Icon icon="heroicons:trash" className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div 
+                            className="prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: note.content }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

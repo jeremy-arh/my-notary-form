@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 
@@ -9,11 +9,26 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showOptionInfo, setShowOptionInfo] = useState(null);
+  const scrollContainerRef = useRef(null);
+  const savedScrollPositionRef = useRef(null);
+  const fileInputRefs = useRef({});
 
   useEffect(() => {
     fetchSelectedServices();
     fetchOptions();
   }, [formData.selectedServices]);
+
+  // Restaurer la position de scroll après les mises à jour du DOM
+  useEffect(() => {
+    if (savedScrollPositionRef.current !== null && scrollContainerRef.current) {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = savedScrollPositionRef.current;
+          savedScrollPositionRef.current = null;
+        }
+      });
+    }
+  }, [formData.serviceDocuments]);
 
   const fetchSelectedServices = async () => {
     if (!formData.selectedServices || formData.selectedServices.length === 0) {
@@ -58,6 +73,20 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
   const handleFileUpload = async (event, serviceId) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
+
+    // Sauvegarder la position de scroll avant le traitement
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      savedScrollPositionRef.current = scrollContainer.scrollTop;
+    }
+
+    // Réinitialiser l'input pour permettre de sélectionner le même fichier à nouveau
+    const inputElement = event.target;
+    setTimeout(() => {
+      if (inputElement) {
+        inputElement.value = '';
+      }
+    }, 0);
 
     const convertedFiles = await Promise.all(
       files.map(async (file) => {
@@ -149,7 +178,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Content Area - Scrollable */}
-      <div className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
+      <div 
+        ref={scrollContainerRef}
+        className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-y-auto overflow-x-hidden" 
+        style={{ minHeight: 0 }}
+      >
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
@@ -190,8 +223,21 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                     </div>
                   </div>
 
-                  <label className="block mb-3 sm:mb-4">
-                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 sm:p-6 text-center cursor-pointer hover:border-black hover:bg-gray-50 transition-all">
+                  <div className="block mb-3 sm:mb-4">
+                    <div 
+                      className="border-2 border-dashed border-gray-300 rounded-xl p-4 sm:p-6 text-center cursor-pointer hover:border-black hover:bg-gray-50 transition-all"
+                      onClick={() => {
+                        // Sauvegarder la position de scroll avant le clic
+                        if (scrollContainerRef.current) {
+                          savedScrollPositionRef.current = scrollContainerRef.current.scrollTop;
+                        }
+                        // Déclencher le clic sur l'input file programmatiquement
+                        const input = fileInputRefs.current[service.service_id];
+                        if (input) {
+                          input.click();
+                        }
+                      }}
+                    >
                       <Icon
                         icon="heroicons:cloud-arrow-up"
                         className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3"
@@ -201,14 +247,32 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                       </p>
                       <p className="text-[10px] sm:text-xs text-gray-500">PDF, PNG, JPG, or other documents</p>
                       <input
+                        ref={(el) => {
+                          if (el) {
+                            fileInputRefs.current[service.service_id] = el;
+                          }
+                        }}
                         type="file"
                         multiple
                         onChange={(e) => handleFileUpload(e, service.service_id)}
+                        onClick={(e) => {
+                          // Empêcher le scroll lors du clic sur l'input
+                          e.stopPropagation();
+                        }}
+                        onFocus={(e) => {
+                          // Empêcher le scroll automatique lors du focus
+                          e.stopPropagation();
+                          // Restaurer immédiatement la position de scroll
+                          if (scrollContainerRef.current && savedScrollPositionRef.current !== null) {
+                            scrollContainerRef.current.scrollTop = savedScrollPositionRef.current;
+                          }
+                        }}
                         className="sr-only"
                         accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                        tabIndex={-1}
                       />
                     </div>
-                  </label>
+                  </div>
 
                   {files.length > 0 && (
                     <div className="space-y-2 sm:space-y-3">

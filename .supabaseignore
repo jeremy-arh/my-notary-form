@@ -1,0 +1,10 @@
+# Ignore SQL migration files
+supabase/migrations/*.sql
+**/*.sql
+
+# Ignore migrations directory
+supabase/migrations/
+
+# Ignore any files with migration in the name
+**/*migration*
+

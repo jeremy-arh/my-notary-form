@@ -105,7 +105,7 @@ const ClientLayout = ({ children }) => {
       {/* Mobile Header - Fixed at top */}
       <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-16">
         <div className="flex items-center justify-between h-full px-4">
-          <Logo width={100} height={100} />
+          <Logo width={80} height={80} />
           <div className="flex items-center gap-2">
             {clientId && (
               <Notifications clientId={clientId} />
@@ -176,10 +176,6 @@ const ClientLayout = ({ children }) => {
         <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50 top-16" onClick={() => setIsSidebarOpen(false)}>
           <aside className="w-full max-w-sm bg-[#F3F4F6] h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex-1 overflow-y-auto p-8 pb-0">
-              <div className="mb-10 flex flex-col items-center justify-center">
-                <Logo width={150} height={150} />
-              </div>
-
               <div className="space-y-1.5 pb-8">
                 {menuItems.map((item) => {
                   const isActive = location.pathname === item.path;
@@ -212,7 +208,7 @@ const ClientLayout = ({ children }) => {
             </div>
 
             {/* Logout Button - Fixed at bottom */}
-            <div className="mt-auto p-6 border-t border-gray-200 bg-[#F3F4F6]">
+            <div className="p-6 border-t border-gray-200">
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
@@ -234,7 +230,7 @@ const ClientLayout = ({ children }) => {
           )}
         </div>
         
-        <div className="p-4 sm:p-6 md:p-8 max-w-full overflow-x-hidden">
+        <div className="w-full overflow-x-hidden">
           {children}
         </div>
       </main>

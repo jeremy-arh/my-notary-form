@@ -162,7 +162,19 @@ const getIANAFromUTCOffset = (utcOffset) => {
 export const convertTimeToNotaryTimezone = (time, date, clientTimezone, notaryTimezone) => {
   if (!time || !date || !clientTimezone || !notaryTimezone) {
     console.warn('Missing timezone conversion parameters:', { time, date, clientTimezone, notaryTimezone });
-    return time || '00:00';
+    // Format in 12-hour format even if parameters are missing
+    if (time) {
+      try {
+        const [hours, minutes] = time.split(':').map(Number);
+        const hour = parseInt(hours);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+      } catch (error) {
+        return time;
+      }
+    }
+    return '12:00 AM';
   }
 
   try {
@@ -176,22 +188,53 @@ export const convertTimeToNotaryTimezone = (time, date, clientTimezone, notaryTi
       }
     }
 
-    // If both timezones are the same, no conversion needed
-    if (clientTz === notaryTimezone) {
-      return time;
+    // Handle UTC offset format for notary timezone (e.g., 'UTC+1', 'UTC-5')
+    let notaryTz = notaryTimezone;
+    if (notaryTimezone.startsWith('UTC')) {
+      notaryTz = getIANAFromUTCOffset(notaryTimezone);
+      if (!notaryTz || notaryTz === 'UTC') {
+        console.warn('Could not convert UTC offset to IANA timezone:', notaryTimezone);
+        notaryTz = 'UTC';
+      }
+    }
+
+    // If both timezones are the same, still format in 12-hour format (AM/PM)
+    if (clientTz === notaryTz) {
+      const [hours, minutes] = time.split(':').map(Number);
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
     }
 
     // Parse the time and date components
     const [hours, minutes] = time.split(':').map(Number);
     if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
       console.error('Invalid time format:', time);
-      return time;
+      // Try to format in 12-hour format anyway
+      try {
+        const hour = parseInt(hours);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        return `${displayHour}:${String(minutes || 0).padStart(2, '0')} ${period}`;
+      } catch (error) {
+        return time;
+      }
     }
 
     const [year, month, day] = date.split('-').map(Number);
     if (isNaN(year) || isNaN(month) || isNaN(day)) {
       console.error('Invalid date format:', date);
-      return time;
+      // Format in 12-hour format even if date is invalid
+      try {
+        const [hours, minutes] = time.split(':').map(Number);
+        const hour = parseInt(hours);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+      } catch (error) {
+        return time;
+      }
     }
 
     // Create formatters
@@ -206,7 +249,7 @@ export const convertTimeToNotaryTimezone = (time, date, clientTimezone, notaryTi
     });
     
     const notaryFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: notaryTimezone,
+      timeZone: notaryTz,
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
@@ -230,11 +273,29 @@ export const convertTimeToNotaryTimezone = (time, date, clientTimezone, notaryTi
       
       // Check if we have an exact match
       if (tzYear === year && tzMonth === month && tzDay === day && tzHour === hours && tzMinute === minutes) {
-        // Found it! Format this UTC timestamp in the notary's timezone
+        // Found it! Format this UTC timestamp in the notary's timezone with 12-hour format (AM/PM)
+        const notaryFormatter12h = new Intl.DateTimeFormat('en-US', {
+          timeZone: notaryTz,
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        
+        const formattedTime = notaryFormatter12h.format(testDate);
+        
+        // Extract time parts (format: "H:MM AM/PM" or "HH:MM AM/PM")
+        const timeMatch = formattedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (timeMatch) {
+          return `${timeMatch[1]}:${timeMatch[2]} ${timeMatch[3]}`;
+        }
+        
+        // Fallback to 24-hour format if parsing fails
         const notaryParts = notaryFormatter.formatToParts(testDate);
-        const notaryHour = notaryParts.find(p => p.type === 'hour').value;
+        const notaryHour = parseInt(notaryParts.find(p => p.type === 'hour').value);
         const notaryMinute = notaryParts.find(p => p.type === 'minute').value;
-        return `${notaryHour.padStart(2, '0')}:${notaryMinute.padStart(2, '0')}`;
+        const period = notaryHour >= 12 ? 'PM' : 'AM';
+        const displayHour = notaryHour > 12 ? notaryHour - 12 : notaryHour === 0 ? 12 : notaryHour;
+        return `${displayHour}:${notaryMinute} ${period}`;
       }
       
       // Calculate the difference in minutes between desired and actual time
@@ -262,14 +323,43 @@ export const convertTimeToNotaryTimezone = (time, date, clientTimezone, notaryTi
       }
     }
     
-    // Use the final UTC timestamp (even if not exact) and format in notary's timezone
-    const notaryParts = notaryFormatter.formatToParts(new Date(utcTimestamp));
-    const notaryHour = notaryParts.find(p => p.type === 'hour').value;
-    const notaryMinute = notaryParts.find(p => p.type === 'minute').value;
+    // Use the final UTC timestamp (even if not exact) and format in notary's timezone with 12-hour format (AM/PM)
+    const notaryFormatter12h = new Intl.DateTimeFormat('en-US', {
+      timeZone: notaryTz,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
     
-    return `${notaryHour.padStart(2, '0')}:${notaryMinute.padStart(2, '0')}`;
+    const formattedTime = notaryFormatter12h.format(new Date(utcTimestamp));
+    
+    // Extract time parts (format: "H:MM AM/PM" or "HH:MM AM/PM")
+    const timeMatch = formattedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (timeMatch) {
+      return `${timeMatch[1]}:${timeMatch[2]} ${timeMatch[3]}`;
+    }
+    
+    // Fallback to 24-hour format if parsing fails
+    const notaryParts = notaryFormatter.formatToParts(new Date(utcTimestamp));
+    const notaryHour = parseInt(notaryParts.find(p => p.type === 'hour').value);
+    const notaryMinute = notaryParts.find(p => p.type === 'minute').value;
+    const period = notaryHour >= 12 ? 'PM' : 'AM';
+    const displayHour = notaryHour > 12 ? notaryHour - 12 : notaryHour === 0 ? 12 : notaryHour;
+    return `${displayHour}:${notaryMinute} ${period}`;
   } catch (error) {
     console.error('Error converting time to notary timezone:', error, { time, date, clientTimezone, notaryTimezone });
+    // Format in 12-hour format even on error
+    if (time) {
+      try {
+        const [hours, minutes] = time.split(':').map(Number);
+        const hour = parseInt(hours);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+      } catch (formatError) {
+        return time;
+      }
+    }
     return time;
   }
 };

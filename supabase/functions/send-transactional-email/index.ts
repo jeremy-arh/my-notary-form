@@ -6,6 +6,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Format time in 12-hour format (AM/PM)
+function formatTime12h(timeString: string | undefined): string {
+  if (!timeString || timeString === 'N/A') return 'N/A';
+  try {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const hour = parseInt(hours.toString());
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+    return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+  } catch (error) {
+    return timeString;
+  }
+}
+
 interface EmailRequest {
   email_type: 'payment_success' | 'payment_failed' | 'notary_assigned' | 'notarized_file_uploaded' | 'message_received' | 'new_submission_available' | 'appointment_reminder_day_before' | 'appointment_reminder_one_hour_before' | 'submission_updated'
   recipient_email: string
@@ -517,7 +531,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
         ` : ''}
         ${data.appointment_date ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}${data.appointment_time ? ` at ${data.appointment_time}` : ''}</strong>
+          Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}${data.appointment_time ? ` at ${formatTime12h(data.appointment_time)}` : ''}</strong>
         </p>
         ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -544,7 +558,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       break
 
     case 'appointment_reminder_day_before':
-      subject = `⏰ Appointment Reminder - Tomorrow at ${data.appointment_time || ''}`
+      subject = `⏰ Appointment Reminder - Tomorrow at ${data.appointment_time ? formatTime12h(data.appointment_time) : ''}`
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -555,7 +569,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
         </p>
         ${data.appointment_date && data.appointment_time ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Date: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} at ${data.appointment_time}</strong>${data.timezone ? ` (${data.timezone})` : ''}
+          Date: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} at ${formatTime12h(data.appointment_time)}</strong>${data.timezone ? ` (${data.timezone})` : ''}
         </p>
         ` : ''}
         ${data.client_name ? `
@@ -599,7 +613,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
         ${data.appointment_date && data.appointment_time ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
           <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Date:</strong> ${new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br>
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Time:</strong> ${data.appointment_time}${data.timezone ? ` (${data.timezone})` : ''}
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Time:</strong> ${formatTime12h(data.appointment_time)}${data.timezone ? ` (${data.timezone})` : ''}
         </p>
         ` : ''}
         ${data.address ? `
@@ -681,7 +695,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
         
         ${data.appointment_date && data.appointment_time ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Appointment:</strong> ${new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at ${data.appointment_time}${data.timezone ? ` (${data.timezone})` : ''}
+          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Appointment:</strong> ${new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at ${formatTime12h(data.appointment_time)}${data.timezone ? ` (${data.timezone})` : ''}
         </p>
         ` : ''}
         

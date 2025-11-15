@@ -748,25 +748,26 @@ const SubmissionDetail = () => {
                     <span className="text-sm sm:text-base font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Time (Florida - Eastern Time):</span>
-                    <span className="text-sm sm:text-base font-semibold text-gray-900">
-                      {submission.appointment_time}
-                    </span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Time ({notaryTimezone || 'Your Timezone'}):</span>
+                    <span className="text-sm sm:text-base text-gray-600">Your timezone:</span>
                     <span className="text-sm sm:text-base font-semibold text-gray-900">
                       {notaryTimezone
                         ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, 'America/New_York', notaryTimezone)
-                        : submission.appointment_time}
-                      {notaryTimezone && (
-                        <span className="text-xs text-gray-500 ml-2">({notaryTimezone})</span>
-                      )}
+                        : (() => {
+                            const [hours, minutes] = submission.appointment_time.split(':').map(Number);
+                            const hour = parseInt(hours);
+                            const period = hour >= 12 ? 'PM' : 'AM';
+                            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+                            return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+                          })()}
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Client Timezone:</span>
-                    <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.timezone}</span>
+                    <span className="text-sm sm:text-base text-gray-600">Client timezone:</span>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900">
+                      {submission.timezone
+                        ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, 'America/New_York', submission.timezone)
+                        : 'N/A'}
+                    </span>
                   </div>
                 </div>
               </div>

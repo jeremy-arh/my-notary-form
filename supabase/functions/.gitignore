@@ -1,0 +1,16 @@
+# Ignore SQL files
+*.sql
+**/*.sql
+
+# Ignore migrations
+**/migrations/**
+**/*migration*
+
+# Ignore documentation
+*.md
+**/*.md
+
+# Ignore README files
+README.md
+**/README.md
+

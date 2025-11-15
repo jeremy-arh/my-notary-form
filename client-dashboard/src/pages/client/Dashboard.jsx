@@ -142,6 +142,20 @@ const Dashboard = () => {
     );
   }, []);
 
+  // Format time in 12-hour format (AM/PM)
+  const formatTime12h = useCallback((timeString) => {
+    if (!timeString) return 'N/A';
+    try {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+    } catch (error) {
+      return timeString;
+    }
+  }, []);
+
   const formatDate = useCallback((dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -273,7 +287,7 @@ const Dashboard = () => {
   return (
     <ClientLayout>
       <ConfirmComponent />
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 overflow-x-hidden">
+      <div className="w-full px-4 sm:px-6 lg:px-8 overflow-x-hidden">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
@@ -366,7 +380,7 @@ const Dashboard = () => {
                       <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-900 whitespace-nowrap">
                         <div>
                           <div>{formatDate(submission.appointment_date)}</div>
-                          <div className="text-gray-500 text-[10px] sm:text-xs">{submission.appointment_time}</div>
+                          <div className="text-gray-500 text-[10px] sm:text-xs">{formatTime12h(submission.appointment_time)}</div>
                         </div>
                       </td>
                       <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-600 whitespace-nowrap">

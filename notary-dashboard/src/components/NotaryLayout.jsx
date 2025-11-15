@@ -192,11 +192,7 @@ const NotaryLayout = ({ children }) => {
       {isSidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50 top-16" onClick={() => setIsSidebarOpen(false)}>
           <aside className="w-full max-w-sm bg-[#F3F4F6] h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex-1 overflow-y-auto p-6 pb-0">
-              <div className="mb-8 flex items-center justify-center">
-                <Logo width={120} height={120} />
-              </div>
-
+            <div className="flex-1 overflow-y-auto p-8 pb-0">
               <div className="space-y-1.5 pb-8">
                 {menuItems.map((item) => {
                   const isActive = location.pathname === item.path;

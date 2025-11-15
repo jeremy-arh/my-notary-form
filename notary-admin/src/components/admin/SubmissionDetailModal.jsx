@@ -118,6 +118,20 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
     });
   };
 
+  // Format time in 12-hour format (AM/PM)
+  const formatTime12h = (timeString) => {
+    if (!timeString || timeString === 'N/A') return 'N/A';
+    try {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+    } catch (error) {
+      return timeString;
+    }
+  };
+
   // Convert time from Florida/Eastern Time to another timezone
   const convertTimeFromFlorida = (time, date, targetTimezone) => {
     if (!time || !date || !targetTimezone) return time;
@@ -172,19 +186,29 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
       const utcTimestamp = tempDate.getTime() + diffMinutes * 60 * 1000;
       const adjustedDate = new Date(utcTimestamp);
       
-      // Format in target timezone
+      // Format in target timezone with 12-hour format (AM/PM)
       const targetFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: targetTz,
-        hour: '2-digit',
+        hour: 'numeric',
         minute: '2-digit',
-        hour12: false
+        hour12: true
       });
       
-      const targetParts = targetFormatter.formatToParts(adjustedDate);
-      const targetHour = targetParts.find(p => p.type === 'hour').value;
-      const targetMinute = targetParts.find(p => p.type === 'minute').value;
+      const formattedTime = targetFormatter.format(adjustedDate);
       
-      return `${targetHour.padStart(2, '0')}:${targetMinute.padStart(2, '0')}`;
+      // Extract time parts (format: "H:MM AM/PM" or "HH:MM AM/PM")
+      const timeMatch = formattedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (timeMatch) {
+        return `${timeMatch[1]}:${timeMatch[2]} ${timeMatch[3]}`;
+      }
+      
+      // Fallback to 24-hour format if parsing fails
+      const targetParts = targetFormatter.formatToParts(adjustedDate);
+      const targetHour = parseInt(targetParts.find(p => p.type === 'hour').value);
+      const targetMinute = targetParts.find(p => p.type === 'minute').value;
+      const period = targetHour >= 12 ? 'PM' : 'AM';
+      const displayHour = targetHour > 12 ? targetHour - 12 : targetHour === 0 ? 12 : targetHour;
+      return `${displayHour}:${targetMinute} ${period}`;
     } catch (error) {
       console.error('Error converting time:', error);
       return time;
@@ -319,7 +343,7 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Time (Florida - Eastern Time)</span>
                         <span className="text-sm font-medium text-gray-900">
-                          {submission.appointment_time}
+                          {formatTime12h(submission.appointment_time)}
                         </span>
                       </div>
                       {notaryTimezone && (

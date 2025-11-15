@@ -1,0 +1,10 @@
+{
+  "exclude": [
+    "**/*.sql",
+    "**/migrations/**",
+    "**/*migration*",
+    "**/*.md",
+    "**/README.md"
+  ]
+}
+
