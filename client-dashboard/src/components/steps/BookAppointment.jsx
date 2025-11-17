@@ -279,41 +279,22 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     { value: 'UTC+14', label: 'Line Islands Time - Kiritimati, Tabuaeran, Teraina (UTC+14)', offset: 14 },
   ];
 
-  // Generate time slots - Base hours are 8 AM to 8 PM Florida time (Eastern Time, UTC-5)
-  // Convert to selected timezone for display
+  // Generate time slots - 9 AM to 8 PM in NOTARY timezone (America/New_York, Eastern Time, UTC-5)
+  // Always display 9h-20h regardless of user's timezone
   const generateTimeSlots = () => {
     const slots = [];
-    const baseOffsetHours = -5; // Eastern Time (Florida) is UTC-5
 
-    // Find the selected timezone's offset
-    const selectedTz = timezones.find(tz => tz.value === timezone);
-    const selectedOffsetHours = selectedTz ? selectedTz.offset : baseOffsetHours;
-
-    // Calculate the offset difference
-    const offsetDiff = selectedOffsetHours - baseOffsetHours;
-
-    // Generate slots from 8 AM to 8 PM in Florida time (Eastern Time)
-    for (let hour = 8; hour < 20; hour++) {
+    // Generate slots from 9 AM to 8 PM (20:00) in NOTARY timezone
+    // Display directly without conversion - always show 9h-20h
+    for (let hour = 9; hour < 21; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        // Calculate the converted time in user's timezone
-        let convertedHour = hour + offsetDiff;
-        let convertedMinute = minute;
-
-        // Handle day overflow
-        if (convertedHour < 0) {
-          convertedHour += 24;
-        } else if (convertedHour >= 24) {
-          convertedHour -= 24;
-        }
-
-        // Store the time in 24-hour format for the value (Florida time - always stored in Florida time)
+        // Store the time in 24-hour format for the value (NOTARY timezone)
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
-        // Display in 12-hour AM/PM format (converted to user's timezone)
-        const displayHourValue = Math.floor(convertedHour);
-        const period = displayHourValue >= 12 ? 'PM' : 'AM';
-        const displayHour = displayHourValue > 12 ? displayHourValue - 12 : displayHourValue === 0 ? 12 : displayHourValue;
-        const displayTime = `${displayHour}:${convertedMinute.toString().padStart(2, '0')} ${period}`;
+        // Display in 12-hour AM/PM format (directly in notary timezone - no conversion)
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        const displayTime = `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
 
         slots.push({ value: time, label: displayTime });
       }
@@ -321,12 +302,9 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     return slots;
   };
 
-  const [timeSlots, setTimeSlots] = useState(generateTimeSlots());
+  const [timeSlots, setTimeSlots] = useState(() => generateTimeSlots());
 
-  // Regenerate time slots when timezone changes
-  useEffect(() => {
-    setTimeSlots(generateTimeSlots());
-  }, [timezone]);
+  // Time slots don't change with timezone - always 9h-20h in notary timezone
 
   // Generate calendar days for current month
   const [currentMonth, setCurrentMonth] = useState(new Date());

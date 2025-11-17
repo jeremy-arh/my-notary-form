@@ -601,8 +601,8 @@ const SubmissionDetail = () => {
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-base sm:text-lg text-gray-900">{service.name}</h3>
                             <p className="text-xs sm:text-sm text-gray-700 mt-1 sm:mt-2">
-                              {documents.length} document{documents.length > 1 ? 's' : ''} × ${service.base_price.toFixed(2)} =
-                              <span className="font-bold text-gray-900"> ${serviceTotal.toFixed(2)}</span>
+                              {documents.length} document{documents.length > 1 ? 's' : ''} × €{service.base_price.toFixed(2)} =
+                              <span className="font-bold text-gray-900"> €{serviceTotal.toFixed(2)}</span>
                             </p>
                           </div>
                         </div>
@@ -624,7 +624,7 @@ const SubmissionDetail = () => {
                                 const docSignatories = signatories.filter(sig => sig.document_key === docKey);
                                 signatoriesCount = docSignatories.length;
                                 if (signatoriesCount > 1) {
-                                  signatoriesCost = (signatoriesCount - 1) * 10; // $10 per additional signatory
+                                  signatoriesCost = (signatoriesCount - 1) * 10; // €10 per additional signatory
                                 }
                               } else {
                                 // Use signatories from submission.data
@@ -675,14 +675,14 @@ const SubmissionDetail = () => {
                                             >
                                               <Icon icon={option.icon || "heroicons:plus-circle"} className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
                                               <span className="truncate max-w-[80px] sm:max-w-none">{option.name}</span>
-                                              <span className="hidden sm:inline ml-1">(+${option.additional_price.toFixed(2)})</span>
+                                              <span className="hidden sm:inline ml-1">(+€{option.additional_price.toFixed(2)})</span>
                                             </span>
                                           );
                                         })}
                                       </div>
                                       {optionsTotal > 0 && (
                                         <p className="text-[10px] sm:text-xs text-gray-700 mt-1 font-semibold">
-                                          Options total: ${optionsTotal.toFixed(2)}
+                                          Options total: €{optionsTotal.toFixed(2)}
                                         </p>
                                       )}
                                     </div>
@@ -696,7 +696,7 @@ const SubmissionDetail = () => {
                                           Additional Signatories ({signatoriesCount - 1} signatory{signatoriesCount - 1 > 1 ? 'ies' : ''})
                                         </span>
                                         <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
-                                          ${signatoriesCost.toFixed(2)}
+                                          €{signatoriesCost.toFixed(2)}
                                         </span>
                                       </div>
                                     </div>
@@ -726,7 +726,7 @@ const SubmissionDetail = () => {
                               <div className="mt-3 pt-3 border-t border-gray-200">
                                 <div className="flex justify-between items-center">
                                   <span className="text-xs sm:text-sm font-semibold text-gray-900">Total (with options):</span>
-                                  <span className="text-base sm:text-lg font-bold text-gray-900">${totalWithOptions.toFixed(2)}</span>
+                                  <span className="text-base sm:text-lg font-bold text-gray-900">€{totalWithOptions.toFixed(2)}</span>
                                 </div>
                               </div>
                             );
@@ -743,7 +743,7 @@ const SubmissionDetail = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-base sm:text-lg font-bold text-gray-900">Total:</span>
                     <span className="text-xl sm:text-2xl font-bold text-gray-900">
-                      ${(() => {
+                      €{(() => {
                         let grandTotal = 0;
                         
                         // Calculate services and options costs
@@ -765,7 +765,7 @@ const SubmissionDetail = () => {
                           }
                         });
                         
-                        // Calculate additional signatories cost ($10 per additional signatory)
+                        // Calculate additional signatories cost (€10 per additional signatory)
                         // First, try to get signatories from database (if payment completed)
                         if (signatories.length > 0) {
                           // Group signatories by document_key
@@ -992,10 +992,10 @@ const SubmissionDetail = () => {
                               });
                             };
 
-                            const formatCurrency = (amount, currency = 'usd') => {
-                              return new Intl.NumberFormat('en-US', {
+                            const formatCurrency = (amount, currency = 'eur') => {
+                              return new Intl.NumberFormat('fr-FR', {
                                 style: 'currency',
-                                currency: currency.toUpperCase()
+                                currency: 'EUR'
                               }).format(amount);
                             };
 

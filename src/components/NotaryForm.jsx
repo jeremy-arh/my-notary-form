@@ -63,6 +63,16 @@ const NotaryForm = () => {
 
   const currentStep = getCurrentStepFromPath();
 
+  // Update page title with current step name
+  useEffect(() => {
+    const currentStepData = steps.find(s => s.path === location.pathname);
+    if (currentStepData) {
+      document.title = `${currentStepData.name} - Demande de Service Notarié`;
+    } else {
+      document.title = 'Demande de Service Notarié';
+    }
+  }, [location.pathname]);
+
   // Track page views and validate step access
   useEffect(() => {
     // Redirect to /documents if at root

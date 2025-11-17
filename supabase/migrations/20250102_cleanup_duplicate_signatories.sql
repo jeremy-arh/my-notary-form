@@ -27,3 +27,4 @@ WHERE id IN (
 -- GROUP BY submission_id, document_key, first_name, last_name, birth_date
 -- HAVING COUNT(*) > 1;
 
+

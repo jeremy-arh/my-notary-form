@@ -159,61 +159,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     });
   };
 
-  const formatTime = (time, date, timezone) => {
-    if (!time || !date) return 'Not selected';
-    
-    try {
-      // IMPORTANT: The time stored in formData.appointmentTime is in Florida time (UTC-5)
-      // We need to convert it to the client's timezone for display
-      
-      // Parse the stored time (Florida time, UTC-5)
-      const [floridaHours, floridaMinutes] = time.split(':').map(Number);
-      
-      // Get client timezone offset
-      let clientOffsetHours = 0;
-      if (timezone && timezone.startsWith('UTC')) {
-        const match = timezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
-        if (match) {
-          const sign = match[1] === '+' ? 1 : -1;
-          const hours = parseInt(match[2], 10);
-          const minutes = match[3] ? parseInt(match[3], 10) : 0;
-          clientOffsetHours = sign * (hours + minutes / 60);
-        }
-      }
-      
-      // Florida is UTC-5
-      const floridaOffsetHours = -5;
-      
-      // Calculate the difference between client timezone and Florida timezone
-      const offsetDiff = clientOffsetHours - floridaOffsetHours;
-      
-      // Convert Florida time to client timezone
-      let clientHour = floridaHours + offsetDiff;
-      const clientMinutes = floridaMinutes;
-      
-      // Handle day overflow/underflow
-      if (clientHour < 0) {
-        clientHour += 24;
-      } else if (clientHour >= 24) {
-        clientHour -= 24;
-      }
-      
-      // Format in 12-hour format
-      const hour = Math.floor(clientHour);
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-      
-      // Format with proper padding for minutes
-      return `${displayHour}:${String(clientMinutes).padStart(2, '0')} ${period}`;
-    } catch (error) {
-      console.error('Error formatting time:', error);
-      // Fallback to original format
-      const [hours, minutes] = time.split(':');
-      const hour = parseInt(hours);
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-      return `${displayHour}:${minutes} ${period}`;
-    }
+  const formatTime = (time) => {
+    if (!time) return 'Not selected';
+    // Simply display the time as stored, no conversion
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+    return `${displayHour}:${minutes} ${period}`;
   };
 
   return (
@@ -258,7 +211,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
-                          {documents.length} document{documents.length > 1 ? 's' : ''} × ${service?.base_price.toFixed(2)}
+                          {documents.length} document{documents.length > 1 ? 's' : ''} × €{service?.base_price.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -329,7 +282,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                             <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
                               Signatory {sigIndex + 1}
                               {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                              {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+$10)</span>}
+                              {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+€10)</span>}
                             </span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
@@ -376,7 +329,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
             <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Time</span>
-            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right">{formatTime(formData.appointmentTime, formData.appointmentDate, formData.timezone)}</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right">{formatTime(formData.appointmentTime)}</span>
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
             <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Timezone</span>
@@ -476,7 +429,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                           {service.name} ({documents.length} document{documents.length > 1 ? 's' : ''})
                         </span>
                         <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 flex-shrink-0">
-                          ${serviceTotal.toFixed(2)}
+                          €{serviceTotal.toFixed(2)}
                         </span>
                       </div>
                       {/* Show options breakdown */}
@@ -492,7 +445,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                   + {option.name} ({count} document{count > 1 ? 's' : ''})
                                 </span>
                                 <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                                  ${optionTotal.toFixed(2)}
+                                  €{optionTotal.toFixed(2)}
                                 </span>
                               </div>
                             );
@@ -518,7 +471,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                   + Additional Signatories ({serviceSignatoriesCount} signatory{serviceSignatoriesCount > 1 ? 'ies' : ''})
                                 </span>
                                 <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                                  ${signatoriesTotal.toFixed(2)}
+                                  €{signatoriesTotal.toFixed(2)}
                                 </span>
                               </div>
                             </div>
@@ -536,7 +489,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2 sm:pt-3 border-t-2 border-gray-300 gap-1 sm:gap-2">
               <span className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 flex-shrink-0">Total Amount</span>
               <span className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 flex-shrink-0">
-                ${(() => {
+                €{(() => {
                   let total = 0;
                   // Calculate total from selected services × files + options + signatories
                   if (formData.selectedServices) {
@@ -559,7 +512,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                           }
                         });
 
-                        // Add signatories cost (10$ per additional signatory)
+                        // Add signatories cost (€10 per additional signatory)
                         documents.forEach((doc, docIndex) => {
                           const docKey = `${serviceId}_${docIndex}`;
                           const signatories = formData.signatoriesByDocument?.[docKey];

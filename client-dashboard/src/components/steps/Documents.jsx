@@ -213,11 +213,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
                       <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
-                        ${service.base_price.toFixed(2)} per document
+                        €{service.base_price.toFixed(2)} per document
                       </p>
                       {fileCount > 0 && (
                         <p className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
-                          Total: ${getTotalPrice(service)} ({fileCount} document{fileCount > 1 ? 's' : ''})
+                          Total: €{getTotalPrice(service)} ({fileCount} document{fileCount > 1 ? 's' : ''})
                         </p>
                       )}
                     </div>
@@ -322,7 +322,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                                     <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-black transition-colors break-words flex-1 min-w-0">
                                       <span className="truncate block">{option.name}</span>
                                       <span className="text-gray-500 font-normal ml-0.5 sm:ml-1 whitespace-nowrap">
-                                        (+${option.additional_price?.toFixed(2) || '0.00'})
+                                        (+€{option.additional_price?.toFixed(2) || '0.00'})
                                       </span>
                                     </span>
                                   </label>
@@ -421,7 +421,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
               {showOptionInfo.additional_price && (
                 <div className="border-t border-gray-200 pt-3 sm:pt-4">
                   <p className="text-xs sm:text-sm text-gray-600">
-                    <strong>Additional Fee:</strong> ${showOptionInfo.additional_price.toFixed(2)} per document
+                    <strong>Additional Fee:</strong> €{showOptionInfo.additional_price.toFixed(2)} per document
                   </p>
                 </div>
               )}

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { ToastProvider } from './contexts/ToastContext'
 import Home from './components/Home'
 import Login from './pages/client/Login'
@@ -23,6 +23,10 @@ const LoadingSpinner = () => (
 )
 
 function App() {
+  useEffect(() => {
+    document.title = 'Client dashboard';
+  }, []);
+
   return (
     <ToastProvider>
       <BrowserRouter>

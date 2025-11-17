@@ -236,7 +236,7 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
                       <div key={index} className="flex items-center justify-between p-3 bg-white rounded-xl">
                         <span className="text-sm text-gray-900">{option.options?.name || 'Unknown Option'}</span>
                         <span className="text-sm font-semibold text-gray-900">
-                          ${option.options?.price || 0}
+                          €{option.options?.price || 0}
                         </span>
                       </div>
                     ))}

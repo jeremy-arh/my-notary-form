@@ -389,19 +389,16 @@ const Dashboard = () => {
     return format(parseISO(dateString), 'MMM dd, yyyy');
   };
 
-  const formatTime = (timeString, appointmentDate, clientTimezone) => {
-    if (!notaryTimezone) {
-      // Format in 12-hour format even if no timezone conversion
-      const [hours, minutes] = timeString.split(':').map(Number);
-      const hour = parseInt(hours);
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-      return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
-    }
-    // Time stored is in Florida/Eastern Time (America/New_York)
-    // Convert from Florida time to notary timezone (already returns AM/PM format)
-    const convertedTime = convertTimeToNotaryTimezone(timeString, appointmentDate, 'America/New_York', notaryTimezone);
-    return convertedTime;
+  const formatTime = (timeString, appointmentDate, sourceTimezone) => {
+    if (!timeString || !appointmentDate) return 'Not selected';
+    
+    // Always convert to notary's timezone
+    const targetTimezone = notaryTimezone || 'UTC';
+    // Use client's timezone as source if provided, otherwise default to America/New_York
+    const clientTimezone = sourceTimezone || 'America/New_York';
+    
+    // Always convert to notary's timezone
+    return convertTimeToNotaryTimezone(timeString, appointmentDate, clientTimezone, targetTimezone);
   };
 
   const getStatusBadge = (status) => {

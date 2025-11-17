@@ -57,3 +57,4 @@ If you see `⚠️ SUPABASE NOT CONFIGURED`, make sure:
 - The `SERVICE_ROLE_KEY` bypasses all security - keep it secret!
 - Only use it for admin dashboards on secure domains
 
+

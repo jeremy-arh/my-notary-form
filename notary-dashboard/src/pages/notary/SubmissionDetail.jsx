@@ -750,22 +750,25 @@ const SubmissionDetail = () => {
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
                     <span className="text-sm sm:text-base text-gray-600">Your timezone:</span>
                     <span className="text-sm sm:text-base font-semibold text-gray-900">
-                      {notaryTimezone
-                        ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, 'America/New_York', notaryTimezone)
-                        : (() => {
-                            const [hours, minutes] = submission.appointment_time.split(':').map(Number);
-                            const hour = parseInt(hours);
-                            const period = hour >= 12 ? 'PM' : 'AM';
-                            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-                            return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
-                          })()}
+                      {convertTimeToNotaryTimezone(
+                        submission.appointment_time, 
+                        submission.appointment_date, 
+                        submission.timezone || 'America/New_York', 
+                        notaryTimezone || 'UTC'
+                      )}
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
                     <span className="text-sm sm:text-base text-gray-600">Client timezone:</span>
                     <span className="text-sm sm:text-base font-semibold text-gray-900">
-                      {submission.timezone
-                        ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, 'America/New_York', submission.timezone)
+                      {submission.appointment_time && submission.timezone
+                        ? (() => {
+                            const [hours, minutes] = submission.appointment_time.split(':').map(Number);
+                            const hour = parseInt(hours);
+                            const period = hour >= 12 ? 'PM' : 'AM';
+                            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+                            return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+                          })()
                         : 'N/A'}
                     </span>
                   </div>

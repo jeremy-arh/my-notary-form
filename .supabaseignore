@@ -8,3 +8,4 @@ supabase/migrations/
 # Ignore any files with migration in the name
 **/*migration*
 
+

@@ -91,7 +91,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     }
 
     return {
-      currency: 'USD',
+      currency: 'EUR',
       value: total,
       items: items
     };
@@ -123,6 +123,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
   const formatTime = (time) => {
     if (!time) return 'Not selected';
+    // Simply display the time as stored, no conversion
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
     const period = hour >= 12 ? 'PM' : 'AM';
@@ -267,7 +268,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           {/* Base Service */}
           <div className="flex justify-between items-center pb-3 border-b border-gray-200">
             <span className="text-sm text-gray-600">Notary Service Fee</span>
-            <span className="text-sm font-semibold text-gray-900">$75.00</span>
+            <span className="text-sm font-semibold text-gray-900">€75.00</span>
           </div>
 
           {/* Additional Services */}
@@ -276,25 +277,25 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               {formData.selectedOptions.includes('urgent') && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Urgent Service (48h)</span>
-                  <span className="text-sm font-semibold text-gray-900">$50.00</span>
+                  <span className="text-sm font-semibold text-gray-900">€50.00</span>
                 </div>
               )}
               {formData.selectedOptions.includes('home-visit') && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Home Visit</span>
-                  <span className="text-sm font-semibold text-gray-900">$100.00</span>
+                  <span className="text-sm font-semibold text-gray-900">€100.00</span>
                 </div>
               )}
               {formData.selectedOptions.includes('translation') && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Translation Service</span>
-                  <span className="text-sm font-semibold text-gray-900">$35.00</span>
+                  <span className="text-sm font-semibold text-gray-900">€35.00</span>
                 </div>
               )}
               {formData.selectedOptions.includes('consultation') && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Legal Consultation</span>
-                  <span className="text-sm font-semibold text-gray-900">$150.00</span>
+                  <span className="text-sm font-semibold text-gray-900">€150.00</span>
                 </div>
               )}
             </>
@@ -304,7 +305,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           {formData.documents && formData.documents.length > 0 && (
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Document Processing ({formData.documents.length} files)</span>
-              <span className="text-sm font-semibold text-gray-900">${(formData.documents.length * 10).toFixed(2)}</span>
+              <span className="text-sm font-semibold text-gray-900">€{(formData.documents.length * 10).toFixed(2)}</span>
             </div>
           )}
 
@@ -312,7 +313,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
             <span className="text-base font-bold text-gray-900">Total Amount</span>
             <span className="text-xl font-bold text-gray-900">
-              ${(() => {
+              €{(() => {
                 let total = 75; // Base fee
                 if (formData.selectedOptions?.includes('urgent')) total += 50;
                 if (formData.selectedOptions?.includes('home-visit')) total += 100;

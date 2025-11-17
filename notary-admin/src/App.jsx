@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { ToastProvider } from './contexts/ToastContext'
 import PrivateRoute from './components/PrivateRoute'
 import Login from './pages/admin/Login'
@@ -20,6 +21,10 @@ import Profile from './pages/admin/Profile'
 import './index.css'
 
 function App() {
+  useEffect(() => {
+    document.title = 'Admin dashboard';
+  }, []);
+
   return (
     <ToastProvider>
       <BrowserRouter>
