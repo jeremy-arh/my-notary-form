@@ -13,6 +13,7 @@ import SignatoriesList from '../../components/SignatoriesList';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
+import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
 
 const SubmissionDetail = () => {
   const { id } = useParams();
@@ -989,7 +990,7 @@ const SubmissionDetail = () => {
           }
         });
         
-        // Add signatories cost ($10 per additional signatory)
+        // Add signatories cost (€10 per additional signatory)
         documents.forEach((doc, docIndex) => {
           const docKey = `${serviceId}_${docIndex}`;
           const docSignatories = signatoriesByDocument[docKey];
@@ -1594,7 +1595,7 @@ const SubmissionDetail = () => {
         // Don't block the update if email fails
       }
       
-      toast.success('Submission updated successfully! New total price: $' + newPrice.toFixed(2));
+      toast.success('Submission updated successfully! New total price: €' + newPrice.toFixed(2));
     } catch (error) {
       console.error('Error updating submission:', error);
       toast.error(`Error: ${error.message}`);
@@ -1893,7 +1894,7 @@ const SubmissionDetail = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Notary Cost ($)
+                            Notary Cost (€)
                           </label>
                           <input
                             type="number"
@@ -1917,7 +1918,7 @@ const SubmissionDetail = () => {
                                     submission.assigned_notary_id,
                                     'notary',
                                     'Notary Cost Updated',
-                                    `The cost for submission #${id.substring(0, 8)} has been updated to $${newCost.toFixed(2)}.`,
+                                    `The cost for submission #${id.substring(0, 8)} has been updated to €${newCost.toFixed(2)}.`,
                                     'info',
                                     'notary_cost_updated',
                                     { submission_id: id, notary_cost: newCost }
@@ -2012,7 +2013,7 @@ const SubmissionDetail = () => {
                         <span className="font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Time (Florida - Eastern Time):</span>
+                        <span className="text-gray-600">Client ({submission.timezone}):</span>
                         <span className="font-semibold text-gray-900">
                           {(() => {
                             const [hours, minutes] = submission.appointment_time.split(':').map(Number);
@@ -2024,9 +2025,9 @@ const SubmissionDetail = () => {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Time (Client Timezone):</span>
+                        <span className="text-gray-600">Florida:</span>
                         <span className="font-semibold text-gray-900">
-                          {convertTimeToClientTimezone(submission.appointment_time, submission.appointment_date, submission.timezone)} ({submission.timezone})
+                          {submission.timezone ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, 'America/New_York') : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -2092,14 +2093,14 @@ const SubmissionDetail = () => {
                             if (signatories.length > 0) {
                               const docSignatories = signatories.filter(sig => sig.document_key === docKey);
                               if (docSignatories.length > 1) {
-                                signatoriesTotal += (docSignatories.length - 1) * 10; // $10 per additional signatory
+                                signatoriesTotal += (docSignatories.length - 1) * 10; // €10 per additional signatory
                               }
                             } else {
                               // Use signatories from submission.data
                               const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
                               const docSignatories = signatoriesFromData[docKey];
                               if (Array.isArray(docSignatories) && docSignatories.length > 1) {
-                                signatoriesTotal += (docSignatories.length - 1) * 10; // $10 per additional signatory
+                                signatoriesTotal += (docSignatories.length - 1) * 10; // €10 per additional signatory
                               }
                             }
                           });
@@ -2110,10 +2111,10 @@ const SubmissionDetail = () => {
                                 <div className="flex-1">
                                   <h3 className="font-semibold text-gray-900">{service.name}</h3>
                                   <p className="text-sm text-gray-600 mt-1">
-                                    {documents.length} document{documents.length > 1 ? 's' : ''} × ${parseFloat(service.base_price || 0).toFixed(2)}
+                                    {documents.length} document{documents.length > 1 ? 's' : ''} × €{parseFloat(service.base_price || 0).toFixed(2)}
                                   </p>
                                 </div>
-                                <span className="font-bold text-gray-900">${serviceTotal.toFixed(2)}</span>
+                                <span className="font-bold text-gray-900">€{serviceTotal.toFixed(2)}</span>
                               </div>
                               
                               {/* Options breakdown - detailed */}
@@ -2127,7 +2128,7 @@ const SubmissionDetail = () => {
                                           + {option.name}
                                           {optionDetail.count > 1 && <span className="ml-1">({optionDetail.count} documents)</span>}
                                         </span>
-                                        <span className="font-semibold text-gray-700">${optionDetail.total.toFixed(2)}</span>
+                                        <span className="font-semibold text-gray-700">€{optionDetail.total.toFixed(2)}</span>
                                       </div>
                                     );
                                   })}
@@ -2139,7 +2140,7 @@ const SubmissionDetail = () => {
                                 <div className="ml-4 mt-2 pt-2 border-t border-gray-200">
                                   <div className="flex justify-between items-center text-sm">
                                     <span className="text-gray-600 italic">+ Additional Signatories</span>
-                                    <span className="font-semibold text-gray-700">${signatoriesTotal.toFixed(2)}</span>
+                                    <span className="font-semibold text-gray-700">€{signatoriesTotal.toFixed(2)}</span>
                                   </div>
                                 </div>
                               )}
@@ -2152,7 +2153,7 @@ const SubmissionDetail = () => {
                           <div className="flex justify-between items-center mb-4">
                             <span className="text-lg font-bold text-gray-900">Total Amount</span>
                             <span className="text-2xl font-bold text-gray-900">
-                              ${(() => {
+                              €{(() => {
                                 let grandTotal = 0;
                                 
                                 // Calculate services and options costs
@@ -2174,7 +2175,7 @@ const SubmissionDetail = () => {
                                   }
                                 });
                                 
-                                // Calculate additional signatories cost ($10 per additional signatory)
+                                // Calculate additional signatories cost (€10 per additional signatory)
                                 if (signatories.length > 0) {
                                   // Group signatories by document_key
                                   const signatoriesByDoc = {};
@@ -2231,7 +2232,7 @@ const SubmissionDetail = () => {
                                   onClick={async () => {
                                   const confirmed = await confirm({
                                     title: 'Refund Payment',
-                                    message: `Are you sure you want to refund the full payment amount of $${(submission.data.payment.amount_paid / 100).toFixed(2)}? This action cannot be undone.`,
+                                    message: `Are you sure you want to refund the full payment amount of €${(submission.data.payment.amount_paid / 100).toFixed(2)}? This action cannot be undone.`,
                                     confirmText: 'Refund',
                                     cancelText: 'Cancel',
                                     type: 'danger',
@@ -2649,10 +2650,10 @@ const SubmissionDetail = () => {
                             });
                           };
 
-                          const formatCurrency = (amount, currency = 'usd') => {
+                          const formatCurrency = (amount, currency = 'eur') => {
                             return new Intl.NumberFormat('fr-FR', {
                               style: 'currency',
-                              currency: currency.toUpperCase()
+                              currency: 'EUR'
                             }).format(amount);
                           };
 
@@ -2868,7 +2869,7 @@ const SubmissionDetail = () => {
                                     )}
                                     {entry.metadata.amount && (
                                       <div>
-                                        <span className="font-semibold">Amount:</span> ${(parseFloat(entry.metadata.amount) / 100).toFixed(2)}
+                                        <span className="font-semibold">Amount:</span> €{(parseFloat(entry.metadata.amount) / 100).toFixed(2)}
                                       </div>
                                     )}
                                   </div>
@@ -3228,7 +3229,7 @@ const SubmissionDetail = () => {
                             <div className="flex-1">
                               <p className="font-semibold text-gray-900">{service.name}</p>
                               <p className="text-sm font-semibold text-gray-900 mt-2">
-                                ${parseFloat(service.base_price || 0).toFixed(2)} per document
+                                €{parseFloat(service.base_price || 0).toFixed(2)} per document
                               </p>
                             </div>
                           </label>
@@ -3397,7 +3398,7 @@ const SubmissionDetail = () => {
                                                   <span className="text-xs font-medium text-gray-700 group-hover:text-black transition-colors">
                                                     {option.name}
                                                     <span className="text-gray-500 font-normal ml-1">
-                                                      (+${option.additional_price?.toFixed(2) || '0.00'})
+                                                      (+€{option.additional_price?.toFixed(2) || '0.00'})
                                                     </span>
                                                   </span>
                                                 </label>
@@ -3444,7 +3445,7 @@ const SubmissionDetail = () => {
                                       <span className="text-sm font-semibold text-gray-900">
                                         Signatory {sigIndex + 1}
                                         {sigIndex === 0 && <span className="ml-2 text-xs text-gray-500">(included)</span>}
-                                        {sigIndex > 0 && <span className="ml-2 text-xs text-orange-600 font-medium">(+$10)</span>}
+                                        {sigIndex > 0 && <span className="ml-2 text-xs text-orange-600 font-medium">(+€10)</span>}
                                       </span>
                                       {sigIndex > 0 && (
                                         <button
@@ -3804,10 +3805,10 @@ const SubmissionDetail = () => {
                                 <div className="flex-1">
                                   <h3 className="font-semibold text-gray-900">{service.name}</h3>
                                   <p className="text-sm text-gray-600 mt-1">
-                                    {documents.length} document{documents.length > 1 ? 's' : ''} × ${parseFloat(service.base_price || 0).toFixed(2)}
+                                    {documents.length} document{documents.length > 1 ? 's' : ''} × €{parseFloat(service.base_price || 0).toFixed(2)}
                                   </p>
                                 </div>
-                                <span className="font-bold text-gray-900">${serviceTotal.toFixed(2)}</span>
+                                <span className="font-bold text-gray-900">€{serviceTotal.toFixed(2)}</span>
                               </div>
                               
                               {/* Options breakdown - detailed */}
@@ -3821,7 +3822,7 @@ const SubmissionDetail = () => {
                                           + {option.name}
                                           {optionDetail.count > 1 && <span className="ml-1">({optionDetail.count} documents)</span>}
                                         </span>
-                                        <span className="font-semibold text-gray-700">${optionDetail.total.toFixed(2)}</span>
+                                        <span className="font-semibold text-gray-700">€{optionDetail.total.toFixed(2)}</span>
                                       </div>
                                     );
                                   })}
@@ -3833,7 +3834,7 @@ const SubmissionDetail = () => {
                                 <div className="ml-4 mt-2 pt-2 border-t border-gray-200">
                                   <div className="flex justify-between items-center text-sm">
                                     <span className="text-gray-600 italic">+ Additional Signatories</span>
-                                    <span className="font-semibold text-gray-700">${signatoriesTotal.toFixed(2)}</span>
+                                    <span className="font-semibold text-gray-700">€{signatoriesTotal.toFixed(2)}</span>
                                   </div>
                                 </div>
                               )}

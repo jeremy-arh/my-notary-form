@@ -5,6 +5,7 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfWeek, endOfWeek, addMonths, subMonths, isSameMonth, isToday, startOfDay, endOfDay, addDays, subDays, addWeeks, subWeeks } from 'date-fns';
+import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
 
 const Submissions = () => {
   const navigate = useNavigate();
@@ -790,12 +791,14 @@ const Submissions = () => {
                             <div>{formatDate(submission.appointment_date)}</div>
                             {submission.appointment_time && (
                               <div className="text-xs text-gray-500 mt-1">
-                                <div>Florida: {formatTime12h(submission.appointment_time)}</div>
-                                {submission.notary?.timezone && (
-                                  <div>Notary ({submission.notary.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.notary.timezone)}</div>
-                                )}
                                 {submission.timezone && (
-                                  <div>Client ({submission.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.timezone)}</div>
+                                  <div>Client ({submission.timezone}): {formatTime12h(submission.appointment_time)}</div>
+                                )}
+                                {submission.notary?.timezone && submission.timezone && (
+                                  <div>Notary ({submission.notary.timezone}): {convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)}</div>
+                                )}
+                                {!submission.notary?.timezone && submission.timezone && (
+                                  <div>Florida: {convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, 'America/New_York')}</div>
                                 )}
                               </div>
                             )}
@@ -981,7 +984,9 @@ const Submissions = () => {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <div className="font-semibold text-base mb-1">
-                                  {formatTime12h(submission.appointment_time)}
+                                  {submission.notary?.timezone && submission.timezone
+                                    ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)
+                                    : formatTime12h(submission.appointment_time)}
                                 </div>
                                 <div className="text-sm">
                                   {submission.first_name} {submission.last_name}
@@ -1038,14 +1043,17 @@ const Submissions = () => {
                               cancelled: 'bg-red-500 text-white'
                             };
                             const colorClass = statusColors[submission.status] || 'bg-gray-500 text-white';
+                            const displayTime = submission.notary?.timezone && submission.timezone
+                              ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)
+                              : formatTime12h(submission.appointment_time);
                             return (
                               <div
                                 key={submission.id}
                                 className={`text-xs ${colorClass} p-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity`}
                                 onClick={() => navigate(`/submission/${submission.id}`)}
-                                title={`${formatTime12h(submission.appointment_time)} - ${submission.first_name} ${submission.last_name}`}
+                                title={`${displayTime} - ${submission.first_name} ${submission.last_name}`}
                               >
-                                <div className="font-semibold">{formatTime12h(submission.appointment_time)}</div>
+                                <div className="font-semibold">{displayTime}</div>
                                 <div className="truncate">{submission.first_name}</div>
                               </div>
                             );
@@ -1100,14 +1108,17 @@ const Submissions = () => {
                                 cancelled: 'bg-red-500 text-white'
                               };
                               const colorClass = statusColors[submission.status] || 'bg-gray-500 text-white';
+                              const displayTime = submission.notary?.timezone && submission.timezone
+                                ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)
+                                : formatTime12h(submission.appointment_time);
                               return (
                                 <div
                                   key={submission.id}
                                   className={`text-[10px] ${colorClass} p-1 rounded cursor-pointer hover:opacity-80 transition-opacity truncate`}
                                   onClick={() => navigate(`/submission/${submission.id}`)}
-                                  title={`${formatTime12h(submission.appointment_time)} - ${submission.first_name}`}
+                                  title={`${displayTime} - ${submission.first_name}`}
                                 >
-                                  {formatTime12h(submission.appointment_time)}
+                                  {displayTime}
                                 </div>
                               );
                             })}
