@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import DocumentViewer from '../DocumentViewer';
 
 const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh }) => {
   const [activeTab, setActiveTab] = useState('details');
@@ -454,14 +455,23 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
                             </p>
                           </div>
                         </div>
-                        <a
-                          href={doc.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 text-gray-600" />
-                        </a>
+                        <div className="flex items-center">
+                          <DocumentViewer
+                            fileUrl={doc.file_url}
+                            fileName={doc.file_name}
+                            fileType={doc.mime_type}
+                            fileSize={doc.file_size}
+                          />
+                          <a
+                            href={doc.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Télécharger"
+                          >
+                            <Icon icon="heroicons:arrow-down-tray" className="w-5 h-5 text-gray-600" />
+                          </a>
+                        </div>
                       </div>
                     ))}
                   </div>

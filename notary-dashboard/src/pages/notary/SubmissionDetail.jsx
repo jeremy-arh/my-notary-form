@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Chat from '../../components/Chat';
 import SignatoriesList from '../../components/SignatoriesList';
+import DocumentViewer from '../../components/DocumentViewer';
 import { supabase } from '../../lib/supabase';
 import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
 import { useToast } from '../../contexts/ToastContext';
@@ -831,13 +832,22 @@ const SubmissionDetail = () => {
                                         </div>
                                       </div>
                                       {doc.public_url && (
-                                        <button
-                                          onClick={() => downloadDocument(doc.public_url, doc.name)}
-                                          className="ml-2 text-black hover:text-gray-700 font-medium text-[10px] sm:text-xs flex items-center flex-shrink-0"
-                                        >
-                                          <Icon icon="heroicons:arrow-down-tray" className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                                          <span className="hidden sm:inline">Download</span>
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <DocumentViewer
+                                            fileUrl={doc.public_url}
+                                            fileName={doc.name}
+                                            fileType={doc.type}
+                                            fileSize={doc.size}
+                                          />
+                                          <button
+                                            onClick={() => downloadDocument(doc.public_url, doc.name)}
+                                            className="ml-2 text-black hover:text-gray-700 font-medium text-[10px] sm:text-xs flex items-center flex-shrink-0"
+                                            title="Télécharger"
+                                          >
+                                            <Icon icon="heroicons:arrow-down-tray" className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                                            <span className="hidden sm:inline">Download</span>
+                                          </button>
+                                        </div>
                                       )}
                                     </div>
 
@@ -1020,11 +1030,18 @@ const SubmissionDetail = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
+                            <DocumentViewer
+                              fileUrl={file.file_url}
+                              fileName={file.file_name}
+                              fileType={file.file_type}
+                              fileSize={file.file_size}
+                            />
                             <a
                               href={file.file_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="px-3 py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
+                              title="Télécharger"
                             >
                               <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
                               Download
