@@ -2060,7 +2060,6 @@ const SubmissionDetail = () => {
                           if (!service) return null;
 
                           const serviceTotal = documents.length * (parseFloat(service.base_price) || 0);
-                          let signatoriesTotal = 0;
                           
                           // Track count per option for detailed display
                           const optionCounts = {}; // Track count per option
@@ -2087,24 +2086,8 @@ const SubmissionDetail = () => {
                             }
                           });
 
-                          // Calculate signatories cost for this service
-                          documents.forEach((doc, docIndex) => {
-                            const docKey = `${serviceId}_${docIndex}`;
-                            // Try to get signatories from database first
-                            if (signatories.length > 0) {
-                              const docSignatories = signatories.filter(sig => sig.document_key === docKey);
-                              if (docSignatories.length > 1) {
-                                signatoriesTotal += (docSignatories.length - 1) * 10; // €10 per additional signatory
-                              }
-                            } else {
-                              // Use signatories from submission.data
-                              const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
-                              const docSignatories = signatoriesFromData[docKey];
-                              if (Array.isArray(docSignatories) && docSignatories.length > 1) {
-                                signatoriesTotal += (docSignatories.length - 1) * 10; // €10 per additional signatory
-                              }
-                            }
-                          });
+                          // Signatories are global for the entire submission, not per service/document
+                          // Don't show signatories cost per service
 
                           return (
                             <div key={serviceId} className="bg-white rounded-xl p-4 border border-gray-200">
@@ -2133,16 +2116,6 @@ const SubmissionDetail = () => {
                                       </div>
                                     );
                                   })}
-                                </div>
-                              )}
-
-                              {/* Signatories breakdown */}
-                              {signatoriesTotal > 0 && (
-                                <div className="ml-4 mt-2 pt-2 border-t border-gray-200">
-                                  <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600 italic">+ Additional Signatories</span>
-                                    <span className="font-semibold text-gray-700">€{signatoriesTotal.toFixed(2)}</span>
-                                  </div>
                                 </div>
                               )}
                             </div>
@@ -2176,33 +2149,45 @@ const SubmissionDetail = () => {
                                   }
                                 });
                                 
-                                // Calculate additional signatories cost (€10 per additional signatory)
+                                // Calculate additional signatories cost (€10 per additional signatory) - global for entire submission
                                 if (signatories.length > 0) {
-                                  // Group signatories by document_key
-                                  const signatoriesByDoc = {};
+                                  // Get unique signatories (they're global, not per document)
+                                  const uniqueSignatories = new Set();
                                   signatories.forEach(sig => {
-                                    if (!signatoriesByDoc[sig.document_key]) {
-                                      signatoriesByDoc[sig.document_key] = [];
-                                    }
-                                    signatoriesByDoc[sig.document_key].push(sig);
+                                    const key = `${sig.first_name}_${sig.last_name}_${sig.birth_date}`;
+                                    uniqueSignatories.add(key);
                                   });
                                   
-                                  // Calculate cost for each document
-                                  Object.values(signatoriesByDoc).forEach(docSignatories => {
-                                    if (docSignatories.length > 1) {
-                                      // First signatory is included, count additional ones
-                                      grandTotal += (docSignatories.length - 1) * 10;
-                                    }
-                                  });
+                                  const uniqueCount = uniqueSignatories.size;
+                                  if (uniqueCount > 1) {
+                                    // First signatory is included, count additional ones
+                                    grandTotal += (uniqueCount - 1) * 10;
+                                  }
                                 } else {
                                   // Use signatories from submission.data (if not yet paid)
-                                  const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
-                                  Object.values(signatoriesFromData).forEach(docSignatories => {
-                                    if (Array.isArray(docSignatories) && docSignatories.length > 1) {
-                                      // First signatory is included, count additional ones
-                                      grandTotal += (docSignatories.length - 1) * 10;
+                                  // Support both new format (signatories array) and old format (signatoriesByDocument)
+                                  const signatoriesFromData = submission?.data?.signatories || submission?.data?.signatoriesByDocument || {};
+                                  if (Array.isArray(signatoriesFromData)) {
+                                    // New format: global signatories
+                                    if (signatoriesFromData.length > 1) {
+                                      grandTotal += (signatoriesFromData.length - 1) * 10;
                                     }
-                                  });
+                                  } else {
+                                    // Old format: signatoriesByDocument - count unique signatories across all documents
+                                    const uniqueSignatories = new Set();
+                                    Object.values(signatoriesFromData).forEach(docSignatories => {
+                                      if (Array.isArray(docSignatories)) {
+                                        docSignatories.forEach(sig => {
+                                          const key = `${sig.firstName || sig.first_name}_${sig.lastName || sig.last_name}_${sig.birthDate || sig.birth_date}`;
+                                          uniqueSignatories.add(key);
+                                        });
+                                      }
+                                    });
+                                    const uniqueCount = uniqueSignatories.size;
+                                    if (uniqueCount > 1) {
+                                      grandTotal += (uniqueCount - 1) * 10;
+                                    }
+                                  }
                                 }
                                 
                                 return grandTotal.toFixed(2);
@@ -2422,10 +2407,21 @@ const SubmissionDetail = () => {
             {/* Signatories Tab */}
             {activeTab === 'signatories' && (() => {
               // Get signatories from database (if payment completed) or from submission.data (if not yet paid)
-              const signatoriesFromData = submission?.data?.signatoriesByDocument || {};
+              // Support both new format (signatories array) and old format (signatoriesByDocument)
+              const signatoriesFromData = submission?.data?.signatories || submission?.data?.signatoriesByDocument || {};
               const hasSignatoriesInDB = signatories.length > 0;
-              const hasSignatoriesInData = Object.keys(signatoriesFromData).length > 0 && 
-                Object.values(signatoriesFromData).some(sigs => sigs && sigs.length > 0);
+              
+              // Check if signatories exist in data
+              let hasSignatoriesInData = false;
+              
+              if (Array.isArray(signatoriesFromData)) {
+                // New format: global signatories array
+                hasSignatoriesInData = signatoriesFromData.length > 0;
+              } else if (typeof signatoriesFromData === 'object') {
+                // Old format: signatoriesByDocument
+                hasSignatoriesInData = Object.keys(signatoriesFromData).length > 0 && 
+                  Object.values(signatoriesFromData).some(sigs => sigs && sigs.length > 0);
+              }
 
               if (!hasSignatoriesInDB && !hasSignatoriesInData) {
                 return (
@@ -2441,45 +2437,66 @@ const SubmissionDetail = () => {
                 );
               }
 
-              // Convert database signatories to the format expected by SignatoriesList
-              const signatoriesByDoc = {};
-              const serviceDocuments = submission?.data?.serviceDocuments || {};
-              const selectedServices = submission?.data?.selectedServices || [];
+              // Get global list of unique signatories (not grouped by document)
+              let globalSignatoriesList = [];
               
               if (hasSignatoriesInDB) {
-                // Use database signatories (after payment)
+                // Use database signatories (after payment) - get unique signatories
+                const uniqueSignatories = new Map();
                 signatories.forEach(sig => {
-                  if (!signatoriesByDoc[sig.document_key]) {
-                    signatoriesByDoc[sig.document_key] = [];
-                  }
-                  signatoriesByDoc[sig.document_key].push({
-                    first_name: sig.first_name,
-                    last_name: sig.last_name,
-                    birth_date: sig.birth_date,
-                    birth_city: sig.birth_city,
-                    postal_address: sig.postal_address,
-                    email: sig.email || null,
-                    phone: sig.phone || null
-                  });
-                });
-              } else {
-                // Use signatories from submission.data (before payment)
-                Object.entries(signatoriesFromData).forEach(([docKey, sigs]) => {
-                  if (sigs && sigs.length > 0) {
-                    signatoriesByDoc[docKey] = sigs.map(sig => ({
-                      first_name: sig.firstName || sig.first_name,
-                      last_name: sig.lastName || sig.last_name,
-                      birth_date: sig.birthDate || sig.birth_date,
-                      birth_city: sig.birthCity || sig.birth_city,
-                      postal_address: sig.postalAddress || sig.postal_address,
+                  const key = `${sig.first_name}_${sig.last_name}_${sig.birth_date}`;
+                  if (!uniqueSignatories.has(key)) {
+                    uniqueSignatories.set(key, {
+                      first_name: sig.first_name,
+                      last_name: sig.last_name,
+                      birth_date: sig.birth_date,
+                      birth_city: sig.birth_city,
+                      postal_address: sig.postal_address,
                       email: sig.email || null,
                       phone: sig.phone || null
-                    }));
+                    });
                   }
                 });
+                globalSignatoriesList = Array.from(uniqueSignatories.values());
+              } else {
+                // Use signatories from submission.data (before payment)
+                if (Array.isArray(signatoriesFromData)) {
+                  // New format: global signatories array
+                  globalSignatoriesList = signatoriesFromData.map(sig => ({
+                    first_name: sig.firstName || sig.first_name,
+                    last_name: sig.lastName || sig.last_name,
+                    birth_date: sig.birthDate || sig.birth_date,
+                    birth_city: sig.birthCity || sig.birth_city,
+                    postal_address: sig.postalAddress || sig.postal_address,
+                    email: sig.email || null,
+                    phone: sig.phone || null
+                  }));
+                } else {
+                  // Old format: signatoriesByDocument - collect all unique signatories
+                  const uniqueSignatories = new Map();
+                  Object.values(signatoriesFromData).forEach(sigs => {
+                    if (Array.isArray(sigs)) {
+                      sigs.forEach(sig => {
+                        const key = `${sig.firstName || sig.first_name}_${sig.lastName || sig.last_name}_${sig.birthDate || sig.birth_date}`;
+                        if (!uniqueSignatories.has(key)) {
+                          uniqueSignatories.set(key, {
+                            first_name: sig.firstName || sig.first_name,
+                            last_name: sig.lastName || sig.last_name,
+                            birth_date: sig.birthDate || sig.birth_date,
+                            birth_city: sig.birthCity || sig.birth_city,
+                            postal_address: sig.postalAddress || sig.postal_address,
+                            email: sig.email || null,
+                            phone: sig.phone || null
+                          });
+                        }
+                      });
+                    }
+                  });
+                  globalSignatoriesList = Array.from(uniqueSignatories.values());
+                }
               }
 
-              if (Object.keys(signatoriesByDoc).length === 0) {
+              if (globalSignatoriesList.length === 0) {
                 return (
                   <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
@@ -2501,24 +2518,56 @@ const SubmissionDetail = () => {
                     </div>
                     Signatories
                   </h2>
-                  <div className="space-y-4">
-                    {Object.entries(signatoriesByDoc).map(([docKey, docSignatories]) => {
-                      // Extract serviceId and docIndex from docKey (format: "serviceId_docIndex")
-                      const [serviceId, docIndex] = docKey.split('_');
-                      const documents = serviceDocuments[serviceId] || [];
-                      const document = documents[parseInt(docIndex)] || {};
-                      const documentName = document.name || `Document ${parseInt(docIndex) + 1}`;
-
-                      return (
-                        <SignatoriesList
-                          key={docKey}
-                          signatories={docSignatories}
-                          documentKey={docKey}
-                          documentName={documentName}
-                          showPrices={true}
-                        />
-                      );
-                    })}
+                  <div className="space-y-3">
+                    {globalSignatoriesList.map((signatory, sigIndex) => (
+                      <div key={sigIndex} className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-gray-900">
+                            Signatory {sigIndex + 1}
+                            {sigIndex === 0 && <span className="ml-1.5 text-[10px] text-gray-500">(included)</span>}
+                            {sigIndex > 0 && <span className="ml-1.5 text-[10px] text-orange-600 font-medium">(+€10)</span>}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-600">Name:</span>
+                            <span className="ml-1.5 font-medium text-gray-900">
+                              {signatory.first_name} {signatory.last_name}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Date of Birth:</span>
+                            <span className="ml-1.5 font-medium text-gray-900">
+                              {signatory.birth_date}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Birth City:</span>
+                            <span className="ml-1.5 font-medium text-gray-900">
+                              {signatory.birth_city}
+                            </span>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-gray-600">Address:</span>
+                            <span className="ml-1.5 font-medium text-gray-900 break-words">
+                              {signatory.postal_address}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Email:</span>
+                            <span className="ml-1.5 font-medium text-gray-900 break-words">
+                              {signatory.email || 'N/A'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Phone:</span>
+                            <span className="ml-1.5 font-medium text-gray-900 break-words">
+                              {signatory.phone || 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -3780,7 +3829,6 @@ const SubmissionDetail = () => {
                           if (!service) return null;
 
                           const serviceTotal = documents.length * (parseFloat(service.base_price) || 0);
-                          let signatoriesTotal = 0;
                           
                           // Track count per option for detailed display
                           const optionCounts = {};

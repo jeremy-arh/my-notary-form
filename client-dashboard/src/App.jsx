@@ -24,7 +24,10 @@ const LoadingSpinner = () => (
 
 function App() {
   useEffect(() => {
-    document.title = 'Client dashboard';
+    // Only set default title if not on form route (form routes manage their own titles)
+    if (!window.location.pathname.startsWith('/form')) {
+      document.title = 'Client dashboard';
+    }
   }, []);
 
   return (

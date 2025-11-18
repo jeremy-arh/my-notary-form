@@ -67,7 +67,7 @@ const NotaryForm = () => {
   useEffect(() => {
     const currentStepData = steps.find(s => s.path === location.pathname);
     if (currentStepData) {
-      document.title = `${currentStepData.name} - Demande de Service Notarié`;
+      document.title = currentStepData.name;
     } else {
       document.title = 'Demande de Service Notarié';
     }

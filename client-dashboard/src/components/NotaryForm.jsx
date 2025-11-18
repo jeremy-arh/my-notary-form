@@ -30,8 +30,8 @@ const NotaryForm = () => {
     // Documents (step 2) - organized by service
     serviceDocuments: {}, // { serviceId: [files] }
 
-    // Signatories (step 3) - organized by document
-    signatoriesByDocument: {}, // { "serviceId_docIndex": [signatories] }
+    // Signatories (step 3) - global list for the entire order
+    signatories: [], // [signatories] - global list for all documents
 
     // Appointment
     appointmentDate: '',
@@ -83,39 +83,26 @@ const NotaryForm = () => {
         });
 
       case 3: // Add Signatories
-        // Check that all signatories have required fields
-        if (!formData.signatoriesByDocument) return false;
-        if (!formData.serviceDocuments) return false;
-        
-        // First, ensure that every document has at least one signatory
-        for (const [serviceId, documents] of Object.entries(formData.serviceDocuments)) {
-          for (let docIndex = 0; docIndex < documents.length; docIndex++) {
-            const docKey = `${serviceId}_${docIndex}`;
-            const signatories = formData.signatoriesByDocument[docKey];
-            if (!signatories || !Array.isArray(signatories) || signatories.length === 0) {
-              return false;
-            }
-          }
+        // Check that there is at least one signatory and all have required fields
+        if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
+          return false;
         }
         
-        // Then check that all signatories have required fields filled
-        for (const signatories of Object.values(formData.signatoriesByDocument)) {
-          if (!Array.isArray(signatories)) continue;
-          for (const signatory of signatories) {
-            if (!signatory || 
-                !signatory.firstName?.trim() || 
-                !signatory.lastName?.trim() || 
-                !signatory.birthDate?.trim() || 
-                !signatory.birthCity?.trim() || 
-                !signatory.postalAddress?.trim() ||
-                !signatory.email?.trim() ||
-                !signatory.phone?.trim()) {
-              return false;
-            }
-            // Validate email format
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email?.trim())) {
-              return false;
-            }
+        // Check that all signatories have required fields filled
+        for (const signatory of formData.signatories) {
+          if (!signatory || 
+              !signatory.firstName?.trim() || 
+              !signatory.lastName?.trim() || 
+              !signatory.birthDate?.trim() || 
+              !signatory.birthCity?.trim() || 
+              !signatory.postalAddress?.trim() ||
+              !signatory.email?.trim() ||
+              !signatory.phone?.trim()) {
+            return false;
+          }
+          // Validate email format
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email?.trim())) {
+            return false;
           }
         }
         return true;
@@ -158,6 +145,16 @@ const NotaryForm = () => {
   };
 
   const currentStep = getCurrentStepFromPath();
+
+  // Update page title with current step name
+  useEffect(() => {
+    const currentStepData = steps.find(s => s.path === location.pathname);
+    if (currentStepData) {
+      document.title = currentStepData.name;
+    } else {
+      document.title = 'Client dashboard';
+    }
+  }, [location.pathname]);
 
   // Map step names to GTM format
   const getStepNameForGTM = (stepName) => {
@@ -392,6 +389,8 @@ const NotaryForm = () => {
       console.log('📤 Calling Edge Function with full data:');
       console.log('   selectedServices:', submissionData.selectedServices);
       console.log('   serviceDocuments:', submissionData.serviceDocuments);
+      console.log('   signatories:', submissionData.signatories);
+      console.log('   signatories count:', submissionData.signatories?.length || 0);
 
       // Log document count per service with options info
       if (submissionData.serviceDocuments) {
@@ -403,36 +402,87 @@ const NotaryForm = () => {
         });
       }
 
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
+      // Use fetch directly to get better error details
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token || supabaseAnonKey;
+      
+      console.log('📤 Calling Edge Function directly with fetch...');
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
           formData: submissionData
-        }
+        })
       });
 
-      console.log('📥 Edge Function response:', { data, error });
+      const responseText = await response.text();
+      console.log('📥 Edge Function raw response status:', response.status);
+      console.log('📥 Edge Function raw response text:', responseText);
 
-      if (error) {
-        console.error('Edge Function error details:', error);
-        throw error;
+      if (!response.ok) {
+        // Try to parse error response
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(responseText);
+          console.error('Edge Function error response:', errorData);
+          errorMessage = errorData.error || errorMessage;
+          if (errorData.type) {
+            console.error('Error type:', errorData.type);
+          }
+          if (errorData.stack) {
+            console.error('Error stack:', errorData.stack);
+          }
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+          errorMessage += `\nResponse: ${responseText}`;
+        }
+        throw new Error(errorMessage);
       }
 
-      if (data?.error) {
-        console.error('Edge Function returned error:', data.error);
-        throw new Error(data.error);
+      // Parse successful response
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('📥 Edge Function parsed response:', data);
+      } catch (parseError) {
+        console.error('Could not parse success response:', parseError);
+        throw new Error('Invalid response format from payment service');
       }
 
-      if (data?.url) {
-        // Form data is already saved in localStorage by useLocalStorage hook
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
-      } else {
+      if (!data || !data.url) {
+        console.error('No checkout URL received. Response data:', data);
         throw new Error('No checkout URL received from payment service');
       }
+
+      // Form data is already saved in localStorage by useLocalStorage hook
+      // Redirect to Stripe Checkout
+      console.log('✅ Redirecting to Stripe Checkout:', data.url);
+      window.location.href = data.url;
     } catch (error) {
       console.error('Error creating payment session:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+        context: error?.context,
+      });
 
       // Show detailed error message
       let errorMessage = 'Une erreur s\'est produite lors de la création de la session de paiement.';
+      
+      // Try to extract more details from the error
+      if (error?.message) {
+        errorMessage += ` Détails: ${error.message}`;
+      }
 
       if (error.message?.includes('Edge Function') || error.message?.includes('FunctionsHttpError')) {
         errorMessage += '\n\n⚠️ Les fonctions de paiement ne sont pas encore déployées.\n\nVeuillez consulter le README dans /supabase/functions/ pour les instructions de déploiement.';

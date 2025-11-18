@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +16,227 @@ function formatTime12h(timeString: string | undefined): string {
     return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
   } catch (error) {
     return timeString;
+  }
+}
+
+// Convert appointment date and time from client timezone to notary timezone
+function convertToNotaryTimezone(
+  date: string | undefined,
+  time: string | undefined,
+  clientTimezone: string | undefined,
+  notaryTimezone: string | undefined
+): { date: string; time: string; timezone: string } {
+  if (!date || !time || !clientTimezone || !notaryTimezone) {
+    return {
+      date: date || '',
+      time: time || '',
+      timezone: notaryTimezone || clientTimezone || 'UTC'
+    };
+  }
+
+  try {
+    // Handle UTC offset format (e.g., 'UTC+1', 'UTC-5')
+    let clientTz = clientTimezone;
+    if (clientTimezone.startsWith('UTC')) {
+      clientTz = getIANAFromUTCOffset(clientTimezone);
+    }
+
+    let notaryTz = notaryTimezone;
+    if (notaryTimezone.startsWith('UTC')) {
+      notaryTz = getIANAFromUTCOffset(notaryTimezone);
+    }
+
+    // Parse date and time components
+    const [year, month, day] = date.split('-').map(Number);
+    const [hours, minutes] = time.split(':').map(Number);
+
+    // Strategy: Find the UTC timestamp that displays as the target time in client's timezone
+    // We'll use an iterative binary search approach
+    
+    // Start with a reasonable estimate: assume noon UTC on the target date
+    const targetDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    let utcTimestamp = targetDate.getTime();
+    
+    // Binary search for the correct UTC timestamp
+    let low = utcTimestamp - 12 * 60 * 60 * 1000; // 12 hours before
+    let high = utcTimestamp + 12 * 60 * 60 * 1000; // 12 hours after
+    let bestUtcTimestamp = utcTimestamp;
+    
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const mid = Math.floor((low + high) / 2);
+      const testDate = new Date(mid);
+      
+      // Format this UTC timestamp in client's timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: clientTz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      const parts = formatter.formatToParts(testDate);
+      const formattedYear = parseInt(parts.find(p => p.type === 'year')?.value || '0');
+      const formattedMonth = parseInt(parts.find(p => p.type === 'month')?.value || '0');
+      const formattedDay = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+      const formattedHour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+      const formattedMinute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+      
+      // Check if this matches our target
+      if (formattedYear === year &&
+          formattedMonth === month &&
+          formattedDay === day &&
+          formattedHour === hours &&
+          formattedMinute === minutes) {
+        bestUtcTimestamp = mid;
+        break;
+      }
+      
+      // Compare to determine direction
+      // First compare dates, then times
+      let comparison = 0;
+      if (formattedYear !== year) {
+        comparison = formattedYear - year;
+      } else if (formattedMonth !== month) {
+        comparison = formattedMonth - month;
+      } else if (formattedDay !== day) {
+        comparison = formattedDay - day;
+      } else if (formattedHour !== hours) {
+        comparison = formattedHour - hours;
+      } else {
+        comparison = formattedMinute - minutes;
+      }
+      
+      if (comparison < 0) {
+        // Formatted time is before target, need to increase UTC timestamp
+        low = mid + 1;
+      } else {
+        // Formatted time is after target, need to decrease UTC timestamp
+        high = mid - 1;
+      }
+      
+      bestUtcTimestamp = mid;
+      
+      // Prevent infinite loops
+      if (high <= low) {
+        break;
+      }
+    }
+    
+    // Now format this UTC timestamp in notary's timezone
+    const appointmentDate = new Date(bestUtcTimestamp);
+    
+    const formattedDate = appointmentDate.toLocaleDateString('en-US', {
+      timeZone: notaryTz,
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    const formattedTime = appointmentDate.toLocaleTimeString('en-US', {
+      timeZone: notaryTz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    
+    // Get timezone name for display
+    const timezoneName = getTimezoneName(notaryTz);
+    
+    return {
+      date: formattedDate,
+      time: formattedTime,
+      timezone: timezoneName
+    };
+  } catch (error) {
+    console.error('Error converting timezone:', error);
+    return {
+      date: date,
+      time: time,
+      timezone: notaryTimezone || clientTimezone || 'UTC'
+    };
+  }
+}
+
+// Get timezone offset in milliseconds for a specific date
+function getTimezoneOffsetForDate(timezone: string, date: Date): number {
+  try {
+    // Get what UTC time this date represents when displayed in the timezone
+    // Format the date in UTC and in the target timezone, then compare
+    const utcString = date.toLocaleString('en-US', { timeZone: 'UTC', hour12: false });
+    const tzString = date.toLocaleString('en-US', { timeZone: timezone, hour12: false });
+    
+    // Parse both strings to get time components
+    const utcDate = new Date(utcString);
+    const tzDate = new Date(tzString);
+    
+    // The difference is the offset
+    return tzDate.getTime() - utcDate.getTime();
+  } catch (error) {
+    // Fallback: use a simpler calculation
+    try {
+      const utcDate = new Date(date.toISOString());
+      const tzFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        timeZoneName: 'longOffset'
+      });
+      // This is a simplified approach - in practice, we'd need a library
+      // For now, return 0 and let the iterative method handle it
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+}
+
+// Convert UTC offset to IANA timezone identifier
+function getIANAFromUTCOffset(offset: string): string {
+  const offsetMap: Record<string, string> = {
+    'UTC+0': 'UTC',
+    'UTC+1': 'Europe/Paris',
+    'UTC+2': 'Europe/Berlin',
+    'UTC+3': 'Europe/Moscow',
+    'UTC+4': 'Asia/Dubai',
+    'UTC+5': 'Asia/Karachi',
+    'UTC+6': 'Asia/Dhaka',
+    'UTC+7': 'Asia/Bangkok',
+    'UTC+8': 'Asia/Shanghai',
+    'UTC+9': 'Asia/Tokyo',
+    'UTC+10': 'Australia/Sydney',
+    'UTC+11': 'Pacific/Guadalcanal',
+    'UTC+12': 'Pacific/Auckland',
+    'UTC-1': 'Atlantic/Azores',
+    'UTC-2': 'Atlantic/South_Georgia',
+    'UTC-3': 'America/Sao_Paulo',
+    'UTC-4': 'America/Caracas',
+    'UTC-5': 'America/New_York',
+    'UTC-6': 'America/Chicago',
+    'UTC-7': 'America/Denver',
+    'UTC-8': 'America/Los_Angeles',
+    'UTC-9': 'America/Anchorage',
+    'UTC-10': 'Pacific/Honolulu',
+    'UTC-11': 'Pacific/Midway',
+    'UTC-12': 'Pacific/Baker_Island'
+  };
+  
+  return offsetMap[offset] || 'UTC';
+}
+
+// Get timezone display name
+function getTimezoneName(timezone: string): string {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'short'
+    });
+    const parts = formatter.formatToParts(now);
+    const tzName = parts.find(p => p.type === 'timeZoneName')?.value || timezone;
+    return tzName;
+  } catch (error) {
+    return timezone;
   }
 }
 
@@ -41,6 +261,8 @@ interface EmailRequest {
     appointment_date?: string
     appointment_time?: string
     timezone?: string
+    client_timezone?: string
+    notary_timezone?: string
     address?: string
     city?: string
     country?: string
@@ -513,6 +735,42 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
 
     case 'new_submission_available':
       subject = `📋 New Submission Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      // Convert appointment date/time to notary's timezone if both timezones are provided
+      let appointmentDisplayDate = data.appointment_date ? new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+      let appointmentDisplayTime = data.appointment_time ? formatTime12h(data.appointment_time) : '';
+      let appointmentTimezone = '';
+      
+      console.log('🔍 [TIMEZONE CONVERSION] Data received:', {
+        appointment_date: data.appointment_date,
+        appointment_time: data.appointment_time,
+        client_timezone: data.client_timezone,
+        notary_timezone: data.notary_timezone
+      });
+      
+      // Use Miami (America/New_York) as default if notary timezone is not provided
+      const notaryTimezone = data.notary_timezone || 'America/New_York';
+      // Use UTC as default if client timezone is not provided
+      const clientTimezone = data.client_timezone || 'UTC';
+      
+      if (data.appointment_date && data.appointment_time) {
+        console.log('✅ [TIMEZONE CONVERSION] Converting timezone...', {
+          clientTimezone,
+          notaryTimezone
+        });
+        const converted = convertToNotaryTimezone(
+          data.appointment_date,
+          data.appointment_time,
+          clientTimezone,
+          notaryTimezone
+        );
+        console.log('✅ [TIMEZONE CONVERSION] Converted result:', converted);
+        appointmentDisplayDate = converted.date;
+        appointmentDisplayTime = formatTime12h(converted.time);
+        appointmentTimezone = converted.timezone;
+      } else {
+        console.log('⚠️ [TIMEZONE CONVERSION] Missing appointment date/time, using original values');
+      }
+      
       html = baseHTML(`
         <!-- Body Content - Left Aligned -->
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -531,7 +789,7 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
         ` : ''}
         ${data.appointment_date ? `
         <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}${data.appointment_time ? ` at ${formatTime12h(data.appointment_time)}` : ''}</strong>
+          Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${appointmentDisplayDate}${appointmentDisplayTime ? ` at ${appointmentDisplayTime}` : ''}${appointmentTimezone ? ` (${appointmentTimezone})` : ''}</strong>
         </p>
         ` : ''}
         <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
@@ -542,10 +800,10 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
           <tr>
             <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 280px;">
                 <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                  <td align="center" style="border-radius: 25px; background-color: #000000;">
+                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
                       View Submission
                     </a>
                   </td>

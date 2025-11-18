@@ -321,9 +321,10 @@ serve(async (req) => {
     }
 
     // Create signatories entries (only if they don't already exist)
-    if (existingSubmission.data?.signatoriesByDocument) {
+    // Support both old format (signatoriesByDocument) and new format (signatories)
+    const signatoriesData = existingSubmission.data?.signatories || existingSubmission.data?.signatoriesByDocument
+    if (signatoriesData) {
       console.log('👥 [SIGNATORIES] Checking and creating signatories entries')
-      const signatoriesByDocument = existingSubmission.data.signatoriesByDocument
       
       // First, check if signatories already exist for this submission
       const { data: existingSignatories, error: checkError } = await supabase
@@ -340,27 +341,72 @@ serve(async (req) => {
       if (existingSignatories && existingSignatories.length > 0) {
         console.log(`ℹ️ [SIGNATORIES] Signatories already exist for submission ${submissionId} (${existingSignatories.length} entries). Skipping insertion to avoid duplicates.`)
       } else {
-            // No existing signatories, proceed with insertion
-            const signatoryEntries: any[] = []
-            for (const [docKey, signatories] of Object.entries(signatoriesByDocument)) {
-              if (Array.isArray(signatories)) {
-                signatories.forEach((signatory: any) => {
-                  if (signatory.firstName && signatory.lastName) {
-                    signatoryEntries.push({
-                      submission_id: submissionId,
-                      document_key: docKey,
-                      first_name: signatory.firstName,
-                      last_name: signatory.lastName,
-                      birth_date: signatory.birthDate,
-                      birth_city: signatory.birthCity,
-                      postal_address: signatory.postalAddress,
-                      email: signatory.email || null,
-                      phone: signatory.phone || null,
-                    })
-                  }
+        // No existing signatories, proceed with insertion
+        const signatoryEntries: any[] = []
+        
+        // Check if it's the new format (array) or old format (object by document)
+        if (Array.isArray(signatoriesData)) {
+          // New format: global signatories - associate with all documents
+          const serviceDocuments = existingSubmission.data?.serviceDocuments || {}
+          const allDocKeys: string[] = []
+          
+          // Generate all document keys
+          if (serviceDocuments && typeof serviceDocuments === 'object') {
+            Object.entries(serviceDocuments).forEach(([serviceId, documents]: [string, any]) => {
+              if (Array.isArray(documents)) {
+                documents.forEach((doc: any, docIndex: number) => {
+                  allDocKeys.push(`${serviceId}_${docIndex}`)
                 })
               }
+            })
+          }
+          
+          // If no documents found, use a global key
+          const docKeysToUse = allDocKeys.length > 0 ? allDocKeys : ['global']
+          
+          console.log(`📋 [SIGNATORIES] Global signatories format: ${signatoriesData.length} signatories for ${docKeysToUse.length} document(s)`)
+          
+          // Associate each signatory with all documents
+          signatoriesData.forEach((signatory: any) => {
+            if (signatory.firstName && signatory.lastName) {
+              docKeysToUse.forEach((docKey: string) => {
+                signatoryEntries.push({
+                  submission_id: submissionId,
+                  document_key: docKey,
+                  first_name: signatory.firstName,
+                  last_name: signatory.lastName,
+                  birth_date: signatory.birthDate,
+                  birth_city: signatory.birthCity,
+                  postal_address: signatory.postalAddress,
+                  email: signatory.email || null,
+                  phone: signatory.phone || null,
+                })
+              })
             }
+          })
+        } else {
+          // Old format: signatoriesByDocument - keep backward compatibility
+          console.log('📋 [SIGNATORIES] Old format (signatoriesByDocument) detected')
+          for (const [docKey, signatories] of Object.entries(signatoriesData)) {
+            if (Array.isArray(signatories)) {
+              signatories.forEach((signatory: any) => {
+                if (signatory.firstName && signatory.lastName) {
+                  signatoryEntries.push({
+                    submission_id: submissionId,
+                    document_key: docKey,
+                    first_name: signatory.firstName,
+                    last_name: signatory.lastName,
+                    birth_date: signatory.birthDate,
+                    birth_city: signatory.birthCity,
+                    postal_address: signatory.postalAddress,
+                    email: signatory.email || null,
+                    phone: signatory.phone || null,
+                  })
+                }
+              })
+            }
+          }
+        }
 
         if (signatoryEntries.length > 0) {
           const { error: signatoriesError } = await supabase
@@ -435,7 +481,7 @@ serve(async (req) => {
       // Get all active notaries
       const { data: activeNotaries, error: notariesError } = await supabase
         .from('notary')
-        .select('id, email, full_name, is_active')
+        .select('id, email, full_name, is_active, timezone')
         .eq('is_active', true)
 
       if (notariesError) {
@@ -456,6 +502,17 @@ serve(async (req) => {
 
           try {
             const notaryName = notary.full_name || 'Notary'
+            // Default to Miami (America/New_York) if notary timezone is not set
+            const notaryTimezone = notary.timezone || 'America/New_York'
+            const clientTimezone = existingSubmission.timezone || 'UTC'
+            
+            console.log('📧 [NOTIFICATIONS] Sending email to notary:', {
+              email: notary.email,
+              notaryTimezone: notaryTimezone,
+              clientTimezone: clientTimezone,
+              appointment_date: existingSubmission.appointment_date,
+              appointment_time: existingSubmission.appointment_time
+            })
             
             // Call send-transactional-email Edge Function
             const { error: emailError } = await supabase.functions.invoke('send-transactional-email', {
@@ -470,7 +527,8 @@ serve(async (req) => {
                   client_name: clientName,
                   appointment_date: existingSubmission.appointment_date,
                   appointment_time: existingSubmission.appointment_time,
-                  timezone: existingSubmission.timezone,
+                  client_timezone: clientTimezone,
+                  notary_timezone: notaryTimezone,
                   address: existingSubmission.address,
                   city: existingSubmission.city,
                   country: existingSubmission.country
