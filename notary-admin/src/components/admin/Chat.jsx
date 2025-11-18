@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
+import { playNotificationSoundIfNeeded } from '../../utils/soundNotification';
 
 /**
  * Reusable Chat component for messaging between clients, notaries, and admins
@@ -14,8 +15,9 @@ import { useToast } from '../../contexts/ToastContext';
  * @param {string} recipientName - Name of the person you're chatting with (optional)
  * @param {string} clientFirstName - First name of the client (optional)
  * @param {string} clientLastName - Last name of the client (optional)
+ * @param {boolean} isFullscreen - Whether the chat should take full height (optional)
  */
-const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, clientFirstName, clientLastName }) => {
+const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, clientFirstName, clientLastName, isFullscreen = false }) => {
   const toast = useToast();
   const [clientInfo, setClientInfo] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -307,12 +309,13 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
   const formatTime = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
-    return date.toLocaleDateString('fr-FR', {
+    return date.toLocaleString('en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
     });
   };
 
@@ -417,22 +420,28 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
     );
   }
 
+  const containerClass = isFullscreen 
+    ? "flex flex-col h-full bg-white overflow-hidden"
+    : "flex flex-col h-[500px] bg-white rounded-2xl border border-gray-200 overflow-hidden";
+
   return (
-    <div className="flex flex-col h-[500px] bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      {/* Chat Header */}
-      <div className="bg-[#F3F4F6] px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center">
-          <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mr-3">
-            <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">
-              {recipientName ? `Chat with ${recipientName}` : 'Messages'}
-            </h3>
-            <p className="text-xs text-gray-600">{messages.length} messages</p>
+    <div className={containerClass}>
+      {/* Chat Header - Only show when not fullscreen */}
+      {!isFullscreen && (
+        <div className="bg-[#F3F4F6] px-6 py-4 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mr-3">
+              <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                {recipientName ? `Chat with ${recipientName}` : 'Messages'}
+              </h3>
+              <p className="text-xs text-gray-600">{messages.length} messages</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">

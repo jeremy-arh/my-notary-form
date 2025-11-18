@@ -257,11 +257,13 @@ serve(async (req) => {
         data: {
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments, // Already converted
-          signatoriesByDocument: formData.signatoriesByDocument || {}, // Signatories data
+          signatories: formData.signatories || [], // Signatories data (global list)
         },
       }
 
       console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
+      console.log('👥 [SIGNATORIES] Signatories in submission.data:', JSON.stringify(submissionData.data.signatories, null, 2))
+      console.log('👥 [SIGNATORIES] Signatories count:', submissionData.data.signatories?.length || 0)
 
       const { data: newSubmission, error: submissionError } = await supabase
         .from('submission')
@@ -337,7 +339,7 @@ serve(async (req) => {
             // Add main service line item
             lineItems.push({
               price_data: {
-                currency: 'usd',
+                currency: 'eur',
                 product_data: {
                   name: `${service.name} (${documentCount} document${documentCount > 1 ? 's' : ''})`,
                   description: service.short_description || service.description,
@@ -346,7 +348,7 @@ serve(async (req) => {
               },
               quantity: documentCount,
             })
-            console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = $${(service.base_price * documentCount).toFixed(2)}`)
+            console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = €${(service.base_price * documentCount).toFixed(2)}`)
 
             // Count options for this service
             console.log(`📋 [OPTIONS DEBUG] Checking documents for service ${service.name}:`)
@@ -412,7 +414,7 @@ serve(async (req) => {
         if (option && option.additional_price) {
           lineItems.push({
             price_data: {
-              currency: 'usd',
+              currency: 'eur',
               product_data: {
                 name: `${option.name} (${count} document${count > 1 ? 's' : ''})`,
                 description: option.description || '',
@@ -421,7 +423,7 @@ serve(async (req) => {
             },
             quantity: count,
           })
-          console.log(`✅ [OPTIONS] Added option: ${option.name} × ${count} documents = $${(option.additional_price * count).toFixed(2)}`)
+          console.log(`✅ [OPTIONS] Added option: ${option.name} × ${count} documents = €${(option.additional_price * count).toFixed(2)}`)
         } else {
           console.warn(`⚠️ [OPTIONS] Option ${optionId} not found or has no price`)
         }
@@ -430,34 +432,32 @@ serve(async (req) => {
       console.log(`⚠️ [OPTIONS] No options selected`)
     }
 
-    // Calculate additional signatories cost (10$ per additional signatory, first one is included)
+    // Calculate additional signatories cost (€10 per additional signatory, first one is included)
     let additionalSignatoriesCount = 0
-    if (formData.signatoriesByDocument) {
-      console.log('📋 [SIGNATORIES] Processing signatories:', Object.keys(formData.signatoriesByDocument).length, 'documents')
-      for (const [docKey, signatories] of Object.entries(formData.signatoriesByDocument)) {
-        if (signatories && signatories.length > 1) {
-          // First signatory is included, count additional ones
-          additionalSignatoriesCount += signatories.length - 1
-          console.log(`   Document ${docKey}: ${signatories.length} signatories (${signatories.length - 1} additional)`)
-        } else if (signatories && signatories.length === 1) {
-          console.log(`   Document ${docKey}: 1 signatory (included)`)
-        }
+    if (formData.signatories && Array.isArray(formData.signatories)) {
+      console.log('📋 [SIGNATORIES] Processing signatories:', formData.signatories.length, 'signatories (global)')
+      if (formData.signatories.length > 1) {
+        // First signatory is included, count additional ones
+        additionalSignatoriesCount = formData.signatories.length - 1
+        console.log(`   Total: ${formData.signatories.length} signatories (${additionalSignatoriesCount} additional)`)
+      } else if (formData.signatories.length === 1) {
+        console.log(`   Total: 1 signatory (included)`)
       }
       
       if (additionalSignatoriesCount > 0) {
-        const additionalSignatoriesPrice = 10.00 // 10$ per additional signatory
+        const additionalSignatoriesPrice = 10.00 // €10 per additional signatory
         lineItems.push({
           price_data: {
-            currency: 'usd',
+            currency: 'eur',
             product_data: {
               name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? 'ies' : ''})`,
-              description: 'Fee for additional signatories (the first signatory of each document is included)',
+              description: 'Fee for additional signatories (the first signatory is included)',
             },
-            unit_amount: Math.round(additionalSignatoriesPrice * 100), // Convert to cents
+            unit_amount: Math.round(additionalSignatoriesPrice * 100), // Convert to cents (€10 per signatory)
           },
-          quantity: additionalSignatoriesCount,
+          quantity: additionalSignatoriesCount, // Quantity should match the number of additional signatories
         })
-        console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = $${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(2)}`)
+        console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = €${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(2)}`)
       } else {
         console.log(`ℹ️ [SIGNATORIES] No additional signatories (only first signatory per document)`)
       }

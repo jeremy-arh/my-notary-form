@@ -127,7 +127,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     }
 
     return {
-      currency: 'USD',
+      currency: 'EUR',
       value: total,
       items: items
     };
@@ -161,6 +161,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
   const formatTime = (time) => {
     if (!time) return 'Not selected';
+    // Simply display the time as stored, no conversion
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
     const period = hour >= 12 ? 'PM' : 'AM';
@@ -171,7 +172,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6" style={{ minHeight: 0 }}>
         <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-full">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
@@ -210,7 +211,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
-                          {documents.length} document{documents.length > 1 ? 's' : ''} × ${service?.base_price.toFixed(2)}
+                          {documents.length} document{documents.length > 1 ? 's' : ''} × €{service?.base_price.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -252,7 +253,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       )}
 
       {/* Signatories Information */}
-      {formData.signatoriesByDocument && Object.keys(formData.signatoriesByDocument).length > 0 && (
+      {formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
           <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
@@ -260,55 +261,36 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             </div>
             <span className="truncate">Signatories</span>
           </h3>
-          <div className="space-y-3 sm:space-y-4">
-            {formData.selectedServices && formData.selectedServices.map((serviceId) => {
-              const documents = formData.serviceDocuments?.[serviceId] || [];
-              return documents.map((doc, docIndex) => {
-                const docKey = `${serviceId}_${docIndex}`;
-                const signatories = formData.signatoriesByDocument[docKey];
-                if (!signatories || signatories.length === 0) return null;
-                
-                return (
-                  <div key={docKey} className="border border-gray-200 rounded-lg sm:rounded-xl p-2.5 sm:p-3 overflow-hidden">
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3 flex items-center">
-                      <Icon icon="heroicons:document" className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{doc.name}</span>
-                    </h4>
-                    <div className="space-y-2 sm:space-y-3">
-                      {signatories.map((signatory, sigIndex) => (
-                        <div key={sigIndex} className="bg-gray-50 rounded-lg p-2 sm:p-3">
-                          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                            <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
-                              Signatory {sigIndex + 1}
-                              {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                              {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+$10)</span>}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
-                            <div>
-                              <span className="text-gray-600">Name:</span>
-                              <span className="ml-1.5 font-medium text-gray-900">{signatory.firstName} {signatory.lastName}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Date of Birth:</span>
-                              <span className="ml-1.5 font-medium text-gray-900">{signatory.birthDate}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Birth City:</span>
-                              <span className="ml-1.5 font-medium text-gray-900">{signatory.birthCity}</span>
-                            </div>
-                            <div className="sm:col-span-2">
-                              <span className="text-gray-600">Address:</span>
-                              <span className="ml-1.5 font-medium text-gray-900 break-words">{signatory.postalAddress}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+          <div className="space-y-2 sm:space-y-3">
+            {formData.signatories.map((signatory, sigIndex) => (
+              <div key={sigIndex} className="bg-gray-50 rounded-lg p-2 sm:p-3">
+                <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                  <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
+                    Signatory {sigIndex + 1}
+                    {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
+                    {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+€10)</span>}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
+                  <div>
+                    <span className="text-gray-600">Name:</span>
+                    <span className="ml-1.5 font-medium text-gray-900">{signatory.firstName} {signatory.lastName}</span>
                   </div>
-                );
-              });
-            })}
+                  <div>
+                    <span className="text-gray-600">Date of Birth:</span>
+                    <span className="ml-1.5 font-medium text-gray-900">{signatory.birthDate}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Birth City:</span>
+                    <span className="ml-1.5 font-medium text-gray-900">{signatory.birthCity}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-gray-600">Address:</span>
+                    <span className="ml-1.5 font-medium text-gray-900 break-words">{signatory.postalAddress}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -428,7 +410,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                           {service.name} ({documents.length} document{documents.length > 1 ? 's' : ''})
                         </span>
                         <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 flex-shrink-0">
-                          ${serviceTotal.toFixed(2)}
+                          €{serviceTotal.toFixed(2)}
                         </span>
                       </div>
                       {/* Show options breakdown */}
@@ -444,53 +426,40 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                   + {option.name} ({count} document{count > 1 ? 's' : ''})
                                 </span>
                                 <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                                  ${optionTotal.toFixed(2)}
+                                  €{optionTotal.toFixed(2)}
                                 </span>
                               </div>
                             );
                           })}
                         </div>
                       )}
-                      {/* Show signatories breakdown for this service */}
-                      {formData.signatoriesByDocument && (() => {
-                        let serviceSignatoriesCount = 0;
-                        documents.forEach((doc, docIndex) => {
-                          const docKey = `${serviceId}_${docIndex}`;
-                          const signatories = formData.signatoriesByDocument[docKey];
-                          if (signatories && signatories.length > 1) {
-                            serviceSignatoriesCount += signatories.length - 1;
-                          }
-                        });
-                        if (serviceSignatoriesCount > 0) {
-                          const signatoriesTotal = serviceSignatoriesCount * 10;
-                          return (
-                            <div className="ml-3 sm:ml-4 mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
-                              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-1 lg:gap-2">
-                                <span className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 italic break-words">
-                                  + Additional Signatories ({serviceSignatoriesCount} signatory{serviceSignatoriesCount > 1 ? 'ies' : ''})
-                                </span>
-                                <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                                  ${signatoriesTotal.toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
                     </div>
                   );
                 })}
               </>
             )}
 
+            {/* Show signatories breakdown - global for all services */}
+            {formData.signatories && formData.signatories.length > 1 && (
+              <div className="pt-2 sm:pt-3 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-1 lg:gap-2">
+                  <span className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 italic break-words">
+                    + Additional Signatories ({formData.signatories.length - 1} signatory{(formData.signatories.length - 1) > 1 ? 'ies' : ''})
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
+                    €{((formData.signatories.length - 1) * 10).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Total */}
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2 sm:pt-3 border-t-2 border-gray-300 gap-1 sm:gap-2">
               <span className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 flex-shrink-0">Total Amount</span>
               <span className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 flex-shrink-0">
-                ${(() => {
+                €{(() => {
                   let total = 0;
-                  // Calculate total from selected services × files + options + signatories
+                  // Calculate total from selected services × files + options
                   if (formData.selectedServices) {
                     formData.selectedServices.forEach(serviceId => {
                       const service = servicesMap[serviceId];
@@ -510,18 +479,16 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                             });
                           }
                         });
-
-                        // Add signatories cost (10$ per additional signatory)
-                        documents.forEach((doc, docIndex) => {
-                          const docKey = `${serviceId}_${docIndex}`;
-                          const signatories = formData.signatoriesByDocument?.[docKey];
-                          if (signatories && signatories.length > 1) {
-                            total += (signatories.length - 1) * 10;
-                          }
-                        });
                       }
                     });
                   }
+                  
+                  // Add signatories cost (€10 per additional signatory) - global for all services
+                  // Only add once, not per service
+                  if (formData.signatories && formData.signatories.length > 1) {
+                    total += (formData.signatories.length - 1) * 10;
+                  }
+                  
                   console.log('💰 Summary Total:', total);
                   return total.toFixed(2);
                 })()}

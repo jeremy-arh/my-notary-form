@@ -14,26 +14,32 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     return timeString.toLowerCase().includes('pm') || timeString.toLowerCase().includes('am');
   });
 
-  // Common timezones
+  // Common timezones with numeric offsets for calculation
   const timezones = [
-    { value: 'America/New_York', label: 'Eastern Time (ET)', offset: 'UTC-5' },
-    { value: 'America/Chicago', label: 'Central Time (CT)', offset: 'UTC-6' },
-    { value: 'America/Denver', label: 'Mountain Time (MT)', offset: 'UTC-7' },
-    { value: 'America/Los_Angeles', label: 'Pacific Time (PT)', offset: 'UTC-8' },
-    { value: 'America/Toronto', label: 'Toronto (ET)', offset: 'UTC-5' },
-    { value: 'America/Vancouver', label: 'Vancouver (PT)', offset: 'UTC-8' },
-    { value: 'America/Montreal', label: 'Montreal (ET)', offset: 'UTC-5' },
-    { value: 'Europe/London', label: 'London (GMT)', offset: 'UTC+0' },
-    { value: 'Europe/Paris', label: 'Paris (CET)', offset: 'UTC+1' },
+    { value: 'America/New_York', label: 'Eastern Time (ET)', offset: -5 },
+    { value: 'America/Chicago', label: 'Central Time (CT)', offset: -6 },
+    { value: 'America/Denver', label: 'Mountain Time (MT)', offset: -7 },
+    { value: 'America/Los_Angeles', label: 'Pacific Time (PT)', offset: -8 },
+    { value: 'America/Toronto', label: 'Toronto (ET)', offset: -5 },
+    { value: 'America/Vancouver', label: 'Vancouver (PT)', offset: -8 },
+    { value: 'America/Montreal', label: 'Montreal (ET)', offset: -5 },
+    { value: 'Europe/London', label: 'London (GMT)', offset: 0 },
+    { value: 'Europe/Paris', label: 'Paris (CET)', offset: 1 },
   ];
 
-  // Generate time slots (9 AM to 5 PM, 30-minute intervals)
+  // Generate time slots - 9 AM to 8 PM in NOTARY timezone (America/New_York, Eastern Time, UTC-5)
+  // Always display 9h-20h regardless of user's timezone
   const generateTimeSlots = () => {
     const slots = [];
-    for (let hour = 9; hour < 17; hour++) {
+
+    // Generate slots from 9 AM to 8 PM (20:00) in NOTARY timezone
+    // Display directly without conversion - always show 9h-20h
+    for (let hour = 9; hour < 21; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
+        // Store the time in 24-hour format for the value (NOTARY timezone)
         const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
+        // Display in user's preferred format (directly in notary timezone - no conversion)
         let displayTime;
         if (use12HourFormat) {
           // 12-hour format with AM/PM
@@ -51,7 +57,13 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
     return slots;
   };
 
-  const timeSlots = generateTimeSlots();
+  const [timeSlots, setTimeSlots] = useState(() => generateTimeSlots());
+
+  // Regenerate time slots when format changes (timezone doesn't affect display - always 9h-20h)
+  useEffect(() => {
+    setTimeSlots(generateTimeSlots());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [use12HourFormat]);
 
   // Generate calendar days for current month
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -151,7 +163,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-3 md:px-10 pt-6 md:pt-10 pb-44 lg:pb-6">
+      <div className="flex-1 overflow-y-auto px-3 md:px-10 pt-6 md:pt-10 pb-28 lg:pb-6">
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -175,7 +187,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         >
           {timezones.map((tz) => (
             <option key={tz.value} value={tz.value}>
-              {tz.label} ({tz.offset})
+              {tz.label} (UTC{tz.offset >= 0 ? '+' : ''}{tz.offset})
             </option>
           ))}
         </select>
@@ -282,7 +294,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Fixed Navigation */}
-      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-16 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
+      <div className="flex-shrink-0 px-3 md:px-10 py-4 border-t border-gray-300 bg-[#F3F4F6] fixed lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto">
         <div className="flex justify-between">
           <button
             type="button"

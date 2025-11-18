@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { ToastProvider } from './contexts/ToastContext'
 import PrivateRoute from './components/PrivateRoute'
 import NotaryLayout from './components/NotaryLayout'
@@ -24,6 +24,10 @@ const LoadingSpinner = () => (
 )
 
 function App() {
+  useEffect(() => {
+    document.title = 'Notary dashboard';
+  }, []);
+
   return (
     <ToastProvider>
       <BrowserRouter>

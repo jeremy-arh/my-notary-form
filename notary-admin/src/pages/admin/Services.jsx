@@ -1,31 +1,18 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
 
 const Services = () => {
+  const navigate = useNavigate();
   const toast = useToast();
   const { confirm, ConfirmComponent } = useConfirm();
   const [services, setServices] = useState([]);
   const [filteredServices, setFilteredServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState(null);
-  const [formData, setFormData] = useState({
-    service_id: '',
-    name: '',
-    description: '',
-    short_description: '',
-    icon: '',
-    color: '',
-    base_price: '',
-    cta: 'Book an appointment',
-    meta_title: '',
-    meta_description: '',
-    is_active: true
-  });
 
   useEffect(() => {
     fetchServices();
@@ -66,81 +53,11 @@ const Services = () => {
   };
 
   const handleCreate = () => {
-    setEditingService(null);
-    setFormData({
-      service_id: '',
-      name: '',
-      description: '',
-      short_description: '',
-      icon: '',
-      color: '',
-      base_price: '',
-      cta: 'Book an appointment',
-      meta_title: '',
-      meta_description: '',
-      is_active: true
-    });
-    setIsModalOpen(true);
+    navigate('/cms/service/new');
   };
 
   const handleEdit = (service) => {
-    setEditingService(service);
-    setFormData({
-      service_id: service.service_id || '',
-      name: service.name || '',
-      description: service.description || '',
-      short_description: service.short_description || '',
-      icon: service.icon || '',
-      color: service.color || '',
-      base_price: service.base_price || '',
-      cta: service.cta || 'Book an appointment',
-      meta_title: service.meta_title || '',
-      meta_description: service.meta_description || '',
-      is_active: service.is_active !== undefined ? service.is_active : true
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      const serviceData = {
-        ...formData,
-        base_price: parseFloat(formData.base_price) || 0
-      };
-
-      // Supprimer les champs vides
-      Object.keys(serviceData).forEach(key => {
-        if (serviceData[key] === '' || serviceData[key] === undefined) {
-          delete serviceData[key];
-        }
-      });
-
-      if (editingService) {
-        const { error } = await supabase
-          .from('services')
-          .update(serviceData)
-          .eq('id', editingService.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('services')
-          .insert([serviceData]);
-
-        if (error) throw error;
-      }
-
-      setIsModalOpen(false);
-      fetchServices();
-    } catch (error) {
-      console.error('Error saving service:', error);
-      // Vérifier si c'est un problème RLS
-      if (error.code === '42501' || error.message.includes('row-level security')) {
-        toast.error('RLS Error: Check that you are using the SERVICE ROLE KEY in your .env, or run the supabase-admin-rls-policies.sql script in Supabase.');
-      } else {
-        toast.error('Error saving: ' + error.message);
-      }
-    }
+    navigate(`/cms/service/${service.id}`);
   };
 
   const handleDelete = async (id) => {
@@ -296,171 +213,6 @@ const Services = () => {
           </div>
         )}
       </div>
-
-      {/* Modal */}
-      {isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 my-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingService ? 'Modifier le service' : 'Nouveau service'}
-                </h2>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <Icon icon="heroicons:x-mark" className="w-6 h-6 text-gray-600" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Service ID *</label>
-                    <input
-                      type="text"
-                      value={formData.service_id}
-                      onChange={(e) => setFormData({ ...formData, service_id: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      placeholder="ex: notarization"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Nom *</label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                    rows="3"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Description courte</label>
-                  <textarea
-                    value={formData.short_description}
-                    onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                    rows="2"
-                    placeholder="Description courte pour les aperçus..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Icône (Iconify)</label>
-                    <input
-                      type="text"
-                      value={formData.icon}
-                      onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      placeholder="ex: heroicons:document-text"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Couleur (Tailwind)</label>
-                    <input
-                      type="text"
-                      value={formData.color}
-                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      placeholder="ex: bg-blue-100"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">Prix de base ($) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.base_price}
-                      onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">CTA (Call to Action)</label>
-                    <input
-                      type="text"
-                      value={formData.cta}
-                      onChange={(e) => setFormData({ ...formData, cta: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      placeholder="Book an appointment"
-                    />
-                  </div>
-                </div>
-
-                {/* SEO Section */}
-                <div className="border-t pt-4">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">SEO</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Meta Title</label>
-                      <input
-                        type="text"
-                        value={formData.meta_title}
-                        onChange={(e) => setFormData({ ...formData, meta_title: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Meta Description</label>
-                      <textarea
-                        value={formData.meta_description}
-                        onChange={(e) => setFormData({ ...formData, meta_description: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                        rows="2"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_active}
-                      onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                      className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black"
-                    />
-                    <span className="ml-2 text-sm font-semibold text-gray-900">Service actif</span>
-                  </label>
-                </div>
-
-                <div className="flex gap-4 pt-4">
-                  <button
-                    onClick={handleSave}
-                    className="flex-1 px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all font-semibold"
-                  >
-                    Enregistrer
-                  </button>
-                  <button
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-semibold"
-                  >
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
     </>
   );
 };

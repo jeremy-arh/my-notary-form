@@ -4,6 +4,8 @@ import { Icon } from '@iconify/react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfWeek, endOfWeek, addMonths, subMonths, isSameMonth, isToday, startOfDay, endOfDay, addDays, subDays, addWeeks, subWeeks } from 'date-fns';
+import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
 
 const Submissions = () => {
   const navigate = useNavigate();
@@ -15,6 +17,11 @@ const Submissions = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'calendar'
+  const [calendarView, setCalendarView] = useState('month'); // 'day', 'week', or 'month'
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
+  const [notaryFilter, setNotaryFilter] = useState('all');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedSubmissionForAssign, setSelectedSubmissionForAssign] = useState(null);
   const [notaries, setNotaries] = useState([]);
@@ -35,7 +42,7 @@ const Submissions = () => {
   useEffect(() => {
     filterSubmissions();
     setCurrentPage(1); // Reset to first page when filters change
-  }, [submissions, searchTerm, statusFilter]);
+  }, [submissions, searchTerm, statusFilter, dateFilter, notaryFilter]);
 
   const fetchSubmissions = async () => {
     try {
@@ -81,16 +88,107 @@ const Submissions = () => {
       filtered = filtered.filter(s => s.status === statusFilter);
     }
 
+    // Notary filter
+    if (notaryFilter !== 'all') {
+      filtered = filtered.filter(s => s.assigned_notary_id === notaryFilter);
+    }
+
+    // Date filter
+    if (dateFilter.startDate) {
+      const startDate = parseISO(dateFilter.startDate);
+      filtered = filtered.filter(s => {
+        if (!s.appointment_date) return false;
+        const aptDate = parseISO(s.appointment_date);
+        return aptDate >= startOfDay(startDate);
+      });
+    }
+
+    if (dateFilter.endDate) {
+      const endDate = parseISO(dateFilter.endDate);
+      filtered = filtered.filter(s => {
+        if (!s.appointment_date) return false;
+        const aptDate = parseISO(s.appointment_date);
+        return aptDate <= endOfDay(endDate);
+      });
+    }
+
     // Search filter
     if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(s =>
-        s.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        s.first_name?.toLowerCase().includes(searchLower) ||
+        s.last_name?.toLowerCase().includes(searchLower) ||
+        s.email?.toLowerCase().includes(searchLower) ||
+        s.id?.toLowerCase().includes(searchLower)
       );
     }
 
     setFilteredSubmissions(filtered);
+  };
+
+  // Calendar helper functions
+  const getAppointmentsForDay = (date) => {
+    return filteredSubmissions.filter(s => {
+      if (!s.appointment_date) return false;
+      const aptDate = parseISO(s.appointment_date);
+      return isSameDay(aptDate, date);
+    });
+  };
+
+  const getAppointmentsForWeek = () => {
+    const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+    const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
+    return weekDays.map(day => {
+      const dayAppointments = filteredSubmissions.filter(s => {
+        if (!s.appointment_date) return false;
+        const aptDate = parseISO(s.appointment_date);
+        return isSameDay(aptDate, day);
+      });
+      return { date: day, appointments: dayAppointments };
+    });
+  };
+
+  const getAppointmentsForMonth = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+    return monthDays.map(day => {
+      const dayAppointments = filteredSubmissions.filter(s => {
+        if (!s.appointment_date) return false;
+        const aptDate = parseISO(s.appointment_date);
+        return isSameDay(aptDate, day);
+      });
+      return { date: day, appointments: dayAppointments };
+    });
+  };
+
+  const navigateDate = (direction) => {
+    if (calendarView === 'day') {
+      setCurrentDate(prev => direction === 'next' ? addDays(prev, 1) : subDays(prev, 1));
+    } else if (calendarView === 'week') {
+      setCurrentDate(prev => direction === 'next' ? addWeeks(prev, 1) : subWeeks(prev, 1));
+    } else if (calendarView === 'month') {
+      setCurrentDate(prev => direction === 'next' ? addMonths(prev, 1) : subMonths(prev, 1));
+    }
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const getDateRangeLabel = () => {
+    if (calendarView === 'day') {
+      return format(currentDate, 'EEEE, MMMM d, yyyy');
+    } else if (calendarView === 'week') {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+      return `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
+    } else {
+      return format(currentDate, 'MMMM yyyy');
+    }
   };
 
 
@@ -270,6 +368,20 @@ const Submissions = () => {
     });
   };
 
+  // Format time in 12-hour format (AM/PM)
+  const formatTime12h = (timeString) => {
+    if (!timeString || timeString === 'N/A') return 'N/A';
+    try {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+    } catch (error) {
+      return timeString;
+    }
+  };
+
   // Convert time from Florida/Eastern Time to another timezone
   const convertTimeFromFlorida = (time, date, targetTimezone) => {
     if (!time || !date || !targetTimezone) return time;
@@ -324,19 +436,29 @@ const Submissions = () => {
       const utcTimestamp = tempDate.getTime() + diffMinutes * 60 * 1000;
       const adjustedDate = new Date(utcTimestamp);
       
-      // Format in target timezone
+      // Format in target timezone with 12-hour format (AM/PM)
       const targetFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: targetTz,
-        hour: '2-digit',
+        hour: 'numeric',
         minute: '2-digit',
-        hour12: false
+        hour12: true
       });
       
-      const targetParts = targetFormatter.formatToParts(adjustedDate);
-      const targetHour = targetParts.find(p => p.type === 'hour').value;
-      const targetMinute = targetParts.find(p => p.type === 'minute').value;
+      const formattedTime = targetFormatter.format(adjustedDate);
       
-      return `${targetHour.padStart(2, '0')}:${targetMinute.padStart(2, '0')}`;
+      // Extract time parts (format: "H:MM AM/PM" or "HH:MM AM/PM")
+      const timeMatch = formattedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (timeMatch) {
+        return `${timeMatch[1]}:${timeMatch[2]} ${timeMatch[3]}`;
+      }
+      
+      // Fallback to 24-hour format if parsing fails
+      const targetParts = targetFormatter.formatToParts(adjustedDate);
+      const targetHour = parseInt(targetParts.find(p => p.type === 'hour').value);
+      const targetMinute = targetParts.find(p => p.type === 'minute').value;
+      const period = targetHour >= 12 ? 'PM' : 'AM';
+      const displayHour = targetHour > 12 ? targetHour - 12 : targetHour === 0 ? 12 : targetHour;
+      return `${displayHour}:${targetMinute} ${period}`;
     } catch (error) {
       console.error('Error converting time:', error);
       return time;
@@ -415,34 +537,34 @@ const Submissions = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[#F3F4F6] rounded-xl p-4 border border-gray-200">
+          <div className="flex flex-wrap items-end gap-3">
             {/* Search */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs font-semibold text-gray-900 mb-1">
                 Search
               </label>
               <div className="relative">
-                <Icon icon="heroicons:magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Icon icon="heroicons:magnifying-glass" className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                  placeholder="Search by name or email..."
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
+                  placeholder="Search by name, email or submission ID..."
                 />
               </div>
             </div>
 
             {/* Status Filter */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
+            <div className="min-w-[150px]">
+              <label className="block text-xs font-semibold text-gray-900 mb-1">
                 Status
               </label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
               >
                 <option value="all">All Statuses</option>
                 <option value="pending">Pending</option>
@@ -452,14 +574,160 @@ const Submissions = () => {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
+
+            {/* Notary Filter */}
+            <div className="min-w-[150px]">
+              <label className="block text-xs font-semibold text-gray-900 mb-1">
+                Notary
+              </label>
+              <select
+                value={notaryFilter}
+                onChange={(e) => setNotaryFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
+              >
+                <option value="all">All Notaries</option>
+                {notaries.map((notary) => (
+                  <option key={notary.id} value={notary.id}>
+                    {notary.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Start Date Filter */}
+            <div className="min-w-[140px]">
+              <label className="block text-xs font-semibold text-gray-900 mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={dateFilter.startDate}
+                onChange={(e) => setDateFilter(prev => ({ ...prev, startDate: e.target.value }))}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
+              />
+            </div>
+
+            {/* End Date Filter */}
+            <div className="min-w-[140px]">
+              <label className="block text-xs font-semibold text-gray-900 mb-1">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={dateFilter.endDate}
+                onChange={(e) => setDateFilter(prev => ({ ...prev, endDate: e.target.value }))}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
+              />
+            </div>
+
+            {/* Clear Filters */}
+            <div>
+              <button
+                onClick={() => {
+                  setDateFilter({ startDate: '', endDate: '' });
+                  setStatusFilter('all');
+                  setNotaryFilter('all');
+                  setSearchTerm('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                Clear Filters
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-200">
+        {/* View Mode Toggle and Calendar Controls */}
+        <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Submissions</h2>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* View Mode Toggle */}
+              <div className="flex gap-2 bg-white rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    viewMode === 'table' ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Table
+                </button>
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    viewMode === 'calendar' ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Calendar
+                </button>
+              </div>
+              
+              {viewMode === 'calendar' && (
+                <>
+                  {/* Calendar View Toggle (Day/Week/Month) */}
+                  <div className="flex gap-2 bg-white rounded-lg p-1">
+                    <button
+                      onClick={() => setCalendarView('day')}
+                      className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                        calendarView === 'day' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      Day
+                    </button>
+                    <button
+                      onClick={() => setCalendarView('week')}
+                      className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                        calendarView === 'week' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      Week
+                    </button>
+                    <button
+                      onClick={() => setCalendarView('month')}
+                      className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                        calendarView === 'month' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      Month
+                    </button>
+                  </div>
+
+                  {/* Date Navigation */}
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => navigateDate('prev')}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                    >
+                      <Icon icon="heroicons:chevron-left" className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={goToToday}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Today
+                    </button>
+                    <span className="font-semibold text-base text-gray-900 min-w-[200px] text-center">
+                      {getDateRangeLabel()}
+                    </span>
+                    <button
+                      onClick={() => navigateDate('next')}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                    >
+                      <Icon icon="heroicons:chevron-right" className="w-5 h-5" />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Table View */}
+        {viewMode === 'table' && (
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-200">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Client
@@ -523,12 +791,14 @@ const Submissions = () => {
                             <div>{formatDate(submission.appointment_date)}</div>
                             {submission.appointment_time && (
                               <div className="text-xs text-gray-500 mt-1">
-                                <div>Florida: {submission.appointment_time}</div>
-                                {submission.notary?.timezone && (
-                                  <div>Notary ({submission.notary.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.notary.timezone)}</div>
-                                )}
                                 {submission.timezone && (
-                                  <div>Client ({submission.timezone}): {convertTimeFromFlorida(submission.appointment_time, submission.appointment_date, submission.timezone)}</div>
+                                  <div>Client ({submission.timezone}): {formatTime12h(submission.appointment_time)}</div>
+                                )}
+                                {submission.notary?.timezone && submission.timezone && (
+                                  <div>Notary ({submission.notary.timezone}): {convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)}</div>
+                                )}
+                                {!submission.notary?.timezone && submission.timezone && (
+                                  <div>Florida: {convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, 'America/New_York')}</div>
                                 )}
                               </div>
                             )}
@@ -614,67 +884,259 @@ const Submissions = () => {
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* Pagination */}
-        {(() => {
-          const totalPages = Math.ceil(filteredSubmissions.length / itemsPerPage);
-          const startIndex = (currentPage - 1) * itemsPerPage;
-          const endIndex = startIndex + itemsPerPage;
-          
-          if (totalPages <= 1) return null;
-          
-          return (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-gray-600">
-                Showing {startIndex + 1} to {Math.min(endIndex, filteredSubmissions.length)} of {filteredSubmissions.length} submissions
+          {/* Pagination */}
+          {(() => {
+            const totalPages = Math.ceil(filteredSubmissions.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            
+            if (totalPages <= 1) return null;
+            
+            return (
+              <div className="flex items-center justify-between mt-4 p-6">
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredSubmissions.length)} of {filteredSubmissions.length} submissions
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let page;
+                      if (totalPages <= 5) {
+                        page = i + 1;
+                      } else if (currentPage <= 3) {
+                        page = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        page = totalPages - 4 + i;
+                      } else {
+                        page = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-2 rounded-lg ${
+                            currentPage === page
+                              ? 'bg-black text-white'
+                              : 'bg-white border border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <div className="flex gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let page;
-                    if (totalPages <= 5) {
-                      page = i + 1;
-                    } else if (currentPage <= 3) {
-                      page = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      page = totalPages - 4 + i;
-                    } else {
-                      page = currentPage - 2 + i;
-                    }
+            );
+          })()}
+        </div>
+        )}
+
+        {/* Calendar View */}
+        {viewMode === 'calendar' && (
+          <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+            {calendarView === 'day' ? (
+              <div className="bg-white rounded-xl overflow-hidden">
+                <div className="border-b border-gray-200 p-4">
+                  <div className="text-xl font-semibold text-gray-900 mb-4">
+                    {format(currentDate, 'EEEE, MMMM d, yyyy')}
+                  </div>
+                  <div className="space-y-2">
+                    {(() => {
+                      const dayAppointments = getAppointmentsForDay(currentDate);
+                      if (dayAppointments.length === 0) {
+                        return (
+                          <div className="text-center py-8 text-sm text-gray-600">
+                            No appointments scheduled for this day
+                          </div>
+                        );
+                      }
+                      return dayAppointments.map((submission) => {
+                        const statusColors = {
+                          pending: 'bg-yellow-100 border-yellow-300 text-yellow-900',
+                          confirmed: 'bg-green-100 border-green-300 text-green-900',
+                          completed: 'bg-purple-100 border-purple-300 text-purple-900',
+                          in_progress: 'bg-blue-100 border-blue-300 text-blue-900',
+                          cancelled: 'bg-red-100 border-red-300 text-red-900'
+                        };
+                        const colorClass = statusColors[submission.status] || 'bg-gray-100 border-gray-300 text-gray-900';
+                        return (
+                          <div
+                            key={submission.id}
+                            className={`${colorClass} border-2 rounded-lg p-4 cursor-pointer hover:opacity-80 transition-opacity`}
+                            onClick={() => navigate(`/submission/${submission.id}`)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-semibold text-base mb-1">
+                                  {submission.notary?.timezone && submission.timezone
+                                    ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)
+                                    : formatTime12h(submission.appointment_time)}
+                                </div>
+                                <div className="text-sm">
+                                  {submission.first_name} {submission.last_name}
+                                </div>
+                                {submission.notary && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    Notary: {submission.notary.full_name}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {getStatusBadge(submission.status)}
+                                <Icon icon="heroicons:chevron-right" className="w-5 h-5" />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              </div>
+            ) : calendarView === 'week' ? (
+              <div className="bg-white rounded-xl overflow-hidden">
+                <div className="grid grid-cols-7 border-b border-gray-200">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="p-3 text-center text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7">
+                  {getAppointmentsForWeek().map((dayData, idx) => {
+                    const { date, appointments } = dayData;
+                    const isTodayDate = isToday(date);
+                    
                     return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-2 rounded-lg ${
-                          currentPage === page
-                            ? 'bg-black text-white'
-                            : 'bg-white border border-gray-200 hover:bg-gray-50'
+                      <div
+                        key={idx}
+                        className={`min-h-[300px] p-3 border-r border-b border-gray-200 last:border-r-0 ${
+                          isTodayDate ? 'bg-blue-50' : 'bg-white'
                         }`}
                       >
-                        {page}
-                      </button>
+                        <div className={`text-sm font-semibold mb-2 ${isTodayDate ? 'text-blue-900' : 'text-gray-900'}`}>
+                          {format(date, 'd')}
+                        </div>
+                        <div className="space-y-2">
+                          {appointments.map((submission) => {
+                            const statusColors = {
+                              pending: 'bg-yellow-500 text-yellow-900',
+                              confirmed: 'bg-green-500 text-white',
+                              completed: 'bg-purple-500 text-white',
+                              in_progress: 'bg-blue-500 text-white',
+                              cancelled: 'bg-red-500 text-white'
+                            };
+                            const colorClass = statusColors[submission.status] || 'bg-gray-500 text-white';
+                            const displayTime = submission.notary?.timezone && submission.timezone
+                              ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)
+                              : formatTime12h(submission.appointment_time);
+                            return (
+                              <div
+                                key={submission.id}
+                                className={`text-xs ${colorClass} p-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity`}
+                                onClick={() => navigate(`/submission/${submission.id}`)}
+                                title={`${displayTime} - ${submission.first_name} ${submission.last_name}`}
+                              >
+                                <div className="font-semibold">{displayTime}</div>
+                                <div className="truncate">{submission.first_name}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
               </div>
-            </div>
-          );
-        })()}
+            ) : (
+              <div className="bg-white rounded-xl overflow-hidden">
+                <div className="grid grid-cols-7 border-b border-gray-200">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="p-3 text-center text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7">
+                  {(() => {
+                    const monthDays = getAppointmentsForMonth();
+                    const weekStart = startOfWeek(monthDays[0].date, { weekStartsOn: 0 });
+                    const weekEnd = endOfWeek(monthDays[monthDays.length - 1].date, { weekStartsOn: 0 });
+                    const calendarDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+                    
+                    return calendarDays.map((day, idx) => {
+                      const dayData = monthDays.find(d => isSameDay(d.date, day));
+                      const appointments = dayData?.appointments || [];
+                      const isCurrentMonth = isSameMonth(day, currentDate);
+                      const isTodayDate = isToday(day);
+                      
+                      return (
+                        <div
+                          key={idx}
+                          className={`min-h-[100px] p-2 border-r border-b border-gray-200 last:border-r-0 ${
+                            !isCurrentMonth ? 'bg-gray-50' : isTodayDate ? 'bg-blue-50' : 'bg-white'
+                          }`}
+                        >
+                          <div className={`text-sm font-semibold mb-1 ${
+                            isCurrentMonth ? (isTodayDate ? 'text-blue-900' : 'text-gray-900') : 'text-gray-400'
+                          }`}>
+                            {format(day, 'd')}
+                          </div>
+                          <div className="space-y-1">
+                            {appointments.slice(0, 2).map((submission) => {
+                              const statusColors = {
+                                pending: 'bg-yellow-500 text-yellow-900',
+                                confirmed: 'bg-green-500 text-white',
+                                completed: 'bg-purple-500 text-white',
+                                in_progress: 'bg-blue-500 text-white',
+                                cancelled: 'bg-red-500 text-white'
+                              };
+                              const colorClass = statusColors[submission.status] || 'bg-gray-500 text-white';
+                              const displayTime = submission.notary?.timezone && submission.timezone
+                                ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, submission.notary.timezone)
+                                : formatTime12h(submission.appointment_time);
+                              return (
+                                <div
+                                  key={submission.id}
+                                  className={`text-[10px] ${colorClass} p-1 rounded cursor-pointer hover:opacity-80 transition-opacity truncate`}
+                                  onClick={() => navigate(`/submission/${submission.id}`)}
+                                  title={`${displayTime} - ${submission.first_name}`}
+                                >
+                                  {displayTime}
+                                </div>
+                              );
+                            })}
+                            {appointments.length > 2 && (
+                              <div className="text-[10px] text-gray-600">
+                                +{appointments.length - 2} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Assign Notary Modal */}

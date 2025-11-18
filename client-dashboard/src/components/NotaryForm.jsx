@@ -30,8 +30,8 @@ const NotaryForm = () => {
     // Documents (step 2) - organized by service
     serviceDocuments: {}, // { serviceId: [files] }
 
-    // Signatories (step 3) - organized by document
-    signatoriesByDocument: {}, // { "serviceId_docIndex": [signatories] }
+    // Signatories (step 3) - global list for the entire order
+    signatories: [], // [signatories] - global list for all documents
 
     // Appointment
     appointmentDate: '',
@@ -83,39 +83,26 @@ const NotaryForm = () => {
         });
 
       case 3: // Add Signatories
-        // Check that all signatories have required fields
-        if (!formData.signatoriesByDocument) return false;
-        if (!formData.serviceDocuments) return false;
-        
-        // First, ensure that every document has at least one signatory
-        for (const [serviceId, documents] of Object.entries(formData.serviceDocuments)) {
-          for (let docIndex = 0; docIndex < documents.length; docIndex++) {
-            const docKey = `${serviceId}_${docIndex}`;
-            const signatories = formData.signatoriesByDocument[docKey];
-            if (!signatories || !Array.isArray(signatories) || signatories.length === 0) {
-              return false;
-            }
-          }
+        // Check that there is at least one signatory and all have required fields
+        if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
+          return false;
         }
         
-        // Then check that all signatories have required fields filled
-        for (const signatories of Object.values(formData.signatoriesByDocument)) {
-          if (!Array.isArray(signatories)) continue;
-          for (const signatory of signatories) {
-            if (!signatory || 
-                !signatory.firstName?.trim() || 
-                !signatory.lastName?.trim() || 
-                !signatory.birthDate?.trim() || 
-                !signatory.birthCity?.trim() || 
-                !signatory.postalAddress?.trim() ||
-                !signatory.email?.trim() ||
-                !signatory.phone?.trim()) {
-              return false;
-            }
-            // Validate email format
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email?.trim())) {
-              return false;
-            }
+        // Check that all signatories have required fields filled
+        for (const signatory of formData.signatories) {
+          if (!signatory || 
+              !signatory.firstName?.trim() || 
+              !signatory.lastName?.trim() || 
+              !signatory.birthDate?.trim() || 
+              !signatory.birthCity?.trim() || 
+              !signatory.postalAddress?.trim() ||
+              !signatory.email?.trim() ||
+              !signatory.phone?.trim()) {
+            return false;
+          }
+          // Validate email format
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email?.trim())) {
+            return false;
           }
         }
         return true;
@@ -158,6 +145,16 @@ const NotaryForm = () => {
   };
 
   const currentStep = getCurrentStepFromPath();
+
+  // Update page title with current step name
+  useEffect(() => {
+    const currentStepData = steps.find(s => s.path === location.pathname);
+    if (currentStepData) {
+      document.title = currentStepData.name;
+    } else {
+      document.title = 'Client dashboard';
+    }
+  }, [location.pathname]);
 
   // Map step names to GTM format
   const getStepNameForGTM = (stepName) => {
@@ -392,6 +389,8 @@ const NotaryForm = () => {
       console.log('📤 Calling Edge Function with full data:');
       console.log('   selectedServices:', submissionData.selectedServices);
       console.log('   serviceDocuments:', submissionData.serviceDocuments);
+      console.log('   signatories:', submissionData.signatories);
+      console.log('   signatories count:', submissionData.signatories?.length || 0);
 
       // Log document count per service with options info
       if (submissionData.serviceDocuments) {
@@ -403,36 +402,87 @@ const NotaryForm = () => {
         });
       }
 
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
+      // Use fetch directly to get better error details
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token || supabaseAnonKey;
+      
+      console.log('📤 Calling Edge Function directly with fetch...');
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
           formData: submissionData
-        }
+        })
       });
 
-      console.log('📥 Edge Function response:', { data, error });
+      const responseText = await response.text();
+      console.log('📥 Edge Function raw response status:', response.status);
+      console.log('📥 Edge Function raw response text:', responseText);
 
-      if (error) {
-        console.error('Edge Function error details:', error);
-        throw error;
+      if (!response.ok) {
+        // Try to parse error response
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(responseText);
+          console.error('Edge Function error response:', errorData);
+          errorMessage = errorData.error || errorMessage;
+          if (errorData.type) {
+            console.error('Error type:', errorData.type);
+          }
+          if (errorData.stack) {
+            console.error('Error stack:', errorData.stack);
+          }
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+          errorMessage += `\nResponse: ${responseText}`;
+        }
+        throw new Error(errorMessage);
       }
 
-      if (data?.error) {
-        console.error('Edge Function returned error:', data.error);
-        throw new Error(data.error);
+      // Parse successful response
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('📥 Edge Function parsed response:', data);
+      } catch (parseError) {
+        console.error('Could not parse success response:', parseError);
+        throw new Error('Invalid response format from payment service');
       }
 
-      if (data?.url) {
-        // Form data is already saved in localStorage by useLocalStorage hook
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
-      } else {
+      if (!data || !data.url) {
+        console.error('No checkout URL received. Response data:', data);
         throw new Error('No checkout URL received from payment service');
       }
+
+      // Form data is already saved in localStorage by useLocalStorage hook
+      // Redirect to Stripe Checkout
+      console.log('✅ Redirecting to Stripe Checkout:', data.url);
+      window.location.href = data.url;
     } catch (error) {
       console.error('Error creating payment session:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+        context: error?.context,
+      });
 
       // Show detailed error message
       let errorMessage = 'Une erreur s\'est produite lors de la création de la session de paiement.';
+      
+      // Try to extract more details from the error
+      if (error?.message) {
+        errorMessage += ` Détails: ${error.message}`;
+      }
 
       if (error.message?.includes('Edge Function') || error.message?.includes('FunctionsHttpError')) {
         errorMessage += '\n\n⚠️ Les fonctions de paiement ne sont pas encore déployées.\n\nVeuillez consulter le README dans /supabase/functions/ pour les instructions de déploiement.';
@@ -455,17 +505,15 @@ const NotaryForm = () => {
   return (
     <div className="flex min-h-screen bg-white">
       {/* Mobile Header - Fixed at top */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-14 sm:h-16 safe-area-inset-top">
-        <div className="flex items-center justify-between h-full px-3 sm:px-4">
-          <div className="w-20 h-8 sm:w-24 sm:h-10 flex items-center">
-            <Logo width={80} height={80} />
-          </div>
+      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-16">
+        <div className="flex items-center justify-between h-full px-4">
+          <Logo width={80} height={80} />
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
           >
-            <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-900" />
+            <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-6 h-6 text-gray-900" />
           </button>
         </div>
       </header>
@@ -473,17 +521,16 @@ const NotaryForm = () => {
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-14 sm:top-16"
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-16"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
-            className="bg-[#F3F4F6] w-72 sm:w-80 h-full flex flex-col"
+            className="bg-[#F3F4F6] w-full max-w-sm h-full flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Steps Navigation - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-              <div className="space-y-1.5 sm:space-y-2">
-                <h3 className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 sm:mb-3">Form Steps</h3>
+            <div className="flex-1 overflow-y-auto p-8 pb-0">
+              <div className="space-y-1.5 pb-8">
               {steps.map((step) => {
                 const isCompleted = completedSteps.includes(step.id);
                 const isCurrent = currentStep === step.id;
@@ -498,42 +545,24 @@ const NotaryForm = () => {
                         setIsMobileMenuOpen(false);
                       }
                     }}
-                    className={`flex items-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 ${
+                    className={`flex items-center justify-between px-3 h-[50px] rounded-lg transition-all duration-300 ${
                       canAccess ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                     } ${
                       isCurrent
-                        ? 'bg-black text-white'
+                        ? 'bg-black text-white shadow-lg'
                         : isCompleted
-                        ? 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                        ? 'bg-white text-gray-700 hover:bg-gray-100 hover:shadow-md'
                         : 'bg-white text-gray-400'
                     }`}
                   >
-                    <div className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg transition-all duration-300 flex-shrink-0 ${
-                      isCurrent
-                        ? 'bg-white/20'
-                        : isCompleted
-                        ? 'bg-gray-200'
-                        : 'bg-gray-100'
-                    }`}>
-                      {isCompleted ? (
-                        <Icon icon="heroicons:check" className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
-                      ) : (
-                        <Icon icon={step.icon} className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
-                          isCurrent ? 'text-white' : 'text-gray-400'
-                        }`} />
-                      )}
-                    </div>
-                    <div className="ml-2 sm:ml-2.5 flex-1 min-w-0">
-                      <div className={`text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide ${
-                        isCurrent ? 'text-white/80' : 'text-gray-500'
-                      }`}>
-                        Step {step.id}
-                      </div>
-                      <div className={`text-[11px] sm:text-xs font-medium mt-0.5 truncate ${
-                        isCurrent ? 'text-white' : 'text-gray-900'
-                      }`}>
-                        {step.name}
-                      </div>
+                    <div className="flex items-center">
+                      <Icon 
+                        icon={isCompleted ? 'heroicons:check' : step.icon} 
+                        className={`w-5 h-5 mr-2 ${
+                          isCurrent ? 'text-white' : isCompleted ? 'text-gray-600' : 'text-gray-400'
+                        }`} 
+                      />
+                      <span className="text-sm font-medium">{step.name}</span>
                     </div>
                   </div>
                 );
@@ -542,24 +571,24 @@ const NotaryForm = () => {
             </div>
 
             {/* Navigation Link - Fixed at bottom */}
-            <div className="p-4 sm:p-6 border-t border-gray-200">
+            <div className="p-6 border-t border-gray-200">
               {isAuthenticated ? (
                 <Link
                   to="/dashboard"
-                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium text-sm sm:text-base"
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:squares-2x2" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                  Dashboard
+                  <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
+                  <span className="text-sm font-medium">Dashboard</span>
                 </Link>
               ) : (
                 <Link
                   to="/login"
-                  className="flex items-center justify-center w-full text-gray-700 hover:text-gray-900 transition-colors font-medium text-sm sm:text-base"
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                  Connexion
+                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+                  <span className="text-sm font-medium">Connexion</span>
                 </Link>
               )}
             </div>
@@ -669,9 +698,9 @@ const NotaryForm = () => {
       </aside>
 
       {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5 pt-14 sm:pt-16 lg:pt-5 pb-28 sm:pb-28 lg:pb-5">
+      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5 pt-16 lg:pt-5 pb-28 sm:pb-28 lg:pb-5">
         {/* Form Content - 95vh centered with full width and side margins */}
-        <div className="w-full max-w-full h-[calc(100vh-6.5rem)] sm:h-[calc(100vh-7rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-y-auto overflow-x-hidden relative mx-0 lg:mx-auto">
+        <div className="w-full max-w-full h-[calc(100vh-7rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative mx-0 lg:mx-auto">
           <Routes>
             <Route
               path="choose-services"

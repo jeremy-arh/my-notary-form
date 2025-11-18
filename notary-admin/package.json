@@ -22,6 +22,13 @@
     "react-dom": "^19.1.1",
     "react-phone-number-input": "^3.4.13",
     "react-router-dom": "^7.9.4",
+    "@tiptap/react": "^2.1.13",
+    "@tiptap/starter-kit": "^2.1.13",
+    "@tiptap/extension-image": "^2.1.13",
+    "@tiptap/extension-link": "^2.1.13",
+    "@tiptap/extension-text-align": "^2.1.13",
+    "@tiptap/extension-color": "^2.1.13",
+    "@tiptap/extension-text-style": "^2.1.13",
     "recharts": "^2.12.0",
     "tailwindcss": "^4.1.15"
   },

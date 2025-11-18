@@ -211,14 +211,16 @@ const Calendar = () => {
     return format(parseISO(dateString), 'MMM dd, yyyy');
   };
 
-  const formatTime = (timeString, appointmentDate, clientTimezone) => {
-    if (!notaryTimezone) {
-      return timeString.substring(0, 5);
-    }
-    // Time stored is in Florida/Eastern Time (America/New_York)
-    // Convert from Florida time to notary timezone
-    const convertedTime = convertTimeToNotaryTimezone(timeString, appointmentDate, 'America/New_York', notaryTimezone);
-    return convertedTime;
+  const formatTime = (timeString, appointmentDate, sourceTimezone) => {
+    if (!timeString || !appointmentDate) return 'Not selected';
+    
+    // Always convert to notary's timezone
+    const targetTimezone = notaryTimezone || 'UTC';
+    // Use client's timezone as source if provided, otherwise default to America/New_York
+    const clientTimezone = sourceTimezone || 'America/New_York';
+    
+    // Always convert to notary's timezone
+    return convertTimeToNotaryTimezone(timeString, appointmentDate, clientTimezone, targetTimezone);
   };
 
   const getStatusBadge = (status) => {

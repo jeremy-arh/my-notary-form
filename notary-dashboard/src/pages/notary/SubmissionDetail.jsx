@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Chat from '../../components/Chat';
 import SignatoriesList from '../../components/SignatoriesList';
+import DocumentViewer from '../../components/DocumentViewer';
 import { supabase } from '../../lib/supabase';
 import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
 import { useToast } from '../../contexts/ToastContext';
@@ -748,25 +749,29 @@ const SubmissionDetail = () => {
                     <span className="text-sm sm:text-base font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Time (Florida - Eastern Time):</span>
+                    <span className="text-sm sm:text-base text-gray-600">Your timezone:</span>
                     <span className="text-sm sm:text-base font-semibold text-gray-900">
-                      {submission.appointment_time}
-                    </span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Time ({notaryTimezone || 'Your Timezone'}):</span>
-                    <span className="text-sm sm:text-base font-semibold text-gray-900">
-                      {notaryTimezone
-                        ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, 'America/New_York', notaryTimezone)
-                        : submission.appointment_time}
-                      {notaryTimezone && (
-                        <span className="text-xs text-gray-500 ml-2">({notaryTimezone})</span>
+                      {convertTimeToNotaryTimezone(
+                        submission.appointment_time, 
+                        submission.appointment_date, 
+                        submission.timezone || 'America/New_York', 
+                        notaryTimezone || 'UTC'
                       )}
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                    <span className="text-sm sm:text-base text-gray-600">Client Timezone:</span>
-                    <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.timezone}</span>
+                    <span className="text-sm sm:text-base text-gray-600">Client timezone:</span>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900">
+                      {submission.appointment_time && submission.timezone
+                        ? (() => {
+                            const [hours, minutes] = submission.appointment_time.split(':').map(Number);
+                            const hour = parseInt(hours);
+                            const period = hour >= 12 ? 'PM' : 'AM';
+                            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+                            return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+                          })()
+                        : 'N/A'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -827,13 +832,22 @@ const SubmissionDetail = () => {
                                         </div>
                                       </div>
                                       {doc.public_url && (
-                                        <button
-                                          onClick={() => downloadDocument(doc.public_url, doc.name)}
-                                          className="ml-2 text-black hover:text-gray-700 font-medium text-[10px] sm:text-xs flex items-center flex-shrink-0"
-                                        >
-                                          <Icon icon="heroicons:arrow-down-tray" className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                                          <span className="hidden sm:inline">Download</span>
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <DocumentViewer
+                                            fileUrl={doc.public_url}
+                                            fileName={doc.name}
+                                            fileType={doc.type}
+                                            fileSize={doc.size}
+                                          />
+                                          <button
+                                            onClick={() => downloadDocument(doc.public_url, doc.name)}
+                                            className="ml-2 text-black hover:text-gray-700 font-medium text-[10px] sm:text-xs flex items-center flex-shrink-0"
+                                            title="Télécharger"
+                                          >
+                                            <Icon icon="heroicons:arrow-down-tray" className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                                            <span className="hidden sm:inline">Download</span>
+                                          </button>
+                                        </div>
                                       )}
                                     </div>
 
@@ -1016,11 +1030,18 @@ const SubmissionDetail = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
+                            <DocumentViewer
+                              fileUrl={file.file_url}
+                              fileName={file.file_name}
+                              fileType={file.file_type}
+                              fileSize={file.file_size}
+                            />
                             <a
                               href={file.file_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="px-3 py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
+                              title="Télécharger"
                             >
                               <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
                               Download

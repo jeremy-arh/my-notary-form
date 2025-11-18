@@ -409,21 +409,21 @@ const Dashboard = () => {
   const revenueCards = [
     {
       title: 'Total Revenue',
-      value: `$${stats.totalRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `€${stats.totalRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: 'heroicons:currency-dollar',
       color: 'bg-gray-100',
       iconColor: 'text-gray-600'
     },
     {
       title: 'Monthly Revenue',
-      value: `$${stats.monthlyRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `€${stats.monthlyRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: 'heroicons:chart-bar',
       color: 'bg-gray-100',
       iconColor: 'text-gray-600'
     },
     {
       title: 'Average Order Value',
-      value: `$${stats.averageOrderValue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `€${stats.averageOrderValue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: 'heroicons:calculator',
       color: 'bg-gray-100',
       iconColor: 'text-gray-600'

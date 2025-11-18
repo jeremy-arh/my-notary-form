@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { ToastProvider } from './contexts/ToastContext'
 import PrivateRoute from './components/PrivateRoute'
 import Login from './pages/admin/Login'
@@ -8,14 +9,22 @@ import Submissions from './pages/admin/Submissions'
 import SubmissionDetail from './pages/admin/SubmissionDetail'
 import Notary from './pages/admin/Notary'
 import NotaryDetail from './pages/admin/NotaryDetail'
+import NotaryEdit from './pages/admin/NotaryEdit'
 import StripePayments from './pages/admin/StripePayments'
 import CashFlow from './pages/admin/CashFlow'
 import CMS from './pages/admin/CMS'
+import BlogArticleEdit from './pages/admin/BlogArticleEdit'
+import ServiceEdit from './pages/admin/ServiceEdit'
+import OptionEdit from './pages/admin/OptionEdit'
 import Messages from './pages/admin/Messages'
 import Profile from './pages/admin/Profile'
 import './index.css'
 
 function App() {
+  useEffect(() => {
+    document.title = 'Admin dashboard';
+  }, []);
+
   return (
     <ToastProvider>
       <BrowserRouter>
@@ -63,6 +72,22 @@ function App() {
           }
         />
         <Route
+          path="/notary/new"
+          element={
+            <PrivateRoute>
+              <NotaryEdit />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/notary/edit/:id"
+          element={
+            <PrivateRoute>
+              <NotaryEdit />
+            </PrivateRoute>
+          }
+        />
+        <Route
           path="/notary/:id"
           element={
             <PrivateRoute>
@@ -91,6 +116,54 @@ function App() {
           element={
             <PrivateRoute>
               <CMS />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cms/blog/new"
+          element={
+            <PrivateRoute>
+              <BlogArticleEdit />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cms/blog/:id"
+          element={
+            <PrivateRoute>
+              <BlogArticleEdit />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cms/service/new"
+          element={
+            <PrivateRoute>
+              <ServiceEdit />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cms/service/:id"
+          element={
+            <PrivateRoute>
+              <ServiceEdit />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cms/option/new"
+          element={
+            <PrivateRoute>
+              <OptionEdit />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cms/option/:id"
+          element={
+            <PrivateRoute>
+              <OptionEdit />
             </PrivateRoute>
           }
         />

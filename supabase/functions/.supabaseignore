@@ -1,0 +1,32 @@
+# Ignore SQL files everywhere
+*.sql
+**/*.sql
+
+# Ignore README files
+README.md
+**/README.md
+
+# Ignore any migration files and directories
+**/migrations/**
+**/*migration*
+migrations/
+**/migrations/
+
+# Ignore hidden files
+.*
+**/.*
+
+# Ignore test files
+*.test.ts
+*.spec.ts
+**/*.test.ts
+**/*.spec.ts
+
+# Ignore documentation
+*.md
+**/*.md
+
+# Explicitly ignore the migrations directory at root level
+../migrations/
+../migrations/**
+

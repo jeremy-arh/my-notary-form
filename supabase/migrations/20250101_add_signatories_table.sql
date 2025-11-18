@@ -23,3 +23,4 @@ CREATE TRIGGER update_signatories_updated_at BEFORE UPDATE ON signatories
 -- Add comment
 COMMENT ON TABLE signatories IS 'Stores signatory information for each document in a submission';
 
+

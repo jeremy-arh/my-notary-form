@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import NotaryLayout from '../../components/NotaryLayout';
 import Chat from '../../components/Chat';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
@@ -9,10 +10,13 @@ import { playNotificationSound } from '../../utils/soundNotification';
 const Messages = () => {
   const toast = useToast();
   const [conversations, setConversations] = useState([]);
+  const [filteredConversations, setFilteredConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [notaryId, setNotaryId] = useState(null);
   const [notaryServiceIds, setNotaryServiceIds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showChatFullscreen, setShowChatFullscreen] = useState(false);
 
   const navigate = useNavigate();
 
@@ -136,9 +140,6 @@ const Messages = () => {
         }
       });
 
-      console.log('Found submissions for notary:', uniqueSubmissions.length);
-      console.log('Notary ID:', notaryId);
-
       // For each submission, get message count and last message
       const conversationsWithMessages = await Promise.all(
         uniqueSubmissions.map(async (submission) => {
@@ -176,8 +177,6 @@ const Messages = () => {
         })
       );
 
-      console.log('Conversations with messages:', conversationsWithMessages.length);
-
       // Show all submissions assigned to the notary (even without messages to allow starting conversations)
       // But prioritize those with messages
       const filteredConversations = conversationsWithMessages;
@@ -195,12 +194,11 @@ const Messages = () => {
         return new Date(b.created_at) - new Date(a.created_at);
       });
 
-      console.log('Final conversations:', filteredConversations.length);
-
       setConversations(filteredConversations);
+      setFilteredConversations(filteredConversations);
 
       // Select first conversation by default
-      if (filteredConversations.length > 0) {
+      if (filteredConversations.length > 0 && !selectedConversation) {
         setSelectedConversation(filteredConversations[0]);
         // On mobile, show chat in fullscreen when selecting first conversation
         if (window.innerWidth < 1024) {
@@ -219,16 +217,45 @@ const Messages = () => {
   const formatTime = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleString('en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
     });
   };
 
-  const [showChatFullscreen, setShowChatFullscreen] = useState(false);
+  // Filter conversations based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredConversations(conversations);
+      return;
+    }
+
+    const searchLower = searchTerm.toLowerCase();
+    const filtered = conversations.filter((conv) => {
+      // Search in client name
+      const clientName = `${conv.first_name} ${conv.last_name}`.toLowerCase();
+      if (clientName.includes(searchLower)) return true;
+
+      // Search in submission ID
+      if (conv.id.toLowerCase().includes(searchLower)) return true;
+
+      // Search in messages content
+      if (conv.messages && conv.messages.length > 0) {
+        const hasMatchingMessage = conv.messages.some(msg => 
+          msg.content.toLowerCase().includes(searchLower)
+        );
+        if (hasMatchingMessage) return true;
+      }
+
+      return false;
+    });
+
+    setFilteredConversations(filtered);
+  }, [searchTerm, conversations]);
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -260,180 +287,196 @@ const Messages = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed inset-0 z-[100] bg-white flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 flex-shrink-0 bg-white">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Messages</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Communicate with your clients</p>
-        </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="p-2 sm:p-3 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors border border-gray-300 hover:border-gray-400 lg:shadow-sm"
-          title="Close Messages"
-          aria-label="Close messages"
-        >
-          <Icon icon="heroicons:x-mark" className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-gray-900" />
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <Icon icon="heroicons:chat-bubble-left-right" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-900 font-semibold text-lg mb-2">No conversations</p>
-            <p className="text-gray-600">Conversations will appear here once a message has been sent.</p>
+    <NotaryLayout>
+      <style>{`
+        /* Hide everything on mobile/tablet for messages page */
+        @media (max-width: 1023px) {
+          aside {
+            display: none !important;
+          }
+          header {
+            display: none !important;
+          }
+          main > div:first-child {
+            display: none !important;
+          }
+          main {
+            padding: 0 !important;
+            margin: 0 !important;
+            margin-left: 0 !important;
+          }
+        }
+        /* Hide header on desktop */
+        @media (min-width: 1024px) {
+          main > div:first-child {
+            display: none !important;
+          }
+        }
+      `}</style>
+      <div className="fixed inset-0 flex gap-0 bg-white overflow-hidden z-[9999] lg:left-80">
+        {/* Conversations List */}
+        <div className={`w-full lg:w-80 h-full bg-[#F3F4F6] border-r border-gray-200 flex flex-col flex-shrink-0 overflow-hidden ${showChatFullscreen ? 'hidden lg:flex' : ''}`}>
+          <div className="p-4 border-b border-gray-300 flex-shrink-0 space-y-3">
+            <h2 className="font-semibold text-base text-gray-900">Conversations ({filteredConversations.length})</h2>
+            {/* Search Bar */}
+            <div className="relative">
+              <Icon icon="heroicons:magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
+                placeholder="Search messages, user or submission..."
+              />
+            </div>
           </div>
-        ) : (
-          <div className="flex h-full">
-            {/* Conversations List */}
-            <div className={`w-full sm:w-96 lg:w-[400px] border-r border-gray-200 flex flex-col flex-shrink-0 ${showChatFullscreen ? 'hidden lg:flex' : ''}`}>
-              <div className="p-4 border-b border-gray-300 flex-shrink-0">
-                <h2 className="font-semibold text-base text-gray-900">Conversations ({conversations.length})</h2>
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
               </div>
-              <div className="flex-1 overflow-y-auto">
-                {conversations.map((conversation) => (
-                  <div
-                    key={conversation.id}
-                    onClick={() => {
-                      setSelectedConversation(conversation);
-                      // On mobile, show chat in fullscreen when clicking a conversation
-                      const isMobile = window.innerWidth < 1024;
-                      if (isMobile) {
-                        setShowChatFullscreen(true);
-                      }
-                    }}
-                    className={`p-4 border-b border-gray-200 cursor-pointer transition-colors hover:bg-gray-50 ${
-                      selectedConversation?.id === conversation.id ? 'bg-white border-l-4 border-l-black' : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-gray-900 truncate">
-                          {conversation.first_name} {conversation.last_name}
-                        </p>
-                        <p className="text-xs text-gray-600 truncate">
-                          Submission #{conversation.id.substring(0, 8)}
-                        </p>
-                      </div>
-                      {conversation.unreadCount > 0 && (
-                        <span className="ml-2 bg-black text-white text-xs font-bold px-2 py-1 rounded-full flex-shrink-0">
-                          {conversation.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between flex-wrap gap-1">
-                      {getStatusBadge(conversation.status)}
-                      {conversation.lastMessage ? (
-                        <span className="text-xs text-gray-500">
-                          {formatTime(conversation.lastMessage.created_at)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-500">
-                          {formatTime(conversation.created_at)}
-                        </span>
-                      )}
-                    </div>
-                    {conversation.lastMessage ? (
-                      <p className="text-xs text-gray-600 mt-2 truncate">
-                        {conversation.lastMessage.sender_type === 'notary' ? 'You: ' : ''}
-                        {conversation.lastMessage.content}
+            ) : filteredConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                <Icon icon="heroicons:chat-bubble-left-right" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-900 font-semibold text-sm mb-2">
+                  {searchTerm ? 'No results found' : 'No conversations'}
+                </p>
+                <p className="text-gray-600 text-xs">
+                  {searchTerm ? 'Try different keywords' : 'Conversations will appear here once a message has been sent.'}
+                </p>
+              </div>
+            ) : (
+              filteredConversations.map((conversation) => (
+                <div
+                  key={conversation.id}
+                  onClick={() => {
+                    setSelectedConversation(conversation);
+                    // On mobile, show chat in fullscreen when clicking a conversation
+                    const isMobile = window.innerWidth < 1024;
+                    if (isMobile) {
+                      setShowChatFullscreen(true);
+                    }
+                  }}
+                  className={`p-4 border-b border-gray-200 cursor-pointer transition-colors hover:bg-gray-50 ${
+                    selectedConversation?.id === conversation.id ? 'bg-white border-l-4 border-l-black' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-900 truncate">
+                        {conversation.first_name} {conversation.last_name}
                       </p>
-                    ) : (
-                      <p className="text-xs text-gray-500 mt-2 italic">
-                        No messages yet. Start the conversation!
+                      <p className="text-xs text-gray-600 truncate">
+                        Submission #{conversation.id.substring(0, 8)}
                       </p>
+                    </div>
+                    {conversation.unreadCount > 0 && (
+                      <span className="ml-2 bg-black text-white text-xs font-bold px-2 py-1 rounded-full flex-shrink-0">
+                        {conversation.unreadCount}
+                      </span>
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chat Area - Desktop */}
-            <div className={`flex-1 flex flex-col min-w-0 ${showChatFullscreen ? 'hidden lg:flex' : ''}`}>
-              {selectedConversation ? (
-                notaryId ? (
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <Chat
-                      submissionId={selectedConversation.id}
-                      currentUserType="notary"
-                      currentUserId={notaryId}
-                      recipientName={`${selectedConversation.first_name} ${selectedConversation.last_name}`}
-                      clientFirstName={selectedConversation.first_name}
-                      clientLastName={selectedConversation.last_name}
-                      isFullscreen={true}
-                    />
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    {getStatusBadge(conversation.status)}
+                    {conversation.lastMessage ? (
+                      <span className="text-xs text-gray-500">
+                        {formatTime(conversation.lastMessage.created_at)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-500">
+                        {formatTime(conversation.created_at)}
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-                    <Icon icon="heroicons:exclamation-triangle" className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-                    <p className="text-gray-900 font-semibold mb-2">Authentication error</p>
-                    <p className="text-gray-600 text-sm">Unable to load notary information. Please refresh the page.</p>
-                  </div>
-                )
-              ) : (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center">
-                    <Icon icon="heroicons:chat-bubble-left-right" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">Select a conversation to start chatting</p>
-                  </div>
+                  {conversation.lastMessage ? (
+                    <p className="text-xs text-gray-600 mt-2 truncate">
+                      {conversation.lastMessage.sender_type === 'notary' ? 'You: ' : ''}
+                      {conversation.lastMessage.content}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-2 italic">
+                      No messages yet. Start the conversation!
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Mobile Fullscreen Chat */}
-            {showChatFullscreen && selectedConversation && notaryId && (
-              <div className="fixed inset-0 z-[101] bg-white flex flex-col lg:hidden">
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white flex-shrink-0">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <button
-                      onClick={() => setShowChatFullscreen(false)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                    >
-                      <Icon icon="heroicons:arrow-left" className="w-6 h-6 text-gray-900" />
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <h2 className="font-semibold text-sm text-gray-900 truncate">
-                        {selectedConversation.first_name} {selectedConversation.last_name}
-                      </h2>
-                      <p className="text-xs text-gray-600 truncate">
-                        Submission #{selectedConversation.id.substring(0, 8)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0 ml-2">
-                    {getStatusBadge(selectedConversation.status)}
-                  </div>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <Chat
-                    submissionId={selectedConversation.id}
-                    currentUserType="notary"
-                    currentUserId={notaryId}
-                    recipientName={`${selectedConversation.first_name} ${selectedConversation.last_name}`}
-                    clientFirstName={selectedConversation.first_name}
-                    clientLastName={selectedConversation.last_name}
-                    isFullscreen={true}
-                  />
-                </div>
-              </div>
+              ))
             )}
+          </div>
+        </div>
+
+        {/* Chat Area - Desktop */}
+        <div className={`flex-1 h-full flex flex-col min-w-0 bg-white ${showChatFullscreen ? 'hidden lg:flex' : ''}`}>
+          {selectedConversation ? (
+            notaryId ? (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <Chat
+                  submissionId={selectedConversation.id}
+                  currentUserType="notary"
+                  currentUserId={notaryId}
+                  recipientName={`${selectedConversation.first_name} ${selectedConversation.last_name}`}
+                  clientFirstName={selectedConversation.first_name}
+                  clientLastName={selectedConversation.last_name}
+                  isFullscreen={true}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                <Icon icon="heroicons:exclamation-triangle" className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+                <p className="text-gray-900 font-semibold mb-2">Authentication error</p>
+                <p className="text-gray-600 text-sm">Unable to load notary information. Please refresh the page.</p>
+              </div>
+            )
+          ) : (
+            <div className="flex-1 flex items-center justify-center bg-white">
+              <div className="text-center">
+                <Icon icon="heroicons:chat-bubble-left-right" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">Select a conversation to start chatting</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Fullscreen Chat */}
+        {showChatFullscreen && selectedConversation && notaryId && (
+          <div className="fixed inset-0 z-[101] bg-white flex flex-col lg:hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <button
+                  onClick={() => setShowChatFullscreen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                >
+                  <Icon icon="heroicons:arrow-left" className="w-6 h-6 text-gray-900" />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-semibold text-sm text-gray-900 truncate">
+                    {selectedConversation.first_name} {selectedConversation.last_name}
+                  </h2>
+                  <p className="text-xs text-gray-600 truncate">
+                    Submission #{selectedConversation.id.substring(0, 8)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex-shrink-0 ml-2">
+                {getStatusBadge(selectedConversation.status)}
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <Chat
+                submissionId={selectedConversation.id}
+                currentUserType="notary"
+                currentUserId={notaryId}
+                recipientName={`${selectedConversation.first_name} ${selectedConversation.last_name}`}
+                clientFirstName={selectedConversation.first_name}
+                clientLastName={selectedConversation.last_name}
+                isFullscreen={true}
+              />
+            </div>
           </div>
         )}
       </div>
-    </div>
+    </NotaryLayout>
   );
 };
 
 export default Messages;
-
