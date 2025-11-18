@@ -5,6 +5,7 @@ import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
 import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
+import { openCrisp } from '../utils/crisp';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import Signatories from './steps/Signatories';
@@ -528,6 +529,20 @@ const NotaryForm = () => {
             className="bg-[#F3F4F6] w-full max-w-sm h-full flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Contact Us Button - Mobile */}
+            <div className="p-4 border-b border-gray-300">
+              <button
+                onClick={() => {
+                  openCrisp();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-center w-full px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+              >
+                <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
+                Contact Us
+              </button>
+            </div>
+
             {/* Steps Navigation - Scrollable */}
             <div className="flex-1 overflow-y-auto p-8 pb-0">
               <div className="space-y-1.5 pb-8">
@@ -661,6 +676,15 @@ const NotaryForm = () => {
 
         {/* Progress Bar & Navigation Button - Fixed at bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#F3F4F6] border-t border-gray-200">
+          {/* Contact Us Button */}
+          <button
+            onClick={openCrisp}
+            className="flex items-center justify-center w-full mb-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+          >
+            <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
+            Contact Us
+          </button>
+
           {/* Dashboard or Login Button */}
           {isAuthenticated ? (
             <Link

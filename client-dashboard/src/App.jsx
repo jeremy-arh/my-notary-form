@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { lazy, Suspense, useEffect } from 'react'
 import { ToastProvider } from './contexts/ToastContext'
+import { initCrisp } from './utils/crisp'
 import Home from './components/Home'
 import Login from './pages/client/Login'
 import ResetPassword from './pages/client/ResetPassword'
@@ -27,6 +28,11 @@ function App() {
     // Only set default title if not on form route (form routes manage their own titles)
     if (!window.location.pathname.startsWith('/form')) {
       document.title = 'Client dashboard';
+    }
+    
+    // Initialize Crisp chat for dashboard (not for form - form uses button to open)
+    if (!window.location.pathname.startsWith('/form')) {
+      initCrisp();
     }
   }, []);
 
