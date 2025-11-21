@@ -499,7 +499,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
       </div>
 
       {/* Fixed Navigation - Desktop only */}
-      <div className="hidden lg:block lg:border-t lg:border-gray-300 bg-[#F3F4F6]">
+      <div className="hidden xl:block xl:border-t xl:border-gray-300 bg-[#F3F4F6]">
         <div className="px-4 py-4 flex justify-between">
           <button
             type="button"
