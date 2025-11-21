@@ -115,7 +115,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep }) => {
       </div>
 
       {/* Fixed Navigation - Desktop only */}
-      <div className="hidden lg:block flex-shrink-0 px-4 py-4 bg-[#F3F4F6] lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto lg:border-t lg:border-gray-300">
+      <div className="hidden xl:block flex-shrink-0 px-4 py-4 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
         <div className="flex justify-end">
           <button
             type="button"
