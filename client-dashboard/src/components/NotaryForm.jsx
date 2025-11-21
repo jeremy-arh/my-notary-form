@@ -4,7 +4,20 @@ import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
-import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
+import { 
+  trackPageView, 
+  trackFormStep, 
+  trackFormSubmissionStart, 
+  trackFormSubmission, 
+  trackFormStart,
+  trackServiceSelected as trackGTMServiceSelected,
+  trackDocumentUploaded as trackGTMDocumentUploaded,
+  trackAppointmentBooked as trackGTMAppointmentBooked,
+  trackSignatoriesAdded as trackGTMSignatoriesAdded,
+  trackPersonalInfoCompleted as trackGTMPersonalInfoCompleted,
+  trackSummaryViewed as trackGTMSummaryViewed,
+  trackPaymentInitiated as trackGTMPaymentInitiated
+} from '../utils/gtm';
 import { 
   trackFormStart as trackPlausibleFormStart,
   trackServicesSelected,
@@ -388,10 +401,16 @@ const NotaryForm = () => {
         trackFormStep(stepId, getStepNameForGTM(step.name));
       }
       
-      // Track Plausible funnel events
+      // Track funnel events (Plausible + GTM)
       switch (stepId) {
         case 1: // Services Selected
+          // Plausible
           trackServicesSelected(
+            formData.selectedServices?.length || 0,
+            formData.selectedServices || []
+          );
+          // GTM
+          trackGTMServiceSelected(
             formData.selectedServices?.length || 0,
             formData.selectedServices || []
           );
@@ -401,20 +420,36 @@ const NotaryForm = () => {
             (sum, docs) => sum + (docs?.length || 0), 0
           );
           const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).length;
+          // Plausible
           trackDocumentsUploaded(totalDocs, servicesWithDocs);
+          // GTM
+          trackGTMDocumentUploaded(totalDocs, servicesWithDocs);
           break;
         case 3: // Signatories Added
+          // Plausible
           trackSignatoriesAdded(formData.signatories?.length || 0);
+          // GTM
+          trackGTMSignatoriesAdded(formData.signatories?.length || 0);
           break;
         case 4: // Appointment Booked
+          // Plausible
           trackAppointmentBooked(
             formData.appointmentDate || '',
             formData.appointmentTime || '',
             formData.timezone || ''
           );
+          // GTM
+          trackGTMAppointmentBooked({
+            date: formData.appointmentDate || '',
+            time: formData.appointmentTime || '',
+            timezone: formData.timezone || ''
+          });
           break;
         case 5: // Personal Info Completed
+          // Plausible
           trackPersonalInfoCompleted(isAuthenticated);
+          // GTM
+          trackGTMPersonalInfoCompleted(isAuthenticated);
           break;
       }
     }
@@ -438,10 +473,18 @@ const NotaryForm = () => {
           const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
             (sum, docs) => sum + (docs?.length || 0), 0
           );
+          // Plausible
           trackSummaryViewed({
             servicesCount: formData.selectedServices?.length || 0,
             documentsCount: totalDocs,
             signatoriesCount: formData.signatories?.length || 0,
+            hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
+          });
+          // GTM
+          trackGTMSummaryViewed({
+            totalServices: formData.selectedServices?.length || 0,
+            totalDocuments: totalDocs,
+            totalSignatories: formData.signatories?.length || 0,
             hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
           });
         }
@@ -596,10 +639,17 @@ const NotaryForm = () => {
       const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
         (sum, docs) => sum + (docs?.length || 0), 0
       );
+      // Plausible
       trackPaymentInitiated({
         servicesCount: formData.selectedServices?.length || 0,
         totalAmount: 0, // Will be calculated by backend
         currency: formData.currency || 'EUR'
+      });
+      // GTM
+      trackGTMPaymentInitiated({
+        amount: 0, // Will be calculated by backend
+        currency: formData.currency || 'EUR',
+        servicesCount: formData.selectedServices?.length || 0
       });
       
       // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
