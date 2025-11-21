@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import Logo from '../assets/Logo';
 import { supabase } from '../lib/supabase';
 import { trackPaymentSuccess } from '../utils/gtm';
+import { trackPaymentCompleted } from '../utils/plausible';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
@@ -48,6 +49,14 @@ const PaymentSuccess = () => {
             selectedServices: data.selectedServices || [],
             isFirstPurchase: data.isFirstPurchase !== undefined ? data.isFirstPurchase : true,
             servicesCount: data.servicesCount || 0,
+          });
+          
+          // Track payment completed in Plausible (funnel completion)
+          trackPaymentCompleted({
+            submissionId: data.submissionId,
+            transactionId: data.transactionId || sessionId,
+            totalAmount: data.amount || 0,
+            currency: data.currency || 'EUR'
           });
         } else {
           setError('Payment verification failed');

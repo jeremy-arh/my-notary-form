@@ -55,3 +55,5 @@ TO authenticated
 USING (bucket_id = 'blog-images');
 
 
+
+

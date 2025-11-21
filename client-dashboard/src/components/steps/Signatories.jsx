@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+import { formatPrice } from '../../utils/currency';
 
 const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [signatories, setSignatories] = useState([]);
@@ -280,17 +281,17 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
   return (
     <div className="h-full w-full flex flex-col relative">
       {/* Header */}
-      <div className="flex-shrink-0 px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-3 sm:pb-4">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
+      <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4">
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
           Add Signatories
         </h2>
-        <p className="text-sm sm:text-base text-gray-600">
-          Add signatory information for your order. The first signatory is included, each additional signatory costs €10.
+        <p className="text-sm sm:text-base md:text-lg text-gray-600">
+          Add signatory information for your order. The first signatory is included, each additional signatory costs {formatPrice(10)}.
         </p>
       </div>
 
       {/* Content Area - Scrollable */}
-      <div className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
+      <div className="flex-1 px-3 sm:px-4 md:px-6 pb-32 sm:pb-36 md:pb-6 lg:pb-24 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
         {signatories.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-600">No signatories added yet.</p>
@@ -308,7 +309,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
                     {signatories.length} signatory{signatories.length > 1 ? 'ies' : ''}
                     {signatories.length > 1 && (
                       <span className="ml-2 text-gray-500">
-                        (+€{((signatories.length - 1) * 10).toFixed(2)})
+                        (+{formatPrice((signatories.length - 1) * 10)})
                       </span>
                     )}
                   </p>
@@ -329,7 +330,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
                       <span className="ml-2 text-xs text-gray-500">(included)</span>
                     )}
                     {signatoryIndex > 0 && (
-                      <span className="ml-2 text-xs text-orange-600 font-medium">(+€10)</span>
+                      <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPrice(10)})</span>
                     )}
                   </h3>
                   {signatoryIndex > 0 && (
@@ -344,7 +345,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
                       First Name <span className="text-red-500">*</span>
@@ -490,7 +491,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
               <span className="text-xs sm:text-sm">
                 {signatories.length === 0 
                   ? "Add Signatory" 
-                  : `Add Additional Signatory (+€10)`}
+                  : `Add Additional Signatory (+${formatPrice(10)})`}
               </span>
             </button>
           </div>

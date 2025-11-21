@@ -147,20 +147,20 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6" style={{ minHeight: 0 }}>
-        <div className="space-y-4 sm:space-y-6 max-w-full">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-32 sm:pb-36 md:pb-6 lg:pb-6" style={{ minHeight: 0 }}>
+        <div className="space-y-4 sm:space-y-6 md:space-y-8 max-w-full">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
               Your Personal Information
             </h2>
-            <p className="text-sm sm:text-base text-gray-600">
+            <p className="text-sm sm:text-base md:text-lg text-gray-600">
               Please fill in your contact details
             </p>
           </div>
 
-          <div className="space-y-3 sm:space-y-4">
+          <div className="space-y-3 sm:space-y-4 md:space-y-5">
         {/* First Name & Last Name */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
           <div>
             <label htmlFor="firstName" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
@@ -209,7 +209,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
         </div>
 
         {/* Email & Phone */}
-        <div className={`grid grid-cols-1 ${!isAuthenticated ? 'sm:grid-cols-2' : ''} gap-3 sm:gap-4`}>
+        <div className={`grid grid-cols-1 ${!isAuthenticated ? 'sm:grid-cols-2 md:grid-cols-2' : ''} gap-3 sm:gap-4 md:gap-5`}>
           {!isAuthenticated && (
             <div>
               <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
@@ -277,7 +277,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
 
         {/* Password & Confirm Password - Only show for non-authenticated users */}
         {!isAuthenticated && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
             <div>
               <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
                 <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
@@ -376,7 +376,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
         </div>
 
         {/* City, Postal Code & Country */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
           <div>
             <label htmlFor="city" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:building-office-2" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
@@ -422,7 +422,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             )}
           </div>
 
-          <div className="sm:col-span-2 lg:col-span-1">
+          <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
             <label htmlFor="country" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:globe-americas" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
               <span>Country <span className="text-red-500 ml-1">*</span></span>

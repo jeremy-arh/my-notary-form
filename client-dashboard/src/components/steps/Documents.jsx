@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import { formatPrice, convertPrice } from '../../utils/currency';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
@@ -148,31 +149,31 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
 
   const getTotalPrice = (service) => {
     const files = formData.serviceDocuments?.[service.service_id] || [];
-    let total = 0;
+    let totalEUR = 0;
 
     files.forEach(file => {
-      total += service.base_price;
+      totalEUR += service.base_price;
       if (file.selectedOptions && file.selectedOptions.length > 0) {
         file.selectedOptions.forEach(optionId => {
           const option = options.find(o => o.option_id === optionId);
           if (option) {
-            total += option.additional_price || 0;
+            totalEUR += option.additional_price || 0;
           }
         });
       }
     });
 
-    return total.toFixed(2);
+    return formatPrice(totalEUR);
   };
 
   return (
     <div className="h-full w-full flex flex-col relative">
       {/* Header */}
-      <div className="flex-shrink-0 px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-3 sm:pb-4">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
+      <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4">
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
           Upload Documents
         </h2>
-        <p className="text-sm sm:text-base text-gray-600">
+        <p className="text-sm sm:text-base md:text-lg text-gray-600">
           Upload documents for each selected service
         </p>
       </div>
@@ -180,7 +181,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
       {/* Content Area - Scrollable */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 px-3 sm:px-4 pb-32 sm:pb-36 lg:pb-24 overflow-y-auto overflow-x-hidden" 
+        className="flex-1 px-3 sm:px-4 md:px-6 pb-32 sm:pb-36 md:pb-6 lg:pb-24 overflow-y-auto overflow-x-hidden" 
         style={{ minHeight: 0 }}
       >
         {loading ? (
@@ -213,11 +214,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
                       <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
-                        €{service.base_price.toFixed(2)} per document
+                        {formatPrice(service.base_price)} per document
                       </p>
                       {fileCount > 0 && (
                         <p className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
-                          Total: €{getTotalPrice(service)} ({fileCount} document{fileCount > 1 ? 's' : ''})
+                          Total: {getTotalPrice(service)} ({fileCount} document{fileCount > 1 ? 's' : ''})
                         </p>
                       )}
                     </div>
@@ -322,7 +323,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                                     <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-black transition-colors break-words flex-1 min-w-0">
                                       <span className="truncate block">{option.name}</span>
                                       <span className="text-gray-500 font-normal ml-0.5 sm:ml-1 whitespace-nowrap">
-                                        (+€{option.additional_price?.toFixed(2) || '0.00'})
+                                        (+{formatPrice(option.additional_price || 0)})
                                       </span>
                                     </span>
                                   </label>
@@ -421,7 +422,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
               {showOptionInfo.additional_price && (
                 <div className="border-t border-gray-200 pt-3 sm:pt-4">
                   <p className="text-xs sm:text-sm text-gray-600">
-                    <strong>Additional Fee:</strong> €{showOptionInfo.additional_price.toFixed(2)} per document
+                    <strong>Additional Fee:</strong> {formatPrice(showOptionInfo.additional_price)} per document
                   </p>
                 </div>
               )}

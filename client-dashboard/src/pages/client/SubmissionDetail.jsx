@@ -264,6 +264,107 @@ const SubmissionDetail = () => {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  // Get currency from submission data
+  const getCurrency = () => {
+    return submission?.data?.currency || 'EUR';
+  };
+
+  // Convert EUR price to target currency
+  const convertPrice = (eurAmount) => {
+    const currency = getCurrency();
+    
+    // If currency is EUR, no conversion needed
+    if (currency === 'EUR') {
+      return eurAmount;
+    }
+
+    // Try to get exchange rate from payment data
+    const paymentData = submission?.data?.payment;
+    if (paymentData && paymentData.amount_paid && paymentData.currency) {
+      // Calculate total in EUR from services
+      let totalEUR = 0;
+      const selectedServices = submission?.data?.selectedServices || [];
+      const serviceDocuments = submission?.data?.serviceDocuments || {};
+      
+      // Only calculate if servicesMap and optionsMap are available
+      if (Object.keys(servicesMap).length > 0) {
+        selectedServices.forEach(serviceId => {
+          const service = servicesMap[serviceId];
+          const documents = serviceDocuments[serviceId] || [];
+          if (service) {
+            totalEUR += documents.length * (service.base_price || 0);
+            documents.forEach(doc => {
+              if (doc.selectedOptions && Object.keys(optionsMap).length > 0) {
+                doc.selectedOptions.forEach(optionId => {
+                  const option = optionsMap[optionId];
+                  if (option) {
+                    totalEUR += option.additional_price || 0;
+                  }
+                });
+              }
+            });
+          }
+        });
+        
+        // Add signatories cost
+        const signatoriesFromData = submission?.data?.signatories || submission?.data?.signatoriesByDocument || {};
+        if (Array.isArray(signatoriesFromData) && signatoriesFromData.length > 1) {
+          totalEUR += (signatoriesFromData.length - 1) * 10;
+        } else if (typeof signatoriesFromData === 'object') {
+          Object.values(signatoriesFromData).forEach(docSignatories => {
+            if (Array.isArray(docSignatories) && docSignatories.length > 1) {
+              totalEUR += (docSignatories.length - 1) * 10;
+            }
+          });
+        }
+        
+        // Calculate exchange rate from actual payment
+        if (totalEUR > 0) {
+          const paidAmount = paymentData.amount_paid / 100; // Convert from cents
+          const exchangeRate = paidAmount / totalEUR;
+          return eurAmount * exchangeRate;
+        }
+      }
+    }
+
+    // Fallback to approximate exchange rates if payment data not available
+    const exchangeRates = {
+      'USD': 1.10,  // 1 EUR = 1.10 USD (approximate)
+      'GBP': 0.85,  // 1 EUR = 0.85 GBP (approximate)
+      'CAD': 1.50,  // 1 EUR = 1.50 CAD (approximate)
+      'AUD': 1.65,  // 1 EUR = 1.65 AUD (approximate)
+      'CHF': 0.95,  // 1 EUR = 0.95 CHF (approximate)
+      'JPY': 165,   // 1 EUR = 165 JPY (approximate)
+      'CNY': 7.80   // 1 EUR = 7.80 CNY (approximate)
+    };
+
+    const rate = exchangeRates[currency] || 1;
+    return eurAmount * rate;
+  };
+
+  // Format price according to submission currency
+  const formatPrice = (eurAmount) => {
+    const currency = getCurrency();
+    const convertedAmount = convertPrice(eurAmount);
+    const locale = currency === 'USD' ? 'en-US' : currency === 'GBP' ? 'en-GB' : currency === 'CAD' ? 'en-CA' : currency === 'AUD' ? 'en-AU' : currency === 'CHF' ? 'de-CH' : currency === 'JPY' ? 'ja-JP' : currency === 'CNY' ? 'zh-CN' : 'fr-FR';
+    
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency
+    }).format(convertedAmount);
+  };
+
+  // Get currency symbol
+  const getCurrencySymbol = () => {
+    const currency = getCurrency();
+    const locale = currency === 'USD' ? 'en-US' : currency === 'GBP' ? 'en-GB' : currency === 'CAD' ? 'en-CA' : currency === 'AUD' ? 'en-AU' : 'fr-FR';
+    
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency
+    }).format(0).replace(/[\d.,\s]/g, '');
+  };
+
   // Convert appointment time from Florida time (UTC-5) to client timezone for display
   const formatAppointmentTime = (time, date, timezone) => {
     if (!time || !date) return 'Not selected';
@@ -433,11 +534,17 @@ const SubmissionDetail = () => {
         timezone: submission.timezone,
         selectedServices: submission.data?.selectedServices || [],
         serviceDocuments: submission.data?.serviceDocuments || {},
+        currency: submission.data?.currency || 'EUR', // Récupérer la devise depuis les données de soumission
       };
+
+      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
+      const currency = (formData.currency || 'EUR').toUpperCase();
+      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
 
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           formData,
+          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
           submissionId: submission.id  // Pass existing submission ID for retry
         }
       });
@@ -619,8 +726,8 @@ const SubmissionDetail = () => {
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-base sm:text-lg text-gray-900">{service.name}</h3>
                             <p className="text-xs sm:text-sm text-gray-700 mt-1 sm:mt-2">
-                              {documents.length} document{documents.length > 1 ? 's' : ''} × €{service.base_price.toFixed(2)} =
-                              <span className="font-bold text-gray-900"> €{serviceTotal.toFixed(2)}</span>
+                              {documents.length} document{documents.length > 1 ? 's' : ''} × {formatPrice(service.base_price)} =
+                              <span className="font-bold text-gray-900"> {formatPrice(serviceTotal)}</span>
                             </p>
                           </div>
                         </div>
@@ -675,14 +782,14 @@ const SubmissionDetail = () => {
                                             >
                                               <Icon icon={option.icon || "heroicons:plus-circle"} className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
                                               <span className="truncate max-w-[80px] sm:max-w-none">{option.name}</span>
-                                              <span className="hidden sm:inline ml-1">(+€{option.additional_price.toFixed(2)})</span>
+                                              <span className="hidden sm:inline ml-1">(+{formatPrice(option.additional_price)})</span>
                                             </span>
                                           );
                                         })}
                                       </div>
                                       {optionsTotal > 0 && (
                                         <p className="text-[10px] sm:text-xs text-gray-700 mt-1 font-semibold">
-                                          Options total: €{optionsTotal.toFixed(2)}
+                                          Options total: {formatPrice(optionsTotal)}
                                         </p>
                                       )}
                                     </div>
@@ -712,7 +819,7 @@ const SubmissionDetail = () => {
                               <div className="mt-3 pt-3 border-t border-gray-200">
                                 <div className="flex justify-between items-center">
                                   <span className="text-xs sm:text-sm font-semibold text-gray-900">Total (with options):</span>
-                                  <span className="text-base sm:text-lg font-bold text-gray-900">€{totalWithOptions.toFixed(2)}</span>
+                                  <span className="text-base sm:text-lg font-bold text-gray-900">{formatPrice(totalWithOptions)}</span>
                                 </div>
                               </div>
                             );
@@ -729,7 +836,7 @@ const SubmissionDetail = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-base sm:text-lg font-bold text-gray-900">Total:</span>
                     <span className="text-xl sm:text-2xl font-bold text-gray-900">
-                      €{(() => {
+                      {(() => {
                         let grandTotal = 0;
                         
                         // Calculate services and options costs
@@ -790,7 +897,7 @@ const SubmissionDetail = () => {
                           }
                         }
                         
-                        return grandTotal.toFixed(2);
+                        return formatPrice(grandTotal);
                       })()}
                     </span>
                   </div>
@@ -923,7 +1030,7 @@ const SubmissionDetail = () => {
                             <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
                               Signatory {sigIndex + 1}
                               {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                              {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+€10)</span>}
+                              {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPrice(10)})</span>}
                             </span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
@@ -1058,10 +1165,21 @@ const SubmissionDetail = () => {
                               });
                             };
 
-                            const formatCurrency = (amount, currency = 'eur') => {
-                              return new Intl.NumberFormat('fr-FR', {
+                            const formatCurrency = (amount, currency = null) => {
+                              // Use transaction currency if provided, otherwise use submission currency
+                              const targetCurrency = currency || getCurrency();
+                              const locale = targetCurrency === 'USD' || targetCurrency === 'usd' ? 'en-US' : 
+                                            targetCurrency === 'GBP' || targetCurrency === 'gbp' ? 'en-GB' : 
+                                            targetCurrency === 'CAD' || targetCurrency === 'cad' ? 'en-CA' : 
+                                            targetCurrency === 'AUD' || targetCurrency === 'aud' ? 'en-AU' : 'fr-FR';
+                              const normalizedCurrency = targetCurrency.toUpperCase();
+                              
+                              return new Intl.NumberFormat(locale, {
                                 style: 'currency',
-                                currency: 'EUR'
+                                currency: normalizedCurrency === 'USD' ? 'USD' : 
+                                          normalizedCurrency === 'GBP' ? 'GBP' : 
+                                          normalizedCurrency === 'CAD' ? 'CAD' : 
+                                          normalizedCurrency === 'AUD' ? 'AUD' : 'EUR'
                               }).format(amount);
                             };
 

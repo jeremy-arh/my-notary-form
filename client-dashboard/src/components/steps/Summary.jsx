@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import { trackBeginCheckout } from '../../utils/gtm';
+import { formatPrice } from '../../utils/currency';
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,7 +128,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     }
 
     return {
-      currency: 'EUR',
+      currency: formData.currency || 'EUR',
       value: total,
       items: items
     };
@@ -172,13 +173,13 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6" style={{ minHeight: 0 }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-32 sm:pb-36 md:pb-6 lg:pb-6" style={{ minHeight: 0 }}>
         <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-full">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
               Review Your Information
             </h2>
-            <p className="text-xs sm:text-sm lg:text-base text-gray-600">
+            <p className="text-xs sm:text-sm md:text-lg text-gray-600">
               Please review all details before submitting
             </p>
           </div>
@@ -186,7 +187,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       {/* Selected Services with Documents */}
       {formData.selectedServices && formData.selectedServices.length > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-          <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
+          <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center">
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
               <Icon icon="heroicons:check-badge" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
             </div>
@@ -211,7 +212,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
-                          {documents.length} document{documents.length > 1 ? 's' : ''} × €{service?.base_price.toFixed(2)}
+                          {documents.length} document{documents.length > 1 ? 's' : ''} × {formatPrice(service?.base_price || 0)}
                         </p>
                       </div>
                     </div>
@@ -255,7 +256,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       {/* Signatories Information */}
       {formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-          <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
+          <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center">
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
               <Icon icon="heroicons:user-group" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
             </div>
@@ -268,10 +269,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
                     Signatory {sigIndex + 1}
                     {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                    {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+€10)</span>}
+                    {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPrice(10)})</span>}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-1.5 sm:gap-2 md:gap-3 text-[10px] sm:text-xs md:text-sm">
                   <div>
                     <span className="text-gray-600">Name:</span>
                     <span className="ml-1.5 font-medium text-gray-900">{signatory.firstName} {signatory.lastName}</span>
@@ -410,7 +411,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                           {service.name} ({documents.length} document{documents.length > 1 ? 's' : ''})
                         </span>
                         <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 flex-shrink-0">
-                          €{serviceTotal.toFixed(2)}
+                          {formatPrice(serviceTotal)}
                         </span>
                       </div>
                       {/* Show options breakdown */}
@@ -426,7 +427,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                   + {option.name} ({count} document{count > 1 ? 's' : ''})
                                 </span>
                                 <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                                  €{optionTotal.toFixed(2)}
+                                  {formatPrice(optionTotal)}
                                 </span>
                               </div>
                             );
@@ -447,7 +448,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     + Additional Signatories ({formData.signatories.length - 1} signatory{(formData.signatories.length - 1) > 1 ? 'ies' : ''})
                   </span>
                   <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                    €{((formData.signatories.length - 1) * 10).toFixed(2)}
+                    {formatPrice((formData.signatories.length - 1) * 10)}
                   </span>
                 </div>
               </div>
@@ -457,7 +458,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2 sm:pt-3 border-t-2 border-gray-300 gap-1 sm:gap-2">
               <span className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 flex-shrink-0">Total Amount</span>
               <span className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 flex-shrink-0">
-                €{(() => {
+                {(() => {
                   let total = 0;
                   // Calculate total from selected services × files + options
                   if (formData.selectedServices) {
@@ -490,7 +491,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   }
                   
                   console.log('💰 Summary Total:', total);
-                  return total.toFixed(2);
+                  return formatPrice(total);
                 })()}
               </span>
             </div>

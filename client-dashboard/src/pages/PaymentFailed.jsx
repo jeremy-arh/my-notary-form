@@ -26,11 +26,22 @@ const PaymentFailed = () => {
 
       const formData = JSON.parse(savedFormData);
 
+      // S'assurer que la devise est présente (fallback sur EUR si absente)
+      if (!formData.currency) {
+        formData.currency = 'EUR';
+        console.log('⚠️ [CURRENCY] Devise manquante dans formData, utilisation de EUR par défaut');
+      }
+      
+      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
+      const currency = (formData.currency || 'EUR').toUpperCase();
+      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
+
       // Call Supabase Edge Function to create Stripe checkout session
       // The Edge Function will fetch services from database and calculate the amount
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
-          formData
+          formData,
+          currency: currency // Envoyer la devise comme paramètre séparé et explicite
         }
       });
 

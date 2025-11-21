@@ -232,11 +232,17 @@ const Dashboard = () => {
         timezone: submission.timezone,
         selectedServices: submission.data?.selectedServices || [],
         serviceDocuments: submission.data?.serviceDocuments || {},
+        currency: submission.data?.currency || 'EUR', // Récupérer la devise depuis les données de soumission
       };
+
+      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
+      const currency = (formData.currency || 'EUR').toUpperCase();
+      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
 
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           formData,
+          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
           submissionId: submission.id
         }
       });

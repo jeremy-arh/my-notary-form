@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { submitNotaryRequest, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
 import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
+import { 
+  trackFormStart as trackPlausibleFormStart,
+  trackServicesSelected,
+  trackDocumentsUploaded,
+  trackSignatoriesAdded,
+  trackAppointmentBooked,
+  trackPersonalInfoCompleted,
+  trackSummaryViewed,
+  trackPaymentInitiated,
+  trackPaymentCompleted,
+  trackFormAbandoned,
+  trackStepNavigation
+} from '../utils/plausible';
 import { openCrisp } from '../utils/crisp';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
@@ -13,15 +26,32 @@ import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
 import Notification from './Notification';
+import CurrencySelector from './CurrencySelector';
 
 const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Load currency from localStorage first, then use it as default
+  const getInitialCurrency = () => {
+    try {
+      const savedCurrency = localStorage.getItem('notaryCurrency');
+      const validCurrencies = ['EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'JPY', 'CNY'];
+      if (savedCurrency && validCurrencies.includes(savedCurrency)) {
+        console.log('💰 [CURRENCY] Devise initiale chargée depuis localStorage:', savedCurrency);
+        return savedCurrency;
+      }
+    } catch (error) {
+      console.error('❌ [CURRENCY] Erreur lors du chargement initial depuis localStorage:', error);
+    }
+    return 'EUR'; // Default to EUR
+  };
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -50,6 +80,9 @@ const NotaryForm = () => {
     city: '',
     postalCode: '',
     country: '',
+
+    // Currency from URL parameter or localStorage
+    currency: getInitialCurrency(),
 
     // Additional notes
     notes: ''
@@ -191,6 +224,8 @@ const NotaryForm = () => {
           ctaLocation: 'homepage_hero',
           ctaText: 'Commencer ma notarisation'
         });
+        // Track Plausible form start
+        trackPlausibleFormStart();
       }
     }
 
@@ -268,6 +303,78 @@ const NotaryForm = () => {
     loadUserData();
   }, []);
 
+  // Récupérer le paramètre currency depuis l'URL et le stocker dans formData et localStorage
+  useEffect(() => {
+    const validCurrencies = ['EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'JPY', 'CNY'];
+    const currencyParam = searchParams.get('currency');
+    
+    if (currencyParam) {
+      // Normaliser la devise (EUR, USD, etc.) en majuscules
+      const normalizedCurrency = currencyParam.toUpperCase();
+      // Valider que c'est une devise valide (EUR, USD, GBP, CAD, etc.)
+      if (validCurrencies.includes(normalizedCurrency)) {
+        console.log('💰 [CURRENCY] Devise détectée depuis l\'URL:', normalizedCurrency);
+        
+        // Sauvegarder immédiatement dans localStorage séparé pour persistance
+        try {
+          localStorage.setItem('notaryCurrency', normalizedCurrency);
+          console.log('💰 [CURRENCY] Devise sauvegardée dans localStorage:', normalizedCurrency);
+        } catch (error) {
+          console.error('❌ [CURRENCY] Erreur lors de la sauvegarde dans localStorage:', error);
+        }
+        
+        setFormData(prev => {
+          // Ne mettre à jour que si la devise a changé
+          if (prev.currency !== normalizedCurrency) {
+            return { ...prev, currency: normalizedCurrency };
+          }
+          return prev;
+        });
+      } else {
+        console.warn('⚠️ [CURRENCY] Devise non valide:', currencyParam, '- Utilisation de EUR par défaut');
+      }
+    } else {
+      // Si pas de paramètre currency dans l'URL, vérifier le localStorage
+      try {
+        const savedCurrency = localStorage.getItem('notaryCurrency');
+        if (savedCurrency && validCurrencies.includes(savedCurrency)) {
+          console.log('💰 [CURRENCY] Devise chargée depuis localStorage:', savedCurrency);
+          setFormData(prev => {
+            if (prev.currency !== savedCurrency) {
+              return { ...prev, currency: savedCurrency };
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error('❌ [CURRENCY] Erreur lors du chargement depuis localStorage:', error);
+      }
+    }
+  }, [searchParams, setFormData]);
+
+  // Gérer le paramètre service depuis l'URL pour pré-sélection et saut d'étapes
+  useEffect(() => {
+    const serviceParam = searchParams.get('service');
+    
+    if (serviceParam && !formData.selectedServices?.includes(serviceParam)) {
+      console.log('🎯 [SERVICE] Service détecté depuis l\'URL:', serviceParam);
+      
+      // Pré-sélectionner le service
+      setFormData(prev => ({
+        ...prev,
+        selectedServices: [serviceParam]
+      }));
+      
+      // Marquer l'étape 1 comme complétée pour permettre l'accès à l'étape 2
+      setCompletedSteps([1]);
+      
+      // Rediriger vers l'étape "Upload Documents" (étape 2)
+      navigate('/form/documents', { replace: true });
+      
+      console.log('✅ [SERVICE] Service pré-sélectionné et redirection vers étape 2 (Documents)');
+    }
+  }, [searchParams, formData.selectedServices, setFormData, setCompletedSteps, navigate]);
+
   const updateFormData = (data) => {
     setFormData(prev => ({ ...prev, ...data }));
   };
@@ -280,10 +387,43 @@ const NotaryForm = () => {
       if (step) {
         trackFormStep(stepId, getStepNameForGTM(step.name));
       }
+      
+      // Track Plausible funnel events
+      switch (stepId) {
+        case 1: // Services Selected
+          trackServicesSelected(
+            formData.selectedServices?.length || 0,
+            formData.selectedServices || []
+          );
+          break;
+        case 2: // Documents Uploaded
+          const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
+            (sum, docs) => sum + (docs?.length || 0), 0
+          );
+          const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).length;
+          trackDocumentsUploaded(totalDocs, servicesWithDocs);
+          break;
+        case 3: // Signatories Added
+          trackSignatoriesAdded(formData.signatories?.length || 0);
+          break;
+        case 4: // Appointment Booked
+          trackAppointmentBooked(
+            formData.appointmentDate || '',
+            formData.appointmentTime || '',
+            formData.timezone || ''
+          );
+          break;
+        case 5: // Personal Info Completed
+          trackPersonalInfoCompleted(isAuthenticated);
+          break;
+      }
     }
   };
 
   const nextStep = () => {
+    // Track step navigation
+    trackStepNavigation(currentStep, currentStep + 1, 'next');
+    
     // Mark current step as completed
     markStepCompleted(currentStep);
 
@@ -292,12 +432,26 @@ const NotaryForm = () => {
       const nextStepData = steps.find(s => s.id === currentStep + 1);
       if (nextStepData) {
         navigate(nextStepData.path);
+        
+        // Track summary viewed when reaching step 6
+        if (nextStepData.id === 6) {
+          const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
+            (sum, docs) => sum + (docs?.length || 0), 0
+          );
+          trackSummaryViewed({
+            servicesCount: formData.selectedServices?.length || 0,
+            documentsCount: totalDocs,
+            signatoriesCount: formData.signatories?.length || 0,
+            hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
+          });
+        }
       }
     }
   };
 
   const prevStep = () => {
     if (currentStep > 1) {
+      trackStepNavigation(currentStep, currentStep - 1, 'prev');
       const prevStepData = steps.find(s => s.id === currentStep - 1);
       if (prevStepData) {
         navigate(prevStepData.path);
@@ -310,12 +464,36 @@ const NotaryForm = () => {
     const canNavigate = stepId === 1 || completedSteps.includes(stepId - 1);
 
     if (canNavigate) {
+      const currentStepData = steps.find(s => s.id === currentStep);
+      const targetStepData = steps.find(s => s.id === stepId);
+      
+      if (currentStepData && targetStepData) {
+        trackStepNavigation(currentStep, stepId, currentStep < stepId ? 'next' : 'prev');
+      }
+      
       const step = steps.find(s => s.id === stepId);
       if (step) {
         navigate(step.path);
       }
     }
   };
+
+  // Track form abandonment when user leaves the page
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // Only track abandonment if user has started the form (completed at least step 1)
+      if (completedSteps.length > 0 && currentStep < 6) {
+        const currentStepData = steps.find(s => s.id === currentStep);
+        trackFormAbandoned(currentStep, currentStepData?.name || 'Unknown');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentStep, completedSteps]);
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -392,6 +570,7 @@ const NotaryForm = () => {
       console.log('   serviceDocuments:', submissionData.serviceDocuments);
       console.log('   signatories:', submissionData.signatories);
       console.log('   signatories count:', submissionData.signatories?.length || 0);
+      console.log('   currency:', submissionData.currency || 'EUR (default)');
 
       // Log document count per service with options info
       if (submissionData.serviceDocuments) {
@@ -413,6 +592,20 @@ const NotaryForm = () => {
       
       console.log('📤 Calling Edge Function directly with fetch...');
       
+      // Track payment initiated
+      const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
+        (sum, docs) => sum + (docs?.length || 0), 0
+      );
+      trackPaymentInitiated({
+        servicesCount: formData.selectedServices?.length || 0,
+        totalAmount: 0, // Will be calculated by backend
+        currency: formData.currency || 'EUR'
+      });
+      
+      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
+      const currency = (submissionData.currency || 'EUR').toUpperCase();
+      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
+
       const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
         method: 'POST',
         headers: {
@@ -421,7 +614,8 @@ const NotaryForm = () => {
           'apikey': supabaseAnonKey,
         },
         body: JSON.stringify({
-          formData: submissionData
+          formData: submissionData,
+          currency: currency // Envoyer la devise comme paramètre séparé et explicite
         })
       });
 
@@ -505,24 +699,27 @@ const NotaryForm = () => {
 
   return (
     <div className="flex min-h-screen bg-white">
-      {/* Mobile Header - Fixed at top */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-16">
-        <div className="flex items-center justify-between h-full px-4">
-          <Logo width={80} height={80} />
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-          >
-            <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-6 h-6 text-gray-900" />
-          </button>
+      {/* Mobile Header - Fixed at top - Visible until xl */}
+      <header className="xl:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-14 sm:h-16">
+        <div className="flex items-center justify-between h-full px-2 sm:px-3 md:px-4">
+          <Logo width={70} height={70} className="sm:w-[80px] sm:h-[80px]" />
+          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2">
+            <CurrencySelector formData={formData} updateFormData={updateFormData} />
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+            >
+              <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-900" />
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Mobile Menu Overlay */}
+      {/* Mobile Menu Overlay - Visible until xl */}
       {isMobileMenuOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-16"
+          className="xl:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-14 sm:top-16"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
@@ -530,22 +727,22 @@ const NotaryForm = () => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Contact Us Button - Mobile */}
-            <div className="p-4 border-b border-gray-300">
+            <div className="p-3 sm:p-4 border-b border-gray-300">
               <button
                 onClick={() => {
                   openCrisp();
                   setIsMobileMenuOpen(false);
                 }}
-                className="flex items-center justify-center w-full px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                className="flex items-center justify-center w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm sm:text-base"
               >
-                <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
-                Contact Us
+                <Icon icon="heroicons:chat-bubble-left-right" className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
+                <span className="truncate">Contact Us</span>
               </button>
             </div>
 
             {/* Steps Navigation - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-8 pb-0">
-              <div className="space-y-1.5 pb-8">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-0">
+              <div className="space-y-1 sm:space-y-1.5 pb-6 sm:pb-8">
               {steps.map((step) => {
                 const isCompleted = completedSteps.includes(step.id);
                 const isCurrent = currentStep === step.id;
@@ -560,7 +757,7 @@ const NotaryForm = () => {
                         setIsMobileMenuOpen(false);
                       }
                     }}
-                    className={`flex items-center justify-between px-3 h-[50px] rounded-lg transition-all duration-300 ${
+                    className={`flex items-center justify-between px-2.5 sm:px-3 h-[44px] sm:h-[50px] rounded-lg transition-all duration-300 ${
                       canAccess ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                     } ${
                       isCurrent
@@ -570,14 +767,14 @@ const NotaryForm = () => {
                         : 'bg-white text-gray-400'
                     }`}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center min-w-0 flex-1">
                       <Icon 
                         icon={isCompleted ? 'heroicons:check' : step.icon} 
-                        className={`w-5 h-5 mr-2 ${
+                        className={`w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0 ${
                           isCurrent ? 'text-white' : isCompleted ? 'text-gray-600' : 'text-gray-400'
                         }`} 
                       />
-                      <span className="text-sm font-medium">{step.name}</span>
+                      <span className="text-xs sm:text-sm font-medium truncate">{step.name}</span>
                     </div>
                   </div>
                 );
@@ -586,24 +783,24 @@ const NotaryForm = () => {
             </div>
 
             {/* Navigation Link - Fixed at bottom */}
-            <div className="p-6 border-t border-gray-200">
+            <div className="p-4 sm:p-6 border-t border-gray-200">
               {isAuthenticated ? (
                 <Link
                   to="/dashboard"
-                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
-                  <span className="text-sm font-medium">Dashboard</span>
+                  <Icon icon="heroicons:squares-2x2" className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
+                  <span className="truncate font-medium">Dashboard</span>
                 </Link>
               ) : (
                 <Link
                   to="/login"
-                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
-                  <span className="text-sm font-medium">Connexion</span>
+                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
+                  <span className="truncate font-medium">Connexion</span>
                 </Link>
               )}
             </div>
@@ -611,16 +808,26 @@ const NotaryForm = () => {
         </div>
       )}
 
-      {/* Left Sidebar - Fixed and 100vh */}
-      <aside className="hidden lg:block w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
-        <div className="flex-1 overflow-y-auto p-8 pb-32">
-          {/* Logo */}
-          <div className="mb-10 animate-fade-in flex items-center justify-center">
-            <Logo width={150} height={150} />
+      {/* Left Sidebar - Fixed and 100vh - HIDDEN until xl (1280px) */}
+      <aside className="hidden xl:block w-56 md:w-64 lg:w-72 xl:w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
+        {/* Header section - Fixed at top (no scroll) - Reduced spacing */}
+        <div className="flex-shrink-0 p-3 md:p-4 xl:p-5 pb-0">
+          {/* Logo - Reduced size */}
+          <div className="mb-3 md:mb-4 xl:mb-4 animate-fade-in flex items-center justify-center">
+            <Logo width={90} height={90} className="md:w-[100px] md:h-[100px] xl:w-[110px] xl:h-[110px] md:max-w-[100px] md:max-h-[100px] xl:max-w-[110px] xl:max-h-[110px]" />
           </div>
 
-          {/* Steps Navigation - Reduced size */}
-          <div className="space-y-1.5">
+          {/* Currency Selector */}
+          <div className="mb-3 md:mb-4 xl:mb-4 animate-fade-in flex items-center justify-center px-1 md:px-2 relative z-[150]">
+            <CurrencySelector formData={formData} updateFormData={updateFormData} />
+          </div>
+        </div>
+
+        {/* Scrollable Steps section - Reduced padding with bottom space for footer */}
+        <div className="flex-1 overflow-y-auto p-3 md:p-4 xl:p-5 pt-2 pb-[200px]">
+
+          {/* Steps Navigation - Very compact */}
+          <div className="space-y-1 md:space-y-1">
             {steps.map((step, index) => {
               const isCompleted = completedSteps.includes(step.id);
               const isCurrent = currentStep === step.id;
@@ -630,7 +837,7 @@ const NotaryForm = () => {
                 <div
                   key={step.id}
                   onClick={() => canAccess && goToStep(step.id)}
-                  className={`flex items-center p-2 rounded-lg transition-all duration-300 ${
+                  className={`flex items-center p-1.5 md:p-1.5 xl:p-2 rounded-lg transition-all duration-300 ${
                     canAccess ? 'cursor-pointer transform hover:scale-105' : 'cursor-not-allowed opacity-50'
                   } ${
                     isCurrent
@@ -641,7 +848,7 @@ const NotaryForm = () => {
                   }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 ${
+                  <div className={`flex items-center justify-center w-6 h-6 md:w-7 md:h-7 xl:w-8 xl:h-8 rounded-lg transition-all duration-300 flex-shrink-0 ${
                     isCurrent
                       ? 'bg-white/20'
                       : isCompleted
@@ -649,20 +856,20 @@ const NotaryForm = () => {
                       : 'bg-gray-100'
                   }`}>
                     {isCompleted ? (
-                      <Icon icon="heroicons:check" className="w-4 h-4 text-gray-600 animate-bounce-in" />
+                      <Icon icon="heroicons:check" className="w-3 h-3 md:w-3.5 md:h-3.5 xl:w-4 xl:h-4 text-gray-600 animate-bounce-in" />
                     ) : (
-                      <Icon icon={step.icon} className={`w-4 h-4 transition-transform duration-300 ${
+                      <Icon icon={step.icon} className={`w-3 h-3 md:w-3.5 md:h-3.5 xl:w-4 xl:h-4 transition-transform duration-300 ${
                         isCurrent ? 'text-white scale-110' : 'text-gray-400'
                       }`} />
                     )}
                   </div>
-                  <div className="ml-2.5 flex-1">
-                    <div className={`text-[10px] font-semibold uppercase tracking-wide ${
+                  <div className="ml-1.5 md:ml-1.5 xl:ml-2 flex-1 min-w-0">
+                    <div className={`text-[8px] md:text-[8px] xl:text-[9px] font-semibold uppercase tracking-wide truncate ${
                       isCurrent ? 'text-white/80' : 'text-gray-500'
                     }`}>
                       Step {step.id}
                     </div>
-                    <div className={`text-xs font-medium mt-0.5 ${
+                    <div className={`text-[10px] md:text-[10px] xl:text-[11px] font-medium mt-0.5 truncate ${
                       isCurrent ? 'text-white' : 'text-gray-900'
                     }`}>
                       {step.name}
@@ -674,42 +881,42 @@ const NotaryForm = () => {
           </div>
         </div>
 
-        {/* Progress Bar & Navigation Button - Fixed at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#F3F4F6] border-t border-gray-200">
+        {/* Progress Bar & Navigation Button - Fixed at bottom - Reduced spacing */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 md:p-3 xl:p-4 bg-[#F3F4F6] border-t border-gray-200">
           {/* Contact Us Button */}
           <button
             onClick={openCrisp}
-            className="flex items-center justify-center w-full mb-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+            className="flex items-center justify-center w-full mb-2 md:mb-2 xl:mb-2.5 px-2.5 md:px-3 xl:px-4 py-1.5 md:py-1.5 xl:py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-xs md:text-sm xl:text-base"
           >
-            <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
-            Contact Us
+            <Icon icon="heroicons:chat-bubble-left-right" className="w-3.5 h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 mr-1.5 md:mr-2 flex-shrink-0" />
+            <span className="truncate">Contact Us</span>
           </button>
 
           {/* Dashboard or Login Button */}
           {isAuthenticated ? (
             <Link
               to="/dashboard"
-              className="flex items-center justify-center w-full mb-4 text-gray-700 hover:text-gray-900 transition-colors font-medium"
+              className="flex items-center justify-center w-full mb-2 md:mb-2 xl:mb-2.5 text-gray-700 hover:text-gray-900 transition-colors font-medium text-xs md:text-sm xl:text-base"
             >
-              <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
-              Dashboard
+              <Icon icon="heroicons:squares-2x2" className="w-3.5 h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 mr-1.5 md:mr-2 flex-shrink-0" />
+              <span className="truncate">Dashboard</span>
             </Link>
           ) : (
             <Link
               to="/login"
-              className="flex items-center justify-center w-full mb-4 text-gray-700 hover:text-gray-900 transition-colors font-medium"
+              className="flex items-center justify-center w-full mb-2 md:mb-2 xl:mb-2.5 text-gray-700 hover:text-gray-900 transition-colors font-medium text-xs md:text-sm xl:text-base"
             >
-              <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
-              Connexion
+              <Icon icon="heroicons:arrow-right-on-rectangle" className="w-3.5 h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 mr-1.5 md:mr-2 flex-shrink-0" />
+              <span className="truncate">Connexion</span>
             </Link>
           )}
 
           {/* Progress Bar */}
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span className="font-medium">Progress</span>
-            <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
+          <div className="flex justify-between text-[10px] md:text-xs xl:text-sm text-gray-600 mb-1 md:mb-1 xl:mb-1.5">
+            <span className="font-medium truncate">Progress</span>
+            <span className="font-bold ml-2 flex-shrink-0">{Math.round((currentStep / steps.length) * 100)}%</span>
           </div>
-          <div className="h-3 bg-gray-300 rounded-full overflow-hidden">
+          <div className="h-2 md:h-2 xl:h-2.5 bg-gray-300 rounded-full overflow-hidden">
             <div
               className="h-full transition-all duration-700 ease-out"
               style={{
@@ -721,10 +928,10 @@ const NotaryForm = () => {
         </div>
       </aside>
 
-      {/* Main Content - Full width with left margin for sidebar */}
-      <main className="flex-1 lg:ml-80 min-h-screen flex items-center justify-center lg:p-5 pt-16 lg:pt-5 pb-28 sm:pb-28 lg:pb-5">
-        {/* Form Content - 95vh centered with full width and side margins */}
-        <div className="w-full max-w-full h-[calc(100vh-7rem)] lg:h-[95vh] bg-[#F3F4F6] lg:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative mx-0 lg:mx-auto">
+      {/* Main Content - Full width with left margin for sidebar ONLY on xl+ */}
+      <main className="flex-1 xl:ml-80 min-h-screen flex items-center justify-center xl:p-4 pt-16 pb-28 sm:pb-28">
+        {/* Form Content - Same height until xl */}
+        <div className="w-full max-w-full h-[calc(100vh-7rem)] xl:h-[95vh] bg-[#F3F4F6] xl:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative mx-0 xl:mx-auto">
           <Routes>
             <Route
               path="choose-services"
@@ -795,26 +1002,26 @@ const NotaryForm = () => {
         </div>
       </main>
 
-      {/* Mobile Footer - Navigation Buttons + Progress Bar in ONE fixed container */}
+      {/* Mobile Footer - Navigation Buttons + Progress Bar in ONE fixed container - Visible until xl */}
       {!isMobileMenuOpen && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] border-t border-gray-200 z-50 safe-area-inset-bottom">
+        <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] border-t border-gray-200 z-50 safe-area-inset-bottom">
           {/* Navigation Buttons */}
-          <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2 sm:pb-3 flex justify-between items-center gap-2 sm:gap-4">
+          <div className="px-2 sm:px-3 pt-2.5 sm:pt-3 pb-1.5 sm:pb-2 flex justify-between items-center gap-1.5 sm:gap-2">
             {currentStep > 1 ? (
               <button
                 type="button"
                 onClick={prevStep}
-                className="btn-glassy-secondary px-4 sm:px-6 py-2.5 sm:py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 text-sm sm:text-base flex-shrink-0"
+                className="btn-glassy-secondary px-3 sm:px-4 py-2 sm:py-2.5 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 text-xs sm:text-sm flex-shrink-0"
               >
                 Back
               </button>
-            ) : <div className="w-16 sm:w-20"></div>}
+            ) : <div className="w-12 sm:w-16"></div>}
             {currentStep < steps.length ? (
               <button
                 type="button"
                 onClick={nextStep}
                 disabled={!canProceedFromCurrentStep()}
-                className="btn-glassy px-4 sm:px-6 py-2.5 sm:py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm sm:text-base flex-1 sm:flex-none min-w-0"
+                className="btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-xs sm:text-sm flex-1 sm:flex-none min-w-0"
               >
                 Continue
               </button>
@@ -823,11 +1030,11 @@ const NotaryForm = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="btn-glassy px-4 sm:px-6 py-2.5 sm:py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center text-sm sm:text-base flex-1 sm:flex-none min-w-0"
+                className="btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center text-xs sm:text-sm flex-1 sm:flex-none min-w-0"
               >
                 {isSubmitting ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -841,12 +1048,12 @@ const NotaryForm = () => {
           </div>
 
           {/* Progress Bar */}
-          <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
-            <div className="flex justify-between text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">
-              <span className="font-medium">Step {currentStep} of {steps.length}</span>
-              <span className="font-bold">{Math.round((currentStep / steps.length) * 100)}%</span>
+          <div className="px-2 sm:px-3 pb-2.5 sm:pb-3 pt-1.5 sm:pt-2">
+            <div className="flex justify-between text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">
+              <span className="font-medium truncate">Step {currentStep} of {steps.length}</span>
+              <span className="font-bold ml-2 flex-shrink-0">{Math.round((currentStep / steps.length) * 100)}%</span>
             </div>
-            <div className="h-1.5 sm:h-2 bg-gray-300 rounded-full overflow-hidden">
+            <div className="h-1 sm:h-1.5 bg-gray-300 rounded-full overflow-hidden">
               <div
                 className="h-full transition-all duration-500"
                 style={{
