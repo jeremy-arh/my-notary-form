@@ -16,14 +16,20 @@ export const trackEvent = (eventName, props = {}) => {
   }
   
   try {
+    // Log event before sending (always visible)
+    console.log('%c🎯 [Plausible] Event:', 'color: #5850ec; font-weight: bold', eventName);
+    if (Object.keys(props).length > 0) {
+      console.log('%c   Props:', 'color: #8b5cf6; font-weight: bold', props);
+    }
+    
     // Use the global plausible() function to send custom events
     if (Object.keys(props).length > 0) {
       window.plausible(eventName, { props });
-      console.log('📊 [Plausible] Custom event sent:', eventName, props);
     } else {
       window.plausible(eventName);
-      console.log('📊 [Plausible] Custom event sent:', eventName);
     }
+    
+    console.log('%c   ✅ Sent to Plausible', 'color: #7c3aed; font-style: italic');
   } catch (error) {
     console.error('❌ [Plausible] Tracking error:', error);
   }
