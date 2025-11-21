@@ -1,49 +1,32 @@
 /**
  * Plausible Analytics - Funnel Tracking
  * Tracks form conversion funnel for Plausible Analytics
- * Documentation: https://plausible.io/docs/events-api
+ * Documentation: https://plausible.io/docs/custom-event-goals
  */
 
-const PLAUSIBLE_DOMAIN = 'mynotary.io';
-const PLAUSIBLE_API = 'https://plausible.io/api/event';
-
 /**
- * Send event to Plausible API
- * @param {object} eventData - Event data
- */
-const sendToPlausible = async (eventData) => {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    await fetch(PLAUSIBLE_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        domain: PLAUSIBLE_DOMAIN,
-        ...eventData
-      })
-    });
-  } catch (error) {
-    // Silently fail - don't break the app if analytics fails
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Plausible tracking error:', error);
-    }
-  }
-};
-
-/**
- * Track custom event
+ * Track custom event using the global plausible() function
  * @param {string} eventName - Event name
  * @param {object} props - Event properties (optional)
  */
 export const trackEvent = (eventName, props = {}) => {
-  sendToPlausible({
-    name: eventName,
-    url: window.location.href,
-    props: props
-  });
+  if (typeof window === 'undefined' || !window.plausible) {
+    console.warn('⚠️ [Plausible] plausible() function not available');
+    return;
+  }
+  
+  try {
+    // Use the global plausible() function to send custom events
+    if (Object.keys(props).length > 0) {
+      window.plausible(eventName, { props });
+      console.log('📊 [Plausible] Custom event sent:', eventName, props);
+    } else {
+      window.plausible(eventName);
+      console.log('📊 [Plausible] Custom event sent:', eventName);
+    }
+  } catch (error) {
+    console.error('❌ [Plausible] Tracking error:', error);
+  }
 };
 
 /**

@@ -2,6 +2,28 @@
 
 Ce document explique comment configurer les funnels de conversion dans Plausible Analytics pour suivre le parcours des utilisateurs dans le formulaire de notarisation.
 
+## ⚙️ Configuration Technique
+
+### Type d'Événements
+
+**IMPORTANT:** Ce système utilise des **Custom Events** Plausible, pas des Pageviews.
+
+- ✅ **Custom Events** : `{"n":"form_started","u":"https://app.mynotary.io/form/services","d":"mynotary.io","p":{...}}`
+- ❌ **Pageviews** : `{"n":"pageview","u":"https://app.mynotary.io/form/services","d":"mynotary.io"}`
+
+### Implémentation
+
+Le script Plausible standard est chargé dans `index.html` et la fonction globale `plausible()` est utilisée pour envoyer les custom events :
+
+```javascript
+// Envoi d'un custom event
+window.plausible('form_started', { 
+  props: { funnel_step: '1_form_started' } 
+});
+```
+
+**Note:** Les pageviews automatiques continuent d'être trackés par le script Plausible standard, mais les événements du funnel sont des custom events séparés.
+
 ## 📊 Événements Trackés
 
 Le système de tracking envoie les événements suivants à Plausible :
@@ -78,10 +100,35 @@ Le système de tracking envoie les événements suivants à Plausible :
 
 ## 🎯 Configuration du Funnel dans Plausible
 
-### Étape 1 : Accéder aux Funnels
+### Étape 0 : Créer les Custom Event Goals
+
+**CRUCIAL:** Avant de créer le funnel, vous devez d'abord créer les goals pour chaque événement custom.
 
 1. Connectez-vous à votre compte Plausible Analytics
 2. Sélectionnez le site `mynotary.io`
+3. Allez dans **Settings** → **Goals**
+4. Pour chaque événement du funnel, cliquez sur **"+ Add goal"**
+5. Sélectionnez **"Custom Event"**
+6. Entrez le nom de l'événement (par exemple `form_started`, `services_selected`, etc.)
+7. Cliquez sur **"Add Goal"**
+
+**Liste des Custom Events à créer:**
+- `form_started`
+- `services_selected`
+- `documents_uploaded`
+- `signatories_added`
+- `appointment_booked`
+- `personal_info_completed`
+- `summary_viewed`
+- `payment_initiated`
+- `payment_completed`
+- `form_abandoned` (optionnel)
+- `step_navigation` (optionnel)
+
+### Étape 1 : Accéder aux Funnels
+
+1. Restez connecté à votre compte Plausible Analytics
+2. Gardez le site `mynotary.io` sélectionné
 3. Allez dans **Goals** → **Funnels**
 
 ### Étape 2 : Créer un Nouveau Funnel
