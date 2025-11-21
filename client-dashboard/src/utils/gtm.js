@@ -31,14 +31,8 @@ export const pushGTMEvent = (eventName, eventData = {}) => {
     ...eventData
   };
 
-  // Log event before pushing (always visible)
-  console.log('%c📊 [GTM] Event:', 'color: #4285f4; font-weight: bold', eventName);
-  console.log('%c   Data:', 'color: #34a853; font-weight: bold', eventPayload);
-
   // Push to dataLayer
   window.dataLayer.push(eventPayload);
-  
-  console.log('%c   ✅ Pushed to dataLayer', 'color: #0f9d58; font-style: italic');
 };
 
 /**
