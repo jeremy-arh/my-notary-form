@@ -368,25 +368,33 @@ const NotaryForm = () => {
   // Gérer le paramètre service depuis l'URL pour pré-sélection et saut d'étapes
   useEffect(() => {
     const serviceParam = searchParams.get('service');
+    const isOnChooseServicesStep = location.pathname === '/form/choose-services';
     
-    if (serviceParam && !formData.selectedServices?.includes(serviceParam)) {
+    if (serviceParam) {
       console.log('🎯 [SERVICE] Service détecté depuis l\'URL:', serviceParam);
       
-      // Pré-sélectionner le service
-      setFormData(prev => ({
-        ...prev,
-        selectedServices: [serviceParam]
-      }));
+      // Pré-sélectionner le service s'il n'est pas déjà sélectionné
+      if (!formData.selectedServices?.includes(serviceParam)) {
+        setFormData(prev => ({
+          ...prev,
+          selectedServices: [serviceParam]
+        }));
+        console.log('✅ [SERVICE] Service pré-sélectionné:', serviceParam);
+      }
       
-      // Marquer l'étape 1 comme complétée pour permettre l'accès à l'étape 2
-      setCompletedSteps([1]);
-      
-      // Rediriger vers l'étape "Upload Documents" (étape 2)
-      navigate('/form/documents', { replace: true });
-      
-      console.log('✅ [SERVICE] Service pré-sélectionné et redirection vers étape 2 (Documents)');
+      // Si l'utilisateur est sur l'étape "Choose Services" avec un paramètre service,
+      // le rediriger automatiquement vers l'étape "Documents"
+      if (isOnChooseServicesStep) {
+        // Marquer l'étape 1 comme complétée pour permettre l'accès à l'étape 2
+        setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
+        
+        // Rediriger vers l'étape "Upload Documents" (étape 2)
+        navigate('/form/documents', { replace: true });
+        
+        console.log('✅ [SERVICE] Redirection vers étape 2 (Documents)');
+      }
     }
-  }, [searchParams, formData.selectedServices, setFormData, setCompletedSteps, navigate]);
+  }, [searchParams, location.pathname, formData.selectedServices, setFormData, setCompletedSteps, navigate]);
 
   const updateFormData = (data) => {
     setFormData(prev => ({ ...prev, ...data }));

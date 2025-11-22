@@ -354,3 +354,4 @@ Utilisez l'extension Chrome "Tag Assistant" pour vérifier :
 
 4. **Double Tracking :** Les événements sont envoyés à la fois à GTM ET à Plausible Analytics pour avoir deux sources de données.
 
+
