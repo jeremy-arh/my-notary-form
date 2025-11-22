@@ -764,6 +764,14 @@ const NotaryForm = () => {
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2">
             <CurrencySelector formData={formData} updateFormData={updateFormData} />
             <button
+              onClick={openCrisp}
+              className="flex items-center justify-center px-2 sm:px-3 py-1 sm:py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm flex-shrink-0"
+              aria-label="Contact Us"
+            >
+              <Icon icon="heroicons:chat-bubble-left-right" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
+              <span className="truncate">Contact Us</span>
+            </button>
+            <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
