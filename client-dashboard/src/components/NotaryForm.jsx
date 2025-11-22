@@ -218,8 +218,30 @@ const NotaryForm = () => {
 
   // Validate step access and track page views
   useEffect(() => {
+    // Check if there's a service parameter in URL
+    const serviceParam = searchParams.get('service');
+    
     // Redirect to /form/choose-services if at /form root
     if (location.pathname === '/form' || location.pathname === '/form/') {
+      // If service parameter exists, redirect directly to documents step
+      if (serviceParam) {
+        // Pre-select the service (using callback to access current state)
+        setFormData(prev => {
+          if (!prev.selectedServices?.includes(serviceParam)) {
+            return {
+              ...prev,
+              selectedServices: [serviceParam]
+            };
+          }
+          return prev;
+        });
+        // Mark step 1 as completed
+        setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
+        // Redirect directly to documents
+        navigate('/form/documents', { replace: true });
+        return;
+      }
+      // Otherwise, redirect to choose-services
       navigate('/form/choose-services', { replace: true });
       return;
     }
@@ -258,7 +280,7 @@ const NotaryForm = () => {
         navigate(redirectStep.path, { replace: true });
       }
     }
-  }, [location.pathname, completedSteps, navigate]);
+  }, [location.pathname, completedSteps, navigate, searchParams, setFormData, setCompletedSteps]);
 
   // Load user data if authenticated
   useEffect(() => {
@@ -366,12 +388,13 @@ const NotaryForm = () => {
   }, [searchParams, setFormData]);
 
   // Gérer le paramètre service depuis l'URL pour pré-sélection et saut d'étapes
+  // (Note: Le cas /form et /form/ est géré par le useEffect précédent)
   useEffect(() => {
     const serviceParam = searchParams.get('service');
     const isOnChooseServicesStep = location.pathname === '/form/choose-services';
     
-    if (serviceParam) {
-      console.log('🎯 [SERVICE] Service détecté depuis l\'URL:', serviceParam);
+    if (serviceParam && isOnChooseServicesStep) {
+      console.log('🎯 [SERVICE] Service détecté depuis l\'URL sur choose-services:', serviceParam);
       
       // Pré-sélectionner le service s'il n'est pas déjà sélectionné
       if (!formData.selectedServices?.includes(serviceParam)) {
@@ -382,17 +405,13 @@ const NotaryForm = () => {
         console.log('✅ [SERVICE] Service pré-sélectionné:', serviceParam);
       }
       
-      // Si l'utilisateur est sur l'étape "Choose Services" avec un paramètre service,
-      // le rediriger automatiquement vers l'étape "Documents"
-      if (isOnChooseServicesStep) {
-        // Marquer l'étape 1 comme complétée pour permettre l'accès à l'étape 2
-        setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
-        
-        // Rediriger vers l'étape "Upload Documents" (étape 2)
-        navigate('/form/documents', { replace: true });
-        
-        console.log('✅ [SERVICE] Redirection vers étape 2 (Documents)');
-      }
+      // Marquer l'étape 1 comme complétée pour permettre l'accès à l'étape 2
+      setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
+      
+      // Rediriger vers l'étape "Upload Documents" (étape 2)
+      navigate('/form/documents', { replace: true });
+      
+      console.log('✅ [SERVICE] Redirection vers étape 2 (Documents)');
     }
   }, [searchParams, location.pathname, formData.selectedServices, setFormData, setCompletedSteps, navigate]);
 
