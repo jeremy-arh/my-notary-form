@@ -185,6 +185,130 @@ const NotaryForm = () => {
     }
   };
 
+  // Function to get validation error message for current step
+  const getValidationErrorMessage = () => {
+    switch (currentStep) {
+      case 1: // Choose Services
+        return 'Please select at least one service to continue.';
+
+      case 2: // Upload Documents
+        if (!formData.selectedServices || formData.selectedServices.length === 0) {
+          return 'No service selected. Please go back to the previous step to select a service.';
+        }
+        
+        const servicesWithoutDocs = formData.selectedServices.filter(serviceId => {
+          const docs = formData.serviceDocuments?.[serviceId];
+          return !docs || docs.length === 0;
+        });
+        
+        if (servicesWithoutDocs.length > 0) {
+          return `Please upload at least one document for ${servicesWithoutDocs.length === 1 ? 'the selected service' : 'all selected services'}.`;
+        }
+        
+        return 'Please upload at least one document for each selected service.';
+
+      case 3: // Add Signatories
+        if (!formData.signatories || formData.signatories.length === 0) {
+          return 'Please add at least one signatory to continue.';
+        }
+        
+        const missingFields = [];
+        const invalidEmails = [];
+        
+        formData.signatories.forEach((signatory, index) => {
+          const signatoryNum = index + 1;
+          const signatoryErrors = [];
+          
+          if (!signatory.firstName?.trim()) signatoryErrors.push('first name');
+          if (!signatory.lastName?.trim()) signatoryErrors.push('last name');
+          if (!signatory.birthDate?.trim()) signatoryErrors.push('birth date');
+          if (!signatory.birthCity?.trim()) signatoryErrors.push('birth city');
+          if (!signatory.postalAddress?.trim()) signatoryErrors.push('address');
+          if (!signatory.email?.trim()) signatoryErrors.push('email');
+          else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email.trim())) {
+            invalidEmails.push(`Signatory ${signatoryNum}`);
+          }
+          if (!signatory.phone?.trim()) signatoryErrors.push('phone');
+          
+          if (signatoryErrors.length > 0) {
+            missingFields.push(`Signatory ${signatoryNum}: ${signatoryErrors.join(', ')}`);
+          }
+        });
+        
+        let message = '';
+        if (missingFields.length > 0) {
+          message = `Please complete the missing information:\n${missingFields.join('\n')}`;
+        }
+        if (invalidEmails.length > 0) {
+          if (message) message += '\n\n';
+          message += `Please correct invalid email addresses: ${invalidEmails.join(', ')}`;
+        }
+        
+        return message || 'Please complete all required information for each signatory.';
+
+      case 4: // Book an appointment
+        const missing = [];
+        if (!formData.appointmentDate) missing.push('date');
+        if (!formData.appointmentTime) missing.push('time');
+        
+        if (missing.length > 0) {
+          return `Please select an appointment ${missing.join(' and ')}.`;
+        }
+        
+        return 'Please select an appointment date and time.';
+
+      case 5: // Personal informations
+        const missingPersonalFields = [];
+        
+        if (!formData.firstName?.trim()) missingPersonalFields.push('first name');
+        if (!formData.lastName?.trim()) missingPersonalFields.push('last name');
+        if (!formData.email?.trim()) missingPersonalFields.push('email');
+        if (!formData.phone?.trim()) missingPersonalFields.push('phone');
+        if (!formData.address?.trim()) missingPersonalFields.push('address');
+        if (!formData.city?.trim()) missingPersonalFields.push('city');
+        if (!formData.postalCode?.trim()) missingPersonalFields.push('postal code');
+        if (!formData.country?.trim()) missingPersonalFields.push('country');
+        
+        if (!isAuthenticated) {
+          if (!formData.password?.trim()) missingPersonalFields.push('password');
+          if (!formData.confirmPassword?.trim()) missingPersonalFields.push('password confirmation');
+        }
+        
+        if (missingPersonalFields.length > 0) {
+          return `Please complete the following fields: ${missingPersonalFields.join(', ')}.`;
+        }
+        
+        return 'Please complete all required personal information fields.';
+
+      default:
+        return 'Please complete this step before continuing.';
+    }
+  };
+
+  // Handle click on Continue button when disabled
+  const handleContinueClick = () => {
+    console.log('🔍 [VALIDATION] Continue button clicked');
+    console.log('🔍 [VALIDATION] canProceed:', canProceedFromCurrentStep());
+    console.log('🔍 [VALIDATION] currentStep:', currentStep);
+    
+    if (!canProceedFromCurrentStep()) {
+      const errorMessage = getValidationErrorMessage();
+      console.log('🔍 [VALIDATION] Error message:', errorMessage);
+      
+      // Force notification update
+      setNotification(null);
+      setTimeout(() => {
+        setNotification({
+          type: 'error',
+          message: errorMessage
+        });
+        console.log('🔍 [VALIDATION] Notification set after timeout');
+      }, 10);
+    } else {
+      nextStep();
+    }
+  };
+
   // Get current step from URL
   const getCurrentStepFromPath = () => {
     const step = steps.find(s => s.path === location.pathname);
@@ -1025,6 +1149,9 @@ const NotaryForm = () => {
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
+                  currentStep={1}
                 />
               }
             />
@@ -1036,6 +1163,9 @@ const NotaryForm = () => {
                   updateFormData={updateFormData}
                   nextStep={nextStep}
                   prevStep={prevStep}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
+                  currentStep={2}
                 />
               }
             />
@@ -1047,6 +1177,9 @@ const NotaryForm = () => {
                   updateFormData={updateFormData}
                   nextStep={nextStep}
                   prevStep={prevStep}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
+                  currentStep={3}
                 />
               }
             />
@@ -1058,6 +1191,9 @@ const NotaryForm = () => {
                   updateFormData={updateFormData}
                   nextStep={nextStep}
                   prevStep={prevStep}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
+                  currentStep={4}
                 />
               }
             />
@@ -1070,6 +1206,9 @@ const NotaryForm = () => {
                   nextStep={nextStep}
                   prevStep={prevStep}
                   isAuthenticated={isAuthenticated}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
+                  currentStep={5}
                 />
               }
             />
@@ -1104,9 +1243,12 @@ const NotaryForm = () => {
             {currentStep < steps.length ? (
               <button
                 type="button"
-                onClick={nextStep}
-                disabled={!canProceedFromCurrentStep()}
-                className="btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-xs sm:text-sm flex-1 sm:flex-none min-w-0"
+                onClick={handleContinueClick}
+                className={`btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all text-xs sm:text-sm flex-1 sm:flex-none min-w-0 ${
+                  canProceedFromCurrentStep() 
+                    ? 'hover:scale-105 active:scale-95' 
+                    : 'opacity-50 hover:opacity-70 active:opacity-90'
+                }`}
               >
                 Continue
               </button>
@@ -1152,9 +1294,9 @@ const NotaryForm = () => {
       )}
 
       {/* Notification */}
-      {notification && (
+      {notification && notification.message && (
         <Notification
-          type={notification.type}
+          type={notification.type || 'error'}
           message={notification.message}
           onClose={() => setNotification(null)}
         />

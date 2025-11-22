@@ -5,7 +5,7 @@ import { formatPrice, convertPrice } from '../../utils/currency';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
-const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
+const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const [services, setServices] = useState([]);
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -378,8 +378,8 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
           </button>
           <button
             type="button"
-            onClick={nextStep}
-            disabled={
+            onClick={handleContinueClick || nextStep}
+            className={`btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all text-sm md:text-base ${
               !formData.selectedServices ||
               formData.selectedServices.length === 0 ||
               !formData.serviceDocuments ||
@@ -387,8 +387,9 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep }) => {
                 const docs = formData.serviceDocuments[serviceId];
                 return docs && docs.length > 0;
               })
-            }
-            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                ? 'opacity-50 hover:opacity-70 active:opacity-90'
+                : 'hover:scale-105 active:scale-95'
+            }`}
           >
             Continue
           </button>

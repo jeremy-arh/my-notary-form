@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 
-const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
+const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const [selectedDate, setSelectedDate] = useState(formData.appointmentDate || '');
   const [selectedTime, setSelectedTime] = useState(formData.appointmentTime || '');
   const [isDetectingTimezone, setIsDetectingTimezone] = useState(true);
@@ -661,9 +661,12 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           </button>
           <button
             type="button"
-            onClick={nextStep}
-            disabled={!selectedDate || !selectedTime}
-            className="btn-glassy px-4 xl:px-8 py-2.5 xl:py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm xl:text-base flex-shrink-0"
+            onClick={handleContinueClick || nextStep}
+            className={`btn-glassy px-4 xl:px-8 py-2.5 xl:py-3 text-white font-semibold rounded-full transition-all text-sm xl:text-base flex-shrink-0 ${
+              !selectedDate || !selectedTime
+                ? 'opacity-50 hover:opacity-70 active:opacity-90'
+                : 'hover:scale-105 active:scale-95'
+            }`}
           >
             Continue
           </button>

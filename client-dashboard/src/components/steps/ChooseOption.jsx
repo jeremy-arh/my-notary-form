@@ -3,7 +3,7 @@ import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import { formatPrice } from '../../utils/currency';
 
-const ChooseOption = ({ formData, updateFormData, nextStep }) => {
+const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick, getValidationErrorMessage }) => {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -119,9 +119,12 @@ const ChooseOption = ({ formData, updateFormData, nextStep }) => {
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={nextStep}
-            disabled={!formData.selectedServices || formData.selectedServices.length === 0}
-            className="btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            onClick={handleContinueClick || nextStep}
+            className={`btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all ${
+              !formData.selectedServices || formData.selectedServices.length === 0
+                ? 'opacity-50 hover:opacity-70 active:opacity-90'
+                : 'hover:scale-105 active:scale-95'
+            }`}
           >
             Continue
           </button>

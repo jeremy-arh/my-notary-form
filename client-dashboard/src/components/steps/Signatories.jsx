@@ -4,7 +4,7 @@ import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { formatPrice } from '../../utils/currency';
 
-const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
+const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const [signatories, setSignatories] = useState([]);
   const [autocompleteInstances, setAutocompleteInstances] = useState({});
   const [phoneErrors, setPhoneErrors] = useState({}); // Store phone errors by signatoryIndex
@@ -270,6 +270,8 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
   const handleNext = () => {
     if (validate()) {
       nextStep();
+    } else if (handleContinueClick) {
+      handleContinueClick();
     }
   };
 
@@ -511,8 +513,11 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep }) => {
           <button
             type="button"
             onClick={handleNext}
-            disabled={!isValid}
-            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            className={`btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all ${
+              !isValid
+                ? 'opacity-50 hover:opacity-70 active:opacity-90'
+                : 'hover:scale-105 active:scale-95'
+            }`}
             onMouseEnter={() => {
               // Debug on hover
               console.log('🔍 [DEBUG] Validation check:', isValid);

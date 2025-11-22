@@ -5,7 +5,7 @@ import 'react-phone-number-input/style.css';
 import { supabase } from '../../lib/supabase';
 import AddressAutocomplete from '../AddressAutocomplete';
 
-const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false }) => {
+const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false, handleContinueClick, getValidationErrorMessage }) => {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -141,6 +141,8 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
     }
     if (validate()) {
       nextStep();
+    } else if (handleContinueClick) {
+      handleContinueClick();
     }
   };
 
@@ -502,11 +504,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <button
             type="button"
             onClick={handleNext}
-            disabled={emailExists}
-            className={`px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 ${
+            className={`px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all ${
               emailExists
-                ? 'bg-red-500 hover:bg-red-600 cursor-not-allowed opacity-75'
-                : 'btn-glassy'
+                ? 'bg-red-500 hover:bg-red-600 opacity-75'
+                : 'btn-glassy hover:scale-105 active:scale-95'
             }`}
           >
             Continue
