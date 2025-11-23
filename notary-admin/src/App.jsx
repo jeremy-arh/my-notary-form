@@ -18,6 +18,7 @@ import ServiceEdit from './pages/admin/ServiceEdit'
 import OptionEdit from './pages/admin/OptionEdit'
 import Messages from './pages/admin/Messages'
 import Profile from './pages/admin/Profile'
+import Analytics from './pages/admin/Analytics'
 import './index.css'
 
 function App() {
@@ -180,6 +181,14 @@ function App() {
           element={
             <PrivateRoute>
               <Profile />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <PrivateRoute>
+              <Analytics />
             </PrivateRoute>
           }
         />

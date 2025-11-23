@@ -1,11 +1,33 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import { 
+  trackDocumentUploaded as trackAnalyticsDocumentUploaded,
+  trackDocumentsUploadCompleted 
+} from '../../utils/analytics';
 import { formatPrice, convertPrice } from '../../utils/currency';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
 const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
+  const handleContinue = () => {
+    // Track documents upload completed before continuing
+    const totalFiles = Object.values(formData.serviceDocuments || {}).reduce(
+      (sum, docs) => sum + (docs?.length || 0), 0
+    );
+    const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).filter(
+      sId => formData.serviceDocuments[sId]?.length > 0
+    ).length;
+    
+    trackDocumentsUploadCompleted(totalFiles, servicesWithDocs);
+    
+    // Call original handleContinueClick or nextStep
+    if (handleContinueClick) {
+      handleContinueClick();
+    } else {
+      nextStep();
+    }
+  };
   const [services, setServices] = useState([]);
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +135,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     serviceDocuments[serviceId] = [...existingFiles, ...convertedFiles];
 
     updateFormData({ serviceDocuments });
+
+    // Track document upload in analytics
+    const totalFiles = Object.values(serviceDocuments).reduce((sum, docs) => sum + (docs?.length || 0), 0);
+    const servicesWithDocs = Object.keys(serviceDocuments).filter(sId => serviceDocuments[sId]?.length > 0).length;
+    trackAnalyticsDocumentUploaded(serviceId, convertedFiles.length, totalFiles, servicesWithDocs);
   };
 
   const removeFile = (serviceId, fileIndex) => {
@@ -378,7 +405,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
           </button>
           <button
             type="button"
-            onClick={handleContinueClick || nextStep}
+            onClick={handleContinue}
             className={`btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all text-sm md:text-base ${
               !formData.selectedServices ||
               formData.selectedServices.length === 0 ||

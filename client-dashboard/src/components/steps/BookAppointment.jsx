@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
+import { trackAppointmentBooked as trackAnalyticsAppointmentBooked } from '../../utils/analytics';
 
 const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const [selectedDate, setSelectedDate] = useState(formData.appointmentDate || '');
@@ -8,6 +9,20 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
   const [timezoneSearchTerm, setTimezoneSearchTerm] = useState('');
   const [isTimezoneDropdownOpen, setIsTimezoneDropdownOpen] = useState(false);
   const timezoneDropdownRef = useRef(null);
+
+  const handleContinue = () => {
+    // Track appointment booked if both date and time are selected
+    if (selectedDate && selectedTime && timezone) {
+      trackAnalyticsAppointmentBooked(selectedDate, selectedTime, timezone);
+    }
+    
+    // Call original handleContinueClick or nextStep
+    if (handleContinueClick) {
+      handleContinueClick();
+    } else {
+      nextStep();
+    }
+  };
 
   // Get default timezone - if formData has a UTC value, use it; otherwise default to UTC-5 (Eastern Time)
   const getDefaultTimezone = () => {
@@ -376,6 +391,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
 
     setSelectedDate(formattedDate);
     updateFormData({ appointmentDate: formattedDate });
+    
+    // Track appointment booked when both date and time are selected
+    if (selectedTime && formattedDate) {
+      trackAnalyticsAppointmentBooked(formattedDate, selectedTime, timezone);
+    }
 
     // Scroll to time slots on mobile and tablet
     if (window.innerWidth < 1024 && timeSlotsRef.current) {
@@ -388,6 +408,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
   const handleTimeClick = (time) => {
     setSelectedTime(time);
     updateFormData({ appointmentTime: time });
+    
+    // Track appointment booked when both date and time are selected
+    if (selectedDate && time) {
+      trackAnalyticsAppointmentBooked(selectedDate, time, timezone);
+    }
   };
 
   const handleTimezoneChange = (tz) => {
@@ -661,7 +686,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
           </button>
           <button
             type="button"
-            onClick={handleContinueClick || nextStep}
+            onClick={handleContinue}
             className={`btn-glassy px-4 xl:px-8 py-2.5 xl:py-3 text-white font-semibold rounded-full transition-all text-sm xl:text-base flex-shrink-0 ${
               !selectedDate || !selectedTime
                 ? 'opacity-50 hover:opacity-70 active:opacity-90'

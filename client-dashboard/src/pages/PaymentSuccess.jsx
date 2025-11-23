@@ -5,6 +5,7 @@ import Logo from '../assets/Logo';
 import { supabase } from '../lib/supabase';
 import { trackPaymentSuccess } from '../utils/gtm';
 import { trackPaymentCompleted } from '../utils/plausible';
+import { trackPaymentCompleted as trackAnalyticsPaymentCompleted } from '../utils/analytics';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
@@ -58,6 +59,13 @@ const PaymentSuccess = () => {
             totalAmount: data.amount || 0,
             currency: data.currency || 'EUR'
           });
+          
+          // Track analytics purchase (conversion)
+          trackAnalyticsPaymentCompleted(
+            data.amount || 0,
+            data.currency || 'EUR',
+            data.transactionId || sessionId
+          );
         } else {
           setError('Payment verification failed');
         }

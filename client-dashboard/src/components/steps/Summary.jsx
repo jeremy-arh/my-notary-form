@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import { trackBeginCheckout } from '../../utils/gtm';
+import { trackPaymentInitiated as trackAnalyticsPaymentInitiated } from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
@@ -141,6 +142,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       if (!loading && services.length > 0) {
         const checkoutData = calculateCheckoutData();
         trackBeginCheckout(checkoutData);
+        // Track analytics payment initiated
+        trackAnalyticsPaymentInitiated(checkoutData.value, checkoutData.currency);
       }
       
       await handleSubmit();

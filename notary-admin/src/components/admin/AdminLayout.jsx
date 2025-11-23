@@ -19,6 +19,7 @@ const AdminLayout = ({ children }) => {
     { path: '/notary', name: 'Notaries', icon: 'heroicons:user-group' },
     { path: '/stripe', name: 'Stripe Payments', icon: 'heroicons:credit-card' },
     { path: '/cashflow', name: 'Trésorerie', icon: 'heroicons:banknotes' },
+    { path: '/analytics', name: 'Analytics', icon: 'heroicons:chart-pie' },
     { path: '/cms', name: 'CMS', icon: 'heroicons:document-duplicate' },
     { path: '/messages', name: 'Messages', icon: 'heroicons:chat-bubble-left-right', badge: unreadCount },
     { path: '/profile', name: 'Profile', icon: 'heroicons:user' }

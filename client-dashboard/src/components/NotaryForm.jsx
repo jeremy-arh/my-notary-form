@@ -31,6 +31,28 @@ import {
   trackFormAbandoned,
   trackStepNavigation
 } from '../utils/plausible';
+import {
+  trackFormOpened,
+  trackFormStart as trackAnalyticsFormStart,
+  trackPageView as trackAnalyticsPageView,
+  trackScreenOpened,
+  trackServiceSelected as trackAnalyticsServiceSelected,
+  trackServicesSelectionCompleted,
+  trackDocumentScreenOpened,
+  trackDocumentUploaded as trackAnalyticsDocumentUploaded,
+  trackDocumentsUploadCompleted,
+  trackSignatoryScreenOpened,
+  trackSignatoryAdded as trackAnalyticsSignatoryAdded,
+  trackSignatoriesCompleted,
+  trackAppointmentScreenOpened,
+  trackAppointmentBooked as trackAnalyticsAppointmentBooked,
+  trackPersonalInfoScreenOpened,
+  trackPersonalInfoCompleted as trackAnalyticsPersonalInfoCompleted,
+  trackSummaryScreenOpened,
+  trackSummaryViewed as trackAnalyticsSummaryViewed,
+  trackPaymentInitiated as trackAnalyticsPaymentInitiated,
+  trackPaymentCompleted as trackAnalyticsPaymentCompleted
+} from '../utils/analytics';
 import { openCrisp } from '../utils/crisp';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
@@ -340,6 +362,15 @@ const NotaryForm = () => {
     return stepNameMap[stepName] || stepName.toLowerCase().replace(/\s+/g, '_');
   };
 
+  // Track form opened (first time)
+  useEffect(() => {
+    const hasTrackedFormOpened = sessionStorage.getItem('form_opened_tracked');
+    if (!hasTrackedFormOpened) {
+      trackFormOpened();
+      sessionStorage.setItem('form_opened_tracked', 'true');
+    }
+  }, []);
+
   // Validate step access and track page views
   useEffect(() => {
     // Check if there's a service parameter in URL
@@ -370,21 +401,43 @@ const NotaryForm = () => {
       return;
     }
 
-    // Track page view (GTM)
+    // Track page view (GTM and Analytics)
     const currentStepData = steps.find(s => s.path === location.pathname);
     if (currentStepData) {
+      // Track GTM pageview (for Google Ads)
       trackPageView(currentStepData.name, location.pathname);
       
-      // Track form_start when user arrives on first step (Choose Services)
-      if (currentStepData.id === 1 && completedSteps.length === 0) {
-        trackFormStart({
-          formName: 'notarization_form',
-          serviceType: 'Document Notarization',
-          ctaLocation: 'homepage_hero',
-          ctaText: 'Commencer ma notarisation'
-        });
-        // Track Plausible form start
-        trackPlausibleFormStart();
+      // Track analytics pageview (only once per page visit)
+      trackAnalyticsPageView(currentStepData.name, location.pathname);
+      
+      // Track analytics screen opened and form start
+      if (currentStepData.id === 1) {
+        trackScreenOpened('Choose Services', '/form/choose-services', 1);
+        if (completedSteps.length === 0) {
+          trackAnalyticsFormStart();
+          trackFormStart({
+            formName: 'notarization_form',
+            serviceType: 'Document Notarization',
+            ctaLocation: 'homepage_hero',
+            ctaText: 'Commencer ma notarisation'
+          });
+          trackPlausibleFormStart();
+        }
+      } else if (currentStepData.id === 2) {
+        trackScreenOpened('Upload Documents', '/form/documents', 2);
+        trackDocumentScreenOpened(formData.selectedServices?.length || 0);
+      } else if (currentStepData.id === 3) {
+        trackScreenOpened('Add Signatories', '/form/signatories', 3);
+        trackSignatoryScreenOpened();
+      } else if (currentStepData.id === 4) {
+        trackScreenOpened('Book Appointment', '/form/book-appointment', 4);
+        trackAppointmentScreenOpened();
+      } else if (currentStepData.id === 5) {
+        trackScreenOpened('Personal Info', '/form/personal-info', 5);
+        trackPersonalInfoScreenOpened();
+      } else if (currentStepData.id === 6) {
+        trackScreenOpened('Summary', '/form/summary', 6);
+        trackSummaryScreenOpened();
       }
     }
 
@@ -555,6 +608,13 @@ const NotaryForm = () => {
       // Track funnel events (Plausible + GTM)
       switch (stepId) {
         case 1: // Services Selected
+          // Analytics
+          if (formData.selectedServices && formData.selectedServices.length > 0) {
+            formData.selectedServices.forEach(serviceId => {
+              trackAnalyticsServiceSelected(serviceId, serviceId, formData.selectedServices.length, formData.selectedServices);
+            });
+            trackServicesSelectionCompleted(formData.selectedServices);
+          }
           // Plausible
           trackServicesSelected(
             formData.selectedServices?.length || 0,
@@ -571,18 +631,40 @@ const NotaryForm = () => {
             (sum, docs) => sum + (docs?.length || 0), 0
           );
           const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).length;
+          // Analytics
+          if (formData.serviceDocuments) {
+            Object.entries(formData.serviceDocuments).forEach(([serviceId, docs]) => {
+              if (docs && docs.length > 0) {
+                trackAnalyticsDocumentUploaded(serviceId, docs.length, totalDocs, servicesWithDocs);
+              }
+            });
+            trackDocumentsUploadCompleted(totalDocs, servicesWithDocs);
+          }
           // Plausible
           trackDocumentsUploaded(totalDocs, servicesWithDocs);
           // GTM
           trackGTMDocumentUploaded(totalDocs, servicesWithDocs);
           break;
         case 3: // Signatories Added
+          // Analytics
+          if (formData.signatories && formData.signatories.length > 0) {
+            trackAnalyticsSignatoryAdded(formData.signatories.length);
+            trackSignatoriesCompleted(formData.signatories.length);
+          }
           // Plausible
           trackSignatoriesAdded(formData.signatories?.length || 0);
           // GTM
           trackGTMSignatoriesAdded(formData.signatories?.length || 0);
           break;
         case 4: // Appointment Booked
+          // Analytics
+          if (formData.appointmentDate && formData.appointmentTime) {
+            trackAnalyticsAppointmentBooked(
+              formData.appointmentDate,
+              formData.appointmentTime,
+              formData.timezone || ''
+            );
+          }
           // Plausible
           trackAppointmentBooked(
             formData.appointmentDate || '',
@@ -597,6 +679,8 @@ const NotaryForm = () => {
           });
           break;
         case 5: // Personal Info Completed
+          // Analytics
+          trackAnalyticsPersonalInfoCompleted(isAuthenticated);
           // Plausible
           trackPersonalInfoCompleted(isAuthenticated);
           // GTM
@@ -624,6 +708,13 @@ const NotaryForm = () => {
           const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
             (sum, docs) => sum + (docs?.length || 0), 0
           );
+          // Analytics
+          trackAnalyticsSummaryViewed({
+            servicesCount: formData.selectedServices?.length || 0,
+            documentsCount: totalDocs,
+            signatoriesCount: formData.signatories?.length || 0,
+            hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
+          });
           // Plausible
           trackSummaryViewed({
             servicesCount: formData.selectedServices?.length || 0,

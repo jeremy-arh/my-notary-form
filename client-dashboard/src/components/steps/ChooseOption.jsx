@@ -1,11 +1,29 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
+import { 
+  trackServiceSelected as trackAnalyticsServiceSelected,
+  trackServicesSelectionCompleted 
+} from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
 
 const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick, getValidationErrorMessage }) => {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleContinue = () => {
+    // Track services selection completed before continuing
+    if (formData.selectedServices && formData.selectedServices.length > 0) {
+      trackServicesSelectionCompleted(formData.selectedServices);
+    }
+    
+    // Call original handleContinueClick or nextStep
+    if (handleContinueClick) {
+      handleContinueClick();
+    } else {
+      nextStep();
+    }
+  };
 
   useEffect(() => {
     fetchServices();
@@ -32,11 +50,23 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
 
   const toggleService = (serviceId) => {
     const currentServices = formData.selectedServices || [];
-    const updatedServices = currentServices.includes(serviceId)
-      ? currentServices.filter(id => id !== serviceId)
-      : [...currentServices, serviceId];
+    const isAdding = !currentServices.includes(serviceId);
+    const updatedServices = isAdding
+      ? [...currentServices, serviceId]
+      : currentServices.filter(id => id !== serviceId);
 
     updateFormData({ selectedServices: updatedServices });
+
+    // Track service selection in analytics
+    if (isAdding) {
+      const service = services.find(s => s.service_id === serviceId);
+      trackAnalyticsServiceSelected(
+        serviceId,
+        service?.name || serviceId,
+        updatedServices.length,
+        updatedServices
+      );
+    }
   };
 
   return (
@@ -119,7 +149,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={handleContinueClick || nextStep}
+            onClick={handleContinue}
             className={`btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all ${
               !formData.selectedServices || formData.selectedServices.length === 0
                 ? 'opacity-50 hover:opacity-70 active:opacity-90'

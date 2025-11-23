@@ -2,9 +2,26 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+import { 
+  trackSignatoryAdded as trackAnalyticsSignatoryAdded,
+  trackSignatoriesCompleted 
+} from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
 
 const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
+  const handleContinue = () => {
+    // Track signatories completed before continuing
+    if (formData.signatories && formData.signatories.length > 0) {
+      trackSignatoriesCompleted(formData.signatories.length);
+    }
+    
+    // Call original handleContinueClick or nextStep
+    if (handleContinueClick) {
+      handleContinueClick();
+    } else {
+      nextStep();
+    }
+  };
   const [signatories, setSignatories] = useState([]);
   const [autocompleteInstances, setAutocompleteInstances] = useState({});
   const [phoneErrors, setPhoneErrors] = useState({}); // Store phone errors by signatoryIndex
@@ -167,6 +184,9 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
     });
     setSignatories(updated);
     updateFormData({ signatories: updated });
+    
+    // Track signatory added in analytics
+    trackAnalyticsSignatoryAdded(updated.length);
   };
 
   const removeSignatory = (signatoryIndex) => {
@@ -269,6 +289,10 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
 
   const handleNext = () => {
     if (validate()) {
+      // Track signatories completed before continuing
+      if (formData.signatories && formData.signatories.length > 0) {
+        trackSignatoriesCompleted(formData.signatories.length);
+      }
       nextStep();
     } else if (handleContinueClick) {
       handleContinueClick();

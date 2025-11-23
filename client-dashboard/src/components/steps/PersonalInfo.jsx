@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { supabase } from '../../lib/supabase';
+import { trackPersonalInfoCompleted as trackAnalyticsPersonalInfoCompleted } from '../../utils/analytics';
 import AddressAutocomplete from '../AddressAutocomplete';
 
 const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false, handleContinueClick, getValidationErrorMessage }) => {
@@ -140,6 +141,8 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       return;
     }
     if (validate()) {
+      // Track personal info completed
+      trackAnalyticsPersonalInfoCompleted(isAuthenticated);
       nextStep();
     } else if (handleContinueClick) {
       handleContinueClick();
