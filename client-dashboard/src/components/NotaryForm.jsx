@@ -390,6 +390,29 @@ const NotaryForm = () => {
           }
           return prev;
         });
+        
+        // Track funnel events for skipped steps when arriving directly from service page
+        // This ensures the funnel is complete even when user skips steps
+        if (completedSteps.length === 0) {
+          // Track form opened (first visit to form)
+          trackFormOpened();
+          
+          // Track form start
+          trackAnalyticsFormStart();
+          trackFormStart({
+            formName: 'notarization_form',
+            serviceType: 'Document Notarization',
+            ctaLocation: 'service_page',
+            ctaText: 'Notarize now'
+          });
+          trackPlausibleFormStart();
+          
+          // Track service selection (since service is pre-selected)
+          trackAnalyticsServiceSelected(serviceParam);
+          trackServicesSelectionCompleted();
+          trackGTMServiceSelected(serviceParam);
+        }
+        
         // Mark step 1 as completed
         setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
         // Redirect directly to documents
@@ -426,6 +449,29 @@ const NotaryForm = () => {
       } else if (currentStepData.id === 2) {
         trackScreenOpened('Upload Documents', '/form/documents', 2);
         trackDocumentScreenOpened(formData.selectedServices?.length || 0);
+        
+        // If arriving directly at documents step (e.g., from service page),
+        // ensure previous funnel steps are tracked
+        if (completedSteps.includes(1) && completedSteps.length === 1) {
+          // Track form opened if not already tracked
+          trackFormOpened();
+          // Track form start if not already tracked
+          trackAnalyticsFormStart();
+          trackFormStart({
+            formName: 'notarization_form',
+            serviceType: 'Document Notarization',
+            ctaLocation: 'service_page',
+            ctaText: 'Notarize now'
+          });
+          trackPlausibleFormStart();
+          // Track service selection completion
+          if (formData.selectedServices && formData.selectedServices.length > 0) {
+            formData.selectedServices.forEach(serviceId => {
+              trackAnalyticsServiceSelected(serviceId);
+            });
+            trackServicesSelectionCompleted();
+          }
+        }
       } else if (currentStepData.id === 3) {
         trackScreenOpened('Add Signatories', '/form/signatories', 3);
         trackSignatoryScreenOpened();

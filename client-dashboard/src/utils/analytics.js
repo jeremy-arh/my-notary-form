@@ -96,51 +96,95 @@ const getDeviceInfo = () => {
   };
 };
 
-// Get geo information from IP address
+// Cache for geo information (stored for 24 hours)
+const GEO_CACHE_KEY = 'analytics_geo_cache';
+const GEO_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// Get cached geo info or fetch new one
 const getGeoInfo = async () => {
+  // Check cache first
   try {
-    // Use ipapi.co for geolocation (free tier: 1000 requests/day)
-    const response = await fetch('https://ipapi.co/json/');
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        countryCode: data.country_code || null,
-        countryName: data.country_name || null,
-        city: data.city || null,
-        region: data.region || null,
-        ip: data.ip || null
-      };
+    const cached = localStorage.getItem(GEO_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      const now = Date.now();
+      // Use cached data if less than 24 hours old
+      if (now - timestamp < GEO_CACHE_DURATION) {
+        return data;
+      }
     }
   } catch (error) {
-    console.warn('Failed to fetch geo info from ipapi.co:', error);
-    // Fallback: try ip-api.com (free tier: 45 requests/minute)
-    try {
-      const fallbackResponse = await fetch('http://ip-api.com/json/?fields=status,message,country,countryCode,city,regionName,query');
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        if (fallbackData.status === 'success') {
-          return {
-            countryCode: fallbackData.countryCode || null,
-            countryName: fallbackData.country || null,
-            city: fallbackData.city || null,
-            region: fallbackData.regionName || null,
-            ip: fallbackData.query || null
-          };
-        }
-      }
-    } catch (fallbackError) {
-      console.warn('Failed to fetch geo info from ip-api.com:', fallbackError);
-    }
+    // Cache invalid, continue to fetch
   }
-  
-  // Return default values if all services fail
-  return {
+
+  // Default values
+  const defaultGeoInfo = {
     countryCode: null,
     countryName: null,
     city: null,
     region: null,
     ip: null
   };
+
+  // Try to fetch geo info (non-blocking, use defaults if fails)
+  try {
+    // Try ip-api.com first with HTTPS (more reliable, free tier: 45 requests/minute)
+    const response = await fetch('https://ip-api.com/json/?fields=status,message,country,countryCode,city,regionName,query');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'success') {
+        const geoInfo = {
+          countryCode: data.countryCode || null,
+          countryName: data.country || null,
+          city: data.city || null,
+          region: data.regionName || null,
+          ip: data.query || null
+        };
+        // Cache the result
+        try {
+          localStorage.setItem(GEO_CACHE_KEY, JSON.stringify({
+            data: geoInfo,
+            timestamp: Date.now()
+          }));
+        } catch (e) {
+          // localStorage might be full or disabled, ignore
+        }
+        return geoInfo;
+      }
+    }
+  } catch (error) {
+    // Silently fail, will use defaults
+  }
+
+  // Fallback: try ipapi.co (if ip-api.com fails)
+  try {
+    const fallbackResponse = await fetch('https://ipapi.co/json/');
+    if (fallbackResponse.ok) {
+      const data = await fallbackResponse.json();
+      const geoInfo = {
+        countryCode: data.country_code || null,
+        countryName: data.country_name || null,
+        city: data.city || null,
+        region: data.region || null,
+        ip: data.ip || null
+      };
+      // Cache the result
+      try {
+        localStorage.setItem(GEO_CACHE_KEY, JSON.stringify({
+          data: geoInfo,
+          timestamp: Date.now()
+        }));
+      } catch (e) {
+        // localStorage might be full or disabled, ignore
+      }
+      return geoInfo;
+    }
+  } catch (error) {
+    // Silently fail, will use defaults
+  }
+
+  // Return defaults if all services fail
+  return defaultGeoInfo;
 };
 
 // Get browser language
@@ -171,7 +215,14 @@ export const trackEvent = async (eventType, pagePath = null, metadata = {}) => {
     const visitorId = getVisitorId();
     const sessionId = getSessionId();
     const deviceInfo = getDeviceInfo();
-    const geoInfo = await getGeoInfo();
+    // Get geo info (cached, non-blocking)
+    const geoInfo = await getGeoInfo().catch(() => ({
+      countryCode: null,
+      countryName: null,
+      city: null,
+      region: null,
+      ip: null
+    }));
     const utmParams = getUTMParams();
     const browserLanguage = getBrowserLanguage();
     

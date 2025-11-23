@@ -774,20 +774,42 @@ const Analytics = () => {
         setFunnelData(funnelMetrics);
         
         // Calculate site events data (CTA clicks, scroll depth, etc.)
+        // Filter events by country if filter is set
+        const siteEvents = countryFilter !== 'all' 
+          ? events.filter(e => e.country_code === countryFilter)
+          : events;
+        
         const ctaClicksMap = {};
         const scrollDepthMap = {};
         const navigationClicksMap = {};
         const serviceClicksMap = {};
         
-        events.forEach(e => {
+        // Debug: log site events
+        console.log('📊 [SITE EVENTS] Total events:', siteEvents.length);
+        console.log('📊 [SITE EVENTS] CTA clicks:', siteEvents.filter(e => e.event_type === 'cta_click').length);
+        console.log('📊 [SITE EVENTS] Scroll depth:', siteEvents.filter(e => e.event_type === 'scroll_depth').length);
+        console.log('📊 [SITE EVENTS] Navigation clicks:', siteEvents.filter(e => e.event_type === 'navigation_click').length);
+        console.log('📊 [SITE EVENTS] Service clicks:', siteEvents.filter(e => e.event_type === 'service_click').length);
+        
+        siteEvents.forEach(e => {
           if (e.event_type === 'cta_click') {
-            const location = e.metadata?.cta_location || 'unknown';
+            // Handle both object and string metadata
+            let metadata = e.metadata;
+            if (typeof metadata === 'string') {
+              try {
+                metadata = JSON.parse(metadata);
+              } catch (err) {
+                console.warn('Failed to parse metadata:', err);
+                metadata = {};
+              }
+            }
+            const location = metadata?.cta_location || 'unknown';
             if (!ctaClicksMap[location]) {
               ctaClicksMap[location] = {
                 location: location,
                 count: 0,
                 visitors: new Set(),
-                serviceId: e.metadata?.service_id || null
+                serviceId: (typeof e.metadata === 'object' ? e.metadata?.service_id : (typeof e.metadata === 'string' ? JSON.parse(e.metadata)?.service_id : null)) || null
               };
             }
             ctaClicksMap[location].count++;
@@ -795,7 +817,16 @@ const Analytics = () => {
               ctaClicksMap[location].visitors.add(e.visitor_id);
             }
           } else if (e.event_type === 'scroll_depth') {
-            const percentage = e.metadata?.scroll_percentage || 0;
+            // Handle both object and string metadata
+            let metadata = e.metadata;
+            if (typeof metadata === 'string') {
+              try {
+                metadata = JSON.parse(metadata);
+              } catch (err) {
+                metadata = {};
+              }
+            }
+            const percentage = metadata?.scroll_percentage || metadata?.percentage || 0;
             if (!scrollDepthMap[percentage]) {
               scrollDepthMap[percentage] = {
                 percentage: percentage,
@@ -808,7 +839,16 @@ const Analytics = () => {
               scrollDepthMap[percentage].visitors.add(e.visitor_id);
             }
           } else if (e.event_type === 'navigation_click') {
-            const destination = e.metadata?.destination || 'unknown';
+            // Handle both object and string metadata
+            let metadata = e.metadata;
+            if (typeof metadata === 'string') {
+              try {
+                metadata = JSON.parse(metadata);
+              } catch (err) {
+                metadata = {};
+              }
+            }
+            const destination = metadata?.destination || 'unknown';
             if (!navigationClicksMap[destination]) {
               navigationClicksMap[destination] = {
                 destination: destination,
@@ -821,8 +861,17 @@ const Analytics = () => {
               navigationClicksMap[destination].visitors.add(e.visitor_id);
             }
           } else if (e.event_type === 'service_click') {
-            const serviceId = e.metadata?.service_id || 'unknown';
-            const serviceName = e.metadata?.service_name || 'Unknown Service';
+            // Handle both object and string metadata
+            let metadata = e.metadata;
+            if (typeof metadata === 'string') {
+              try {
+                metadata = JSON.parse(metadata);
+              } catch (err) {
+                metadata = {};
+              }
+            }
+            const serviceId = metadata?.service_id || 'unknown';
+            const serviceName = metadata?.service_name || 'Unknown Service';
             if (!serviceClicksMap[serviceId]) {
               serviceClicksMap[serviceId] = {
                 serviceId: serviceId,
