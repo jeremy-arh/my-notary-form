@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { Line } from 'react-chartjs-2';
-import { format, subHours, subMinutes, eachHourOfInterval, eachMinuteOfInterval, startOfDay, endOfDay } from 'date-fns';
+import { format, subHours, subDays, subMinutes, eachHourOfInterval, eachMinuteOfInterval, startOfDay, endOfDay, startOfToday, startOfYesterday } from 'date-fns';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
 import '../../lib/chartConfig';
@@ -9,8 +9,12 @@ import { defaultChartOptions } from '../../lib/chartConfig';
 
 const Analytics = () => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [timeRange, setTimeRange] = useState('hours'); // 'hours', 'days', 'weeks'
+  const [timeRange, setTimeRange] = useState('hours'); // 'hours', 'days', 'weeks' (deprecated, kept for backward compatibility)
   const [chartTimeRange, setChartTimeRange] = useState('hours'); // 'minutes', 'hours', 'days', 'weeks'
+  const [countryFilter, setCountryFilter] = useState('all'); // 'all' or country code
+  const [dateFilter, setDateFilter] = useState('today'); // 'today', 'yesterday', 'last7days', 'last30days', 'custom'
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [loading, setLoading] = useState(true);
   
   // Overview metrics
@@ -68,37 +72,85 @@ const Analytics = () => {
 
   useEffect(() => {
     fetchAnalyticsData();
-  }, [timeRange, chartTimeRange, pageViewType]);
+  }, [timeRange, chartTimeRange, pageViewType, countryFilter, dateFilter, customStartDate, customEndDate]);
 
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true);
 
-      // Calculate date range based on timeRange
+      // Calculate date range based on dateFilter
       let startDate;
-      if (timeRange === 'hours') {
-        startDate = subHours(new Date(), 14); // Last 14 hours
-      } else if (timeRange === 'days') {
-        startDate = subHours(new Date(), 24 * 7); // Last 7 days
+      let endDate = new Date();
+      
+      if (dateFilter === 'today') {
+        startDate = startOfToday();
+        endDate = new Date();
+      } else if (dateFilter === 'yesterday') {
+        startDate = startOfYesterday();
+        endDate = new Date(startOfToday().getTime() - 1); // End of yesterday
+      } else if (dateFilter === 'last7days') {
+        startDate = startOfDay(subDays(new Date(), 6)); // 7 days including today
+        endDate = new Date();
+      } else if (dateFilter === 'last30days') {
+        startDate = startOfDay(subDays(new Date(), 29)); // 30 days including today
+        endDate = new Date();
+      } else if (dateFilter === 'custom' && customStartDate && customEndDate) {
+        startDate = startOfDay(new Date(customStartDate));
+        endDate = endOfDay(new Date(customEndDate));
       } else {
-        startDate = subHours(new Date(), 24 * 30); // Last 30 days
+        // Fallback to today if custom dates not set
+        startDate = startOfToday();
+        endDate = new Date();
       }
 
-      // Fetch all events
-      console.log('📊 [ANALYTICS] Fetching events from:', startDate.toISOString());
-      const { data: events, error } = await supabase
+      // First, fetch all events to get countries list
+      console.log('📊 [ANALYTICS] Fetching all events from:', startDate.toISOString(), 'to:', endDate.toISOString());
+      const { data: allEvents, error: allEventsError } = await supabase
         .from('analytics_events')
         .select('*')
         .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
         .order('created_at', { ascending: true });
       
-      // Store events in state for use in regions/cities views
-      setEventsData(events || []);
-
-      if (error) {
-        console.error('❌ [ANALYTICS] Error fetching events:', error);
-        throw error;
+      if (allEventsError) {
+        console.error('❌ [ANALYTICS] Error fetching all events:', allEventsError);
+        throw allEventsError;
       }
+      
+      // Calculate countries data from all events (for the filter dropdown)
+      const countryMap = {};
+      (allEvents || []).forEach(e => {
+        if (e.country_code) {
+          const country = e.country_name || e.country_code;
+          if (!countryMap[country]) {
+            countryMap[country] = {
+              code: e.country_code,
+              name: country,
+              visitors: new Set()
+            };
+          }
+          if (e.visitor_id) {
+            countryMap[country].visitors.add(e.visitor_id);
+          }
+        }
+      });
+      const countries = Object.values(countryMap)
+        .map(c => ({
+          code: c.code,
+          name: c.name,
+          visitors: c.visitors.size
+        }))
+        .sort((a, b) => b.visitors - a.visitors);
+      setCountriesData(countries);
+      
+      // Filter events by country if selected
+      let events = allEvents || [];
+      if (countryFilter !== 'all') {
+        events = events.filter(e => e.country_code === countryFilter);
+      }
+      
+      // Store filtered events in state for use in regions/cities views
+      setEventsData(events);
 
       console.log('📊 [ANALYTICS] Events fetched:', events?.length || 0);
       if (events && events.length > 0) {
@@ -169,10 +221,11 @@ const Analytics = () => {
         let chartData = [];
         
         if (chartTimeRange === 'minutes') {
-          // Last 60 minutes, grouped by minute
+          // Last 60 minutes from endDate, grouped by minute
+          const minutesStart = subMinutes(endDate, 60);
           const minutes = eachMinuteOfInterval({
-            start: subMinutes(new Date(), 60),
-            end: new Date()
+            start: minutesStart > startDate ? minutesStart : startDate,
+            end: endDate
           });
           
           chartData = minutes.map(minute => {
@@ -190,7 +243,7 @@ const Analytics = () => {
           // Group by hour
           const hours = eachHourOfInterval({
             start: startOfDay(startDate),
-            end: endOfDay(new Date())
+            end: endOfDay(endDate)
           });
           
           chartData = hours.map(hour => {
@@ -208,7 +261,7 @@ const Analytics = () => {
           // Group by day
           const days = [];
           let currentDate = new Date(startDate);
-          while (currentDate <= new Date()) {
+          while (currentDate <= endDate) {
             const dayStart = new Date(currentDate);
             dayStart.setHours(0, 0, 0, 0);
             const dayEnd = new Date(currentDate);
@@ -232,7 +285,7 @@ const Analytics = () => {
           // Group by week
           const weeks = [];
           let currentDate = new Date(startDate);
-          while (currentDate <= new Date()) {
+          while (currentDate <= endDate) {
             const weekStart = new Date(currentDate);
             weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week (Sunday)
             weekStart.setHours(0, 0, 0, 0);
@@ -257,32 +310,6 @@ const Analytics = () => {
         }
         
         setVisitorChartData(chartData);
-
-        // Calculate countries data
-        const countryMap = {};
-        events.forEach(e => {
-          if (e.country_code) {
-            const country = e.country_name || e.country_code;
-            if (!countryMap[country]) {
-              countryMap[country] = {
-                code: e.country_code,
-                name: country,
-                visitors: new Set()
-              };
-            }
-            if (e.visitor_id) {
-              countryMap[country].visitors.add(e.visitor_id);
-            }
-          }
-        });
-        const countries = Object.values(countryMap)
-          .map(c => ({
-            code: c.code,
-            name: c.name,
-            visitors: c.visitors.size
-          }))
-          .sort((a, b) => b.visitors - a.visitors);
-        setCountriesData(countries);
 
         // Calculate devices data
         const deviceMap = {};
@@ -976,9 +1003,79 @@ const Analytics = () => {
     <AdminLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-600 mt-2">Statistiques et analyses du formulaire</p>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
+            <p className="text-gray-600 mt-2">Statistiques et analyses du formulaire</p>
+          </div>
+          
+          {/* Filters */}
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Date Filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Période:</label>
+              <select
+                value={dateFilter}
+                onChange={(e) => {
+                  setDateFilter(e.target.value);
+                  if (e.target.value !== 'custom') {
+                    setCustomStartDate('');
+                    setCustomEndDate('');
+                  }
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium min-w-[180px]"
+              >
+                <option value="today">Aujourd'hui</option>
+                <option value="yesterday">Hier</option>
+                <option value="last7days">7 derniers jours</option>
+                <option value="last30days">30 derniers jours</option>
+                <option value="custom">Période personnalisée</option>
+              </select>
+              
+              {/* Custom Date Range */}
+              {dateFilter === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+                    max={customEndDate || format(new Date(), 'yyyy-MM-dd')}
+                  />
+                  <span className="text-gray-500">→</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+                    min={customStartDate}
+                    max={format(new Date(), 'yyyy-MM-dd')}
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Country Filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Pays:</label>
+              <select
+                value={countryFilter}
+                onChange={(e) => setCountryFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium min-w-[200px]"
+              >
+                <option value="all">Tous les pays</option>
+                {countriesData.length > 0 ? (
+                  countriesData.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {getCountryFlag(country.code)} {country.name} ({country.visitors})
+                    </option>
+                  ))
+                ) : (
+                  <option disabled>Aucun pays disponible</option>
+                )}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -1033,6 +1130,26 @@ const Analytics = () => {
               }`}
             >
               Pages
+            </button>
+            <button
+              onClick={() => setActiveTab('funnel')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'funnel'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Funnel
+            </button>
+            <button
+              onClick={() => setActiveTab('site')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'site'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Site
             </button>
           </nav>
         </div>
@@ -1149,6 +1266,13 @@ const Analytics = () => {
               </div>
             </div>
 
+          </div>
+        )}
+        
+        {/* Funnel Tab */}
+        {activeTab === 'funnel' && (
+          <div className="space-y-6">
+
             {/* Conversion Funnel */}
             <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
               <div className="flex items-center justify-between mb-6">
@@ -1247,7 +1371,13 @@ const Analytics = () => {
                 </div>
               )}
             </div>
-            
+          </div>
+        )}
+        
+        {/* Site Tab */}
+        {activeTab === 'site' && (
+          <div className="space-y-6">
+
             {/* Site Events Section */}
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Événements du site</h2>

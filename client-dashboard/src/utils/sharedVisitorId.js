@@ -5,7 +5,7 @@
  */
 
 // Generate UUID (fallback for older browsers)
-const generateUUID = () => {
+export const generateUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
