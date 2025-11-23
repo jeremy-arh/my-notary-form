@@ -69,6 +69,9 @@ const Analytics = () => {
   const [selectedVisitor, setSelectedVisitor] = useState(null);
   const [visitorDetailModalOpen, setVisitorDetailModalOpen] = useState(false);
   const [selectedVisitorEvents, setSelectedVisitorEvents] = useState([]);
+  
+  // Traffic sources data
+  const [trafficSourcesData, setTrafficSourcesData] = useState([]);
 
   useEffect(() => {
     fetchAnalyticsData();
@@ -919,6 +922,203 @@ const Analytics = () => {
             }))
             .sort((a, b) => b.count - a.count)
         });
+        
+        // Calculate traffic sources data
+        const sourcesMap = {};
+        const firstPageViewPerSession = {}; // Track first pageview per session to get original source
+        
+        // First, identify the first pageview for each session to get the original source
+        events
+          .filter(e => e.event_type === 'pageview')
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+          .forEach(e => {
+            if (!firstPageViewPerSession[e.session_id]) {
+              firstPageViewPerSession[e.session_id] = e;
+            }
+          });
+        
+        // Process first pageviews to determine traffic sources
+        Object.values(firstPageViewPerSession).forEach(e => {
+          let source = 'Direct';
+          let sourceType = 'direct';
+          let referrerDomain = null;
+          
+          // Parse referrer to identify source (no UTM used)
+          if (e.referrer) {
+            try {
+              const referrerUrl = new URL(e.referrer);
+              const hostname = referrerUrl.hostname.toLowerCase();
+              referrerDomain = referrerUrl.hostname.replace('www.', '');
+              
+              // Known sources
+              if (hostname.includes('google')) {
+                // Check for Google Ads patterns in referrer
+                // Google Ads referrers often contain: googleads, doubleclick, gclid parameter
+                const hasGclid = referrerUrl.searchParams.has('gclid');
+                const hasGoogleAds = hostname.includes('googleads') || hostname.includes('doubleclick');
+                const searchQuery = referrerUrl.searchParams.get('q') || referrerUrl.searchParams.get('query');
+                
+                if (hasGclid || hasGoogleAds) {
+                  // Google Ads detected
+                  source = 'Google Ads';
+                  sourceType = 'paid';
+                } else if (searchQuery) {
+                  // Google SEO (organic search with query)
+                  source = 'Google SEO';
+                  sourceType = 'organic';
+                } else {
+                  // Google but unclear - default to organic
+                  source = 'Google';
+                  sourceType = 'organic';
+                }
+              } else if (hostname.includes('facebook') || hostname.includes('fb.com')) {
+                source = 'Facebook';
+                sourceType = 'social';
+              } else if (hostname.includes('instagram')) {
+                source = 'Instagram';
+                sourceType = 'social';
+              } else if (hostname.includes('linkedin')) {
+                source = 'LinkedIn';
+                sourceType = 'social';
+              } else if (hostname.includes('twitter') || hostname.includes('x.com')) {
+                source = 'Twitter/X';
+                sourceType = 'social';
+              } else if (hostname.includes('youtube')) {
+                source = 'YouTube';
+                sourceType = 'social';
+              } else if (hostname.includes('tiktok')) {
+                source = 'TikTok';
+                sourceType = 'social';
+              } else if (hostname.includes('bing')) {
+                source = 'Bing';
+                sourceType = 'search';
+              } else if (hostname.includes('yahoo')) {
+                source = 'Yahoo';
+                sourceType = 'search';
+              } else if (hostname.includes('mynotary.io') || hostname.includes('app.mynotary.io')) {
+                source = 'Internal';
+                sourceType = 'internal';
+              } else {
+                source = referrerUrl.hostname.replace('www.', '');
+                sourceType = 'referral';
+              }
+            } catch (err) {
+              source = 'Unknown';
+              sourceType = 'unknown';
+              referrerDomain = e.referrer;
+            }
+          }
+          
+          const sourceKey = `${source}|${sourceType}|${referrerDomain || 'none'}`;
+          
+          if (!sourcesMap[sourceKey]) {
+            sourcesMap[sourceKey] = {
+              source: source,
+              sourceType: sourceType,
+              referrerDomain: referrerDomain,
+              sessions: new Set(),
+              visitors: new Set(),
+              pageviews: 0
+            };
+          }
+          
+          sourcesMap[sourceKey].sessions.add(e.session_id);
+          if (e.visitor_id) {
+            sourcesMap[sourceKey].visitors.add(e.visitor_id);
+          }
+        });
+        
+        // Count total pageviews per source
+        events.forEach(e => {
+          if (e.event_type === 'pageview' && firstPageViewPerSession[e.session_id]) {
+            const firstPageView = firstPageViewPerSession[e.session_id];
+            let source = 'Direct';
+            let sourceType = 'direct';
+            let referrerDomain = null;
+            
+            if (firstPageView.referrer) {
+              try {
+                const referrerUrl = new URL(firstPageView.referrer);
+                const hostname = referrerUrl.hostname.toLowerCase();
+                referrerDomain = referrerUrl.hostname.replace('www.', '');
+                
+                if (hostname.includes('google')) {
+                  // Check for Google Ads patterns in referrer
+                  // Google Ads referrers often contain: googleads, doubleclick, gclid parameter
+                  const hasGclid = referrerUrl.searchParams.has('gclid');
+                  const hasGoogleAds = hostname.includes('googleads') || hostname.includes('doubleclick');
+                  const searchQuery = referrerUrl.searchParams.get('q') || referrerUrl.searchParams.get('query');
+                  
+                  if (hasGclid || hasGoogleAds) {
+                    // Google Ads detected
+                    source = 'Google Ads';
+                    sourceType = 'paid';
+                  } else if (searchQuery) {
+                    // Google SEO (organic search with query)
+                    source = 'Google SEO';
+                    sourceType = 'organic';
+                  } else {
+                    // Google but unclear - default to organic
+                    source = 'Google';
+                    sourceType = 'organic';
+                  }
+                } else if (hostname.includes('facebook') || hostname.includes('fb.com')) {
+                  source = 'Facebook';
+                  sourceType = 'social';
+                } else if (hostname.includes('instagram')) {
+                  source = 'Instagram';
+                  sourceType = 'social';
+                } else if (hostname.includes('linkedin')) {
+                  source = 'LinkedIn';
+                  sourceType = 'social';
+                } else if (hostname.includes('twitter') || hostname.includes('x.com')) {
+                  source = 'Twitter/X';
+                  sourceType = 'social';
+                } else if (hostname.includes('youtube')) {
+                  source = 'YouTube';
+                  sourceType = 'social';
+                } else if (hostname.includes('tiktok')) {
+                  source = 'TikTok';
+                  sourceType = 'social';
+                } else if (hostname.includes('bing')) {
+                  source = 'Bing';
+                  sourceType = 'search';
+                } else if (hostname.includes('yahoo')) {
+                  source = 'Yahoo';
+                  sourceType = 'search';
+                } else if (hostname.includes('mynotary.io') || hostname.includes('app.mynotary.io')) {
+                  source = 'Internal';
+                  sourceType = 'internal';
+                } else {
+                  source = referrerUrl.hostname.replace('www.', '');
+                  sourceType = 'referral';
+                }
+              } catch (err) {
+                source = 'Unknown';
+                sourceType = 'unknown';
+                referrerDomain = firstPageView.referrer;
+              }
+            }
+            
+            const sourceKey = `${source}|${sourceType}|${referrerDomain || 'none'}`;
+            if (sourcesMap[sourceKey]) {
+              sourcesMap[sourceKey].pageviews++;
+            }
+          }
+        });
+        
+        const trafficSources = Object.values(sourcesMap)
+          .map(s => ({
+            source: s.source,
+            sourceType: s.sourceType,
+            referrerDomain: s.referrerDomain,
+            sessions: s.sessions.size,
+            visitors: s.visitors.size,
+            pageviews: s.pageviews
+          }))
+          .sort((a, b) => b.visitors - a.visitors);
+        
+        setTrafficSourcesData(trafficSources);
       } else {
         // No data, set defaults
         setMetrics({
@@ -1200,6 +1400,16 @@ const Analytics = () => {
             >
               Site
             </button>
+            <button
+              onClick={() => setActiveTab('sources')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'sources'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Sources
+            </button>
           </nav>
         </div>
 
@@ -1423,6 +1633,123 @@ const Analytics = () => {
           </div>
         )}
         
+        {/* Sources Tab */}
+        {activeTab === 'sources' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sources de trafic</h2>
+              <p className="text-gray-600">Découvrez d'où viennent vos visiteurs</p>
+            </div>
+            
+            {trafficSourcesData.length === 0 ? (
+              <div className="bg-white rounded-lg shadow p-8 text-center">
+                <Icon icon="heroicons:chart-bar" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">Aucune donnée de source de trafic pour cette période</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Source</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Domaine referrer</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Visiteurs</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Sessions</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Pages vues</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {trafficSourcesData.map((source, index) => {
+                        const getSourceIcon = (sourceType) => {
+                          switch (sourceType) {
+                            case 'utm':
+                              return 'heroicons:link';
+                            case 'social':
+                              return 'heroicons:share';
+                            case 'search':
+                              return 'heroicons:magnifying-glass';
+                            case 'organic':
+                              return 'heroicons:globe-alt';
+                            case 'paid':
+                              return 'heroicons:currency-dollar';
+                            case 'referral':
+                              return 'heroicons:arrow-top-right-on-square';
+                            case 'internal':
+                              return 'heroicons:home';
+                            case 'direct':
+                              return 'heroicons:arrow-right';
+                            default:
+                              return 'heroicons:question-mark-circle';
+                          }
+                        };
+                        
+                        const getSourceTypeLabel = (sourceType) => {
+                          switch (sourceType) {
+                            case 'utm':
+                              return 'UTM';
+                            case 'paid':
+                              return 'Payant';
+                            case 'social':
+                              return 'Réseaux sociaux';
+                            case 'search':
+                              return 'Recherche';
+                            case 'organic':
+                              return 'Organique';
+                            case 'referral':
+                              return 'Référence';
+                            case 'internal':
+                              return 'Interne';
+                            case 'direct':
+                              return 'Direct';
+                            default:
+                              return 'Inconnu';
+                          }
+                        };
+                        
+                        return (
+                          <tr key={index} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <Icon icon={getSourceIcon(source.sourceType)} className="w-5 h-5 text-gray-600" />
+                                <span className="text-sm font-medium text-gray-900">{source.source}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                source.sourceType === 'paid' ? 'bg-green-100 text-green-800' :
+                                source.sourceType === 'organic' ? 'bg-blue-100 text-blue-800' :
+                                source.sourceType === 'social' ? 'bg-purple-100 text-purple-800' :
+                                source.sourceType === 'direct' ? 'bg-gray-100 text-gray-800' :
+                                'bg-blue-100 text-blue-800'
+                              }`}>
+                                {getSourceTypeLabel(source.sourceType)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {source.referrerDomain || '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
+                              {source.visitors}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
+                              {source.sessions}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
+                              {source.pageviews}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Site Tab */}
         {activeTab === 'site' && (
           <div className="space-y-6">
