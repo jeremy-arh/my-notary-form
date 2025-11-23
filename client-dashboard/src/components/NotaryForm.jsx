@@ -393,24 +393,44 @@ const NotaryForm = () => {
         
         // Track funnel events for skipped steps when arriving directly from service page
         // This ensures the funnel is complete even when user skips steps
+        // IMPORTANT: Track events BEFORE redirecting to ensure they are sent
         if (completedSteps.length === 0) {
-          // Track form opened (first visit to form)
-          trackFormOpened();
-          
-          // Track form start
-          trackAnalyticsFormStart();
-          trackFormStart({
-            formName: 'notarization_form',
-            serviceType: 'Document Notarization',
-            ctaLocation: 'service_page',
-            ctaText: 'Notarize now'
-          });
-          trackPlausibleFormStart();
-          
-          // Track service selection (since service is pre-selected)
-          trackAnalyticsServiceSelected(serviceParam);
-          trackServicesSelectionCompleted();
-          trackGTMServiceSelected(serviceParam);
+          // Track all events asynchronously before redirecting
+          (async () => {
+            try {
+              // Track all analytics events in parallel for faster execution
+              await Promise.all([
+                trackFormOpened(), // form_opened
+                trackAnalyticsFormStart(), // form_start
+                trackAnalyticsServiceSelected(serviceParam, '', 1, [serviceParam]), // service_selected
+                trackServicesSelectionCompleted([serviceParam]) // services_selection_completed
+              ]);
+              
+              // Track GTM and Plausible events (non-blocking)
+              trackFormStart({
+                formName: 'notarization_form',
+                serviceType: 'Document Notarization',
+                ctaLocation: 'service_page',
+                ctaText: 'Notarize now'
+              });
+              trackPlausibleFormStart();
+              trackGTMServiceSelected(serviceParam);
+              
+              // Mark step 1 as completed AFTER tracking
+              setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
+              
+              // Small delay to ensure events are sent before redirect
+              setTimeout(() => {
+                navigate('/form/documents', { replace: true });
+              }, 500);
+            } catch (error) {
+              console.error('Error tracking funnel events:', error);
+              // Still redirect even if tracking fails
+              setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
+              navigate('/form/documents', { replace: true });
+            }
+          })();
+          return;
         }
         
         // Mark step 1 as completed
@@ -449,29 +469,6 @@ const NotaryForm = () => {
       } else if (currentStepData.id === 2) {
         trackScreenOpened('Upload Documents', '/form/documents', 2);
         trackDocumentScreenOpened(formData.selectedServices?.length || 0);
-        
-        // If arriving directly at documents step (e.g., from service page),
-        // ensure previous funnel steps are tracked
-        if (completedSteps.includes(1) && completedSteps.length === 1) {
-          // Track form opened if not already tracked
-          trackFormOpened();
-          // Track form start if not already tracked
-          trackAnalyticsFormStart();
-          trackFormStart({
-            formName: 'notarization_form',
-            serviceType: 'Document Notarization',
-            ctaLocation: 'service_page',
-            ctaText: 'Notarize now'
-          });
-          trackPlausibleFormStart();
-          // Track service selection completion
-          if (formData.selectedServices && formData.selectedServices.length > 0) {
-            formData.selectedServices.forEach(serviceId => {
-              trackAnalyticsServiceSelected(serviceId);
-            });
-            trackServicesSelectionCompleted();
-          }
-        }
       } else if (currentStepData.id === 3) {
         trackScreenOpened('Add Signatories', '/form/signatories', 3);
         trackSignatoryScreenOpened();
