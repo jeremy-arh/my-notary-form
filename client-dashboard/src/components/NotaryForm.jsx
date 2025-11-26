@@ -1330,7 +1330,7 @@ const NotaryForm = () => {
               <button
                 type="button"
                 onClick={handleContinueClick}
-                className={`btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all text-xs sm:text-sm flex-1 sm:flex-none min-w-0 ${
+                className={`btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all text-xs sm:text-sm flex-shrink-0 ${
                   canProceedFromCurrentStep() 
                     ? 'hover:scale-105 active:scale-95' 
                     : 'opacity-50 hover:opacity-70 active:opacity-90'
@@ -1343,7 +1343,7 @@ const NotaryForm = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center text-xs sm:text-sm flex-1 sm:flex-none min-w-0"
+                className="btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center text-xs sm:text-sm flex-shrink-0"
               >
                 {isSubmitting ? (
                   <>
