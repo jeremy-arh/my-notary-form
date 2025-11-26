@@ -283,14 +283,13 @@ serve(async (req) => {
         data: {
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments, // Already converted
-          signatories: formData.signatories || [], // Signatories data (global list)
+          signatoryCount: formData.signatoryCount || null, // Number of signatories
           currency: currency, // Stocker la devise dans les données de la submission
         },
       }
 
       console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
-      console.log('👥 [SIGNATORIES] Signatories in submission.data:', JSON.stringify(submissionData.data.signatories, null, 2))
-      console.log('👥 [SIGNATORIES] Signatories count:', submissionData.data.signatories?.length || 0)
+      console.log('👥 [SIGNATORIES] Signatory count in submission.data:', submissionData.data.signatoryCount)
 
       const { data: newSubmission, error: submissionError } = await supabase
         .from('submission')
@@ -392,7 +391,6 @@ serve(async (req) => {
                 currency: stripeCurrency,
                 product_data: {
                   name: `${service.name} (${documentCount} document${documentCount > 1 ? 's' : ''})`,
-                  description: service.short_description || service.description,
                 },
                 unit_amount: unitAmount,
               },
@@ -474,7 +472,6 @@ serve(async (req) => {
               currency: stripeCurrency,
               product_data: {
                 name: `${option.name} (${count} document${count > 1 ? 's' : ''})`,
-                description: option.description || '',
               },
               unit_amount: unitAmount,
             },
@@ -491,15 +488,24 @@ serve(async (req) => {
 
     // Calculate additional signatories cost (€10 per additional signatory, first one is included)
     let additionalSignatoriesCount = 0
-    if (formData.signatories && Array.isArray(formData.signatories)) {
-      console.log('📋 [SIGNATORIES] Processing signatories:', formData.signatories.length, 'signatories (global)')
-      if (formData.signatories.length > 1) {
+    console.log('🔍 [SIGNATORIES DEBUG] formData.signatoryCount:', formData.signatoryCount, 'type:', typeof formData.signatoryCount)
+    
+    // Convert to number if it's a string, handle null/undefined
+    const signatoryCount = formData.signatoryCount != null ? Number(formData.signatoryCount) : 0
+    console.log('🔍 [SIGNATORIES DEBUG] signatoryCount (converted):', signatoryCount, 'type:', typeof signatoryCount, 'isNaN:', isNaN(signatoryCount))
+    
+    if (!isNaN(signatoryCount) && signatoryCount > 0) {
+      console.log('📋 [SIGNATORIES] Processing signatory count:', signatoryCount, 'signatories')
+      if (signatoryCount > 1) {
         // First signatory is included, count additional ones
-        additionalSignatoriesCount = formData.signatories.length - 1
-        console.log(`   Total: ${formData.signatories.length} signatories (${additionalSignatoriesCount} additional)`)
-      } else if (formData.signatories.length === 1) {
+        additionalSignatoriesCount = signatoryCount - 1
+        console.log(`   Total: ${signatoryCount} signatories (${additionalSignatoriesCount} additional)`)
+      } else if (signatoryCount === 1) {
         console.log(`   Total: 1 signatory (included)`)
+        additionalSignatoriesCount = 0
       }
+      
+      console.log('🔍 [SIGNATORIES DEBUG] additionalSignatoriesCount:', additionalSignatoriesCount)
       
       if (additionalSignatoriesCount > 0) {
         const additionalSignatoriesPriceEUR = 10.00 // €10 per additional signatory (en EUR)
@@ -510,18 +516,20 @@ serve(async (req) => {
           ? Math.round(additionalSignatoriesPrice) 
           : Math.round(additionalSignatoriesPrice * 100)
         
-        lineItems.push({
+        const signatoriesLineItem = {
           price_data: {
             currency: stripeCurrency,
             product_data: {
               name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? 'ies' : ''})`,
-              description: 'Fee for additional signatories (the first signatory is included)',
             },
             unit_amount: unitAmount,
           },
           quantity: additionalSignatoriesCount, // Quantity should match the number of additional signatories
-        })
+        }
+        console.log('🔍 [SIGNATORIES DEBUG] Line item to add:', JSON.stringify(signatoriesLineItem, null, 2))
+        lineItems.push(signatoriesLineItem)
         console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = ${currency}${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(currency === 'JPY' ? 0 : 2)} (${additionalSignatoriesPriceEUR} EUR converted)`)
+        console.log(`🔍 [SIGNATORIES DEBUG] Total lineItems count after adding signatories:`, lineItems.length)
       } else {
         console.log(`ℹ️ [SIGNATORIES] No additional signatories (only first signatory per document)`)
       }
@@ -534,6 +542,10 @@ serve(async (req) => {
       console.error('❌ [SERVICES] No valid services with documents selected')
       throw new Error('No valid services with documents selected')
     }
+
+    // Log all line items before creating Stripe session
+    console.log('🔍 [STRIPE DEBUG] All line items before creating session:', JSON.stringify(lineItems, null, 2))
+    console.log('🔍 [STRIPE DEBUG] Total line items:', lineItems.length)
 
     // Create Stripe Checkout Session with minimal metadata
     const sessionParams: any = {

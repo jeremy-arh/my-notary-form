@@ -56,12 +56,13 @@ import {
 import { openCrisp } from '../utils/crisp';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
-import Signatories from './steps/Signatories';
+import SignatoryCount from './steps/SignatoryCount';
 import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
 import Notification from './Notification';
 import CurrencySelector from './CurrencySelector';
+import PriceDetails from './PriceDetails';
 
 const NotaryForm = () => {
   const navigate = useNavigate();
@@ -72,6 +73,7 @@ const NotaryForm = () => {
   const [notification, setNotification] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(true);
 
   // Load currency from localStorage first, then use it as default
   const getInitialCurrency = () => {
@@ -96,8 +98,8 @@ const NotaryForm = () => {
     // Documents (step 2) - organized by service
     serviceDocuments: {}, // { serviceId: [files] }
 
-    // Signatories (step 3) - global list for the entire order
-    signatories: [], // [signatories] - global list for all documents
+    // Signatories (step 3) - number of signatories
+    signatoryCount: null, // Number of signatories
 
     // Appointment
     appointmentDate: '',
@@ -108,9 +110,7 @@ const NotaryForm = () => {
     firstName: '',
     lastName: '',
     email: '',
-    phone: '',
     password: '',
-    confirmPassword: '',
     address: '',
     city: '',
     postalCode: '',
@@ -152,29 +152,8 @@ const NotaryForm = () => {
         });
 
       case 3: // Add Signatories
-        // Check that there is at least one signatory and all have required fields
-        if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
-          return false;
-        }
-        
-        // Check that all signatories have required fields filled
-        for (const signatory of formData.signatories) {
-          if (!signatory || 
-              !signatory.firstName?.trim() || 
-              !signatory.lastName?.trim() || 
-              !signatory.birthDate?.trim() || 
-              !signatory.birthCity?.trim() || 
-              !signatory.postalAddress?.trim() ||
-              !signatory.email?.trim() ||
-              !signatory.phone?.trim()) {
-            return false;
-          }
-          // Validate email format
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email?.trim())) {
-            return false;
-          }
-        }
-        return true;
+        // Check that signatory count is selected
+        return formData.signatoryCount && formData.signatoryCount > 0;
 
       case 4: // Book an appointment
         return formData.appointmentDate && formData.appointmentTime;
@@ -183,17 +162,15 @@ const NotaryForm = () => {
         const requiredFields = [
           formData.firstName,
           formData.lastName,
-          formData.email,
-          formData.phone,
           formData.address,
           formData.city,
           formData.postalCode,
           formData.country
         ];
 
-        // If not authenticated, also require password
+        // If not authenticated, also require email and password
         if (!isAuthenticated) {
-          requiredFields.push(formData.password, formData.confirmPassword);
+          requiredFields.push(formData.email, formData.password);
         }
 
         // Check all required fields are filled
@@ -230,43 +207,10 @@ const NotaryForm = () => {
         return 'Please upload at least one document for each selected service.';
 
       case 3: // Add Signatories
-        if (!formData.signatories || formData.signatories.length === 0) {
-          return 'Please add at least one signatory to continue.';
+        if (!formData.signatoryCount) {
+          return 'Please select the number of signatories to continue.';
         }
-        
-        const missingFields = [];
-        const invalidEmails = [];
-        
-        formData.signatories.forEach((signatory, index) => {
-          const signatoryNum = index + 1;
-          const signatoryErrors = [];
-          
-          if (!signatory.firstName?.trim()) signatoryErrors.push('first name');
-          if (!signatory.lastName?.trim()) signatoryErrors.push('last name');
-          if (!signatory.birthDate?.trim()) signatoryErrors.push('birth date');
-          if (!signatory.birthCity?.trim()) signatoryErrors.push('birth city');
-          if (!signatory.postalAddress?.trim()) signatoryErrors.push('address');
-          if (!signatory.email?.trim()) signatoryErrors.push('email');
-          else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signatory.email.trim())) {
-            invalidEmails.push(`Signatory ${signatoryNum}`);
-          }
-          if (!signatory.phone?.trim()) signatoryErrors.push('phone');
-          
-          if (signatoryErrors.length > 0) {
-            missingFields.push(`Signatory ${signatoryNum}: ${signatoryErrors.join(', ')}`);
-          }
-        });
-        
-        let message = '';
-        if (missingFields.length > 0) {
-          message = `Please complete the missing information:\n${missingFields.join('\n')}`;
-        }
-        if (invalidEmails.length > 0) {
-          if (message) message += '\n\n';
-          message += `Please correct invalid email addresses: ${invalidEmails.join(', ')}`;
-        }
-        
-        return message || 'Please complete all required information for each signatory.';
+        return '';
 
       case 4: // Book an appointment
         const missing = [];
@@ -690,14 +634,14 @@ const NotaryForm = () => {
           break;
         case 3: // Signatories Added
           // Analytics
-          if (formData.signatories && formData.signatories.length > 0) {
-            trackAnalyticsSignatoryAdded(formData.signatories.length);
-            trackSignatoriesCompleted(formData.signatories.length);
+          if (formData.signatoryCount && formData.signatoryCount > 0) {
+            trackAnalyticsSignatoryAdded(formData.signatoryCount);
+            trackSignatoriesCompleted(formData.signatoryCount);
           }
           // Plausible
-          trackSignatoriesAdded(formData.signatories?.length || 0);
+          trackSignatoriesAdded(formData.signatoryCount || 0);
           // GTM
-          trackGTMSignatoriesAdded(formData.signatories?.length || 0);
+          trackGTMSignatoriesAdded(formData.signatoryCount || 0);
           break;
         case 4: // Appointment Booked
           // Analytics
@@ -755,21 +699,21 @@ const NotaryForm = () => {
           trackAnalyticsSummaryViewed({
             servicesCount: formData.selectedServices?.length || 0,
             documentsCount: totalDocs,
-            signatoriesCount: formData.signatories?.length || 0,
+            signatoriesCount: formData.signatoryCount || 0,
             hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
           });
           // Plausible
           trackSummaryViewed({
             servicesCount: formData.selectedServices?.length || 0,
             documentsCount: totalDocs,
-            signatoriesCount: formData.signatories?.length || 0,
+            signatoriesCount: formData.signatoryCount || 0,
             hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
           });
           // GTM
           trackGTMSummaryViewed({
             totalServices: formData.selectedServices?.length || 0,
             totalDocuments: totalDocs,
-            totalSignatories: formData.signatories?.length || 0,
+            totalSignatories: formData.signatoryCount || 0,
             hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
           });
         }
@@ -896,8 +840,7 @@ const NotaryForm = () => {
       console.log('📤 Calling Edge Function with full data:');
       console.log('   selectedServices:', submissionData.selectedServices);
       console.log('   serviceDocuments:', submissionData.serviceDocuments);
-      console.log('   signatories:', submissionData.signatories);
-      console.log('   signatories count:', submissionData.signatories?.length || 0);
+      console.log('   signatoryCount:', submissionData.signatoryCount);
       console.log('   currency:', submissionData.currency || 'EUR (default)');
 
       // Log document count per service with options info
@@ -1306,7 +1249,7 @@ const NotaryForm = () => {
             <Route
               path="signatories"
               element={
-                <Signatories
+                <SignatoryCount
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}
@@ -1363,6 +1306,15 @@ const NotaryForm = () => {
       {/* Mobile Footer - Navigation Buttons + Progress Bar in ONE fixed container - Visible until xl */}
       {!isMobileMenuOpen && (
         <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] border-t border-gray-200 z-50 safe-area-inset-bottom">
+          {/* Price Details - Only show on Summary step */}
+          {currentStep === 6 && (
+            <PriceDetails 
+              formData={formData} 
+              isOpen={isPriceDetailsOpen}
+              onToggle={setIsPriceDetailsOpen}
+            />
+          )}
+          
           {/* Navigation Buttons */}
           <div className="px-2 sm:px-3 pt-2.5 sm:pt-3 pb-1.5 sm:pb-2 flex justify-between items-center gap-1.5 sm:gap-2">
             {currentStep > 1 ? (
