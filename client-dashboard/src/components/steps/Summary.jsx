@@ -84,10 +84,10 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
 
   // Helper function to truncate file name on mobile
   const truncateFileName = (fileName) => {
-    if (isMobile && fileName.length > 50) {
+    if (isMobile && fileName.length > 30) {
       const extension = fileName.substring(fileName.lastIndexOf('.'));
       const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
-      const truncatedName = nameWithoutExt.substring(0, 50 - extension.length - 3) + '...';
+      const truncatedName = nameWithoutExt.substring(0, 30 - extension.length - 3) + '...';
       return truncatedName + extension;
     }
     return fileName;
