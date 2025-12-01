@@ -106,7 +106,9 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       city: addressData.city || '',
       postalCode: addressData.postal_code || '',
       country: addressData.country || '',
-      timezone: addressData.timezone || ''
+      timezone: addressData.timezone || '',
+      // Marquer que ces champs ont été remplis par l'autocomplétion
+      _addressAutoFilled: true
     });
   };
 
@@ -339,11 +341,25 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               type="text"
               id="country"
               value={formData.country || ''}
-              onChange={(e) => handleChange('country', e.target.value)}
-              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
+              onChange={(e) => {
+                handleChange('country', e.target.value);
+                // Si l'utilisateur modifie manuellement, retirer le flag d'autocomplétion
+                if (formData._addressAutoFilled) {
+                  updateFormData({ _addressAutoFilled: false });
+                }
+              }}
+              disabled={!!(formData._addressAutoFilled && formData.country && formData.country.trim() !== '')}
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl transition-all text-sm sm:text-base ${
+                formData._addressAutoFilled && formData.country && formData.country.trim() !== ''
+                  ? 'bg-gray-50 text-gray-500 cursor-not-allowed'
+                  : 'bg-white focus:ring-2 focus:ring-black focus:border-black'
+              } ${
                 errors.country ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder={t('form.steps.personalInfo.placeholderCountry')}
+              placeholder={formData._addressAutoFilled && formData.country && formData.country.trim() !== ''
+                ? t('form.steps.personalInfo.placeholderAutoFilled')
+                : t('form.steps.personalInfo.placeholderCountry')
+              }
             />
             {errors.country && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
