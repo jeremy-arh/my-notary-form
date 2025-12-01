@@ -357,7 +357,27 @@ const Profile = () => {
                           {formatDate(invoice.data.payment.paid_at || invoice.created_at)}
                         </td>
                         <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm text-gray-900 whitespace-nowrap">
-                          ${((invoice.data.payment.amount_paid || 0) / 100).toFixed(2)} {(invoice.data.payment.currency || 'usd').toUpperCase()}
+                          {(() => {
+                            const amount = (invoice.data.payment.amount_paid || 0) / 100;
+                            const currency = (invoice.data.payment.currency || 'usd').toUpperCase();
+                            const locale = currency === 'USD' ? 'en-US' : 
+                                         currency === 'GBP' ? 'en-GB' : 
+                                         currency === 'CAD' ? 'en-CA' : 
+                                         currency === 'AUD' ? 'en-AU' : 
+                                         currency === 'CHF' ? 'de-CH' : 
+                                         currency === 'JPY' ? 'ja-JP' : 
+                                         currency === 'CNY' ? 'zh-CN' : 'fr-FR';
+                            return new Intl.NumberFormat(locale, {
+                              style: 'currency',
+                              currency: currency === 'USD' ? 'USD' : 
+                                       currency === 'GBP' ? 'GBP' : 
+                                       currency === 'CAD' ? 'CAD' : 
+                                       currency === 'AUD' ? 'AUD' : 
+                                       currency === 'CHF' ? 'CHF' : 
+                                       currency === 'JPY' ? 'JPY' : 
+                                       currency === 'CNY' ? 'CNY' : 'EUR'
+                            }).format(amount);
+                          })()}
                         </td>
                         <td className="py-3 sm:py-4 px-2 sm:px-4 whitespace-nowrap">
                           <span className="px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold border bg-green-100 text-green-800 border-green-200">

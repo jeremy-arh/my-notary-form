@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { lazy, Suspense, useEffect } from 'react'
 import { ToastProvider } from './contexts/ToastContext'
+import { CurrencyProvider } from './contexts/CurrencyContext'
+import { LanguageProvider } from './contexts/LanguageContext'
+import { initCrisp } from './utils/crisp'
 import Home from './components/Home'
 import Login from './pages/client/Login'
 import ResetPassword from './pages/client/ResetPassword'
@@ -28,12 +31,19 @@ function App() {
     if (!window.location.pathname.startsWith('/form')) {
       document.title = 'Client dashboard';
     }
+    
+    // Initialize Crisp chat for dashboard (not for form - form uses button to open)
+    if (!window.location.pathname.startsWith('/form')) {
+      initCrisp();
+    }
   }, []);
 
   return (
     <ToastProvider>
-      <BrowserRouter>
-        <Routes>
+      <CurrencyProvider>
+        <LanguageProvider>
+          <BrowserRouter>
+          <Routes>
         {/* Smart redirect based on authentication */}
         <Route path="/" element={<Home />} />
 
@@ -88,8 +98,10 @@ function App() {
             </PrivateRoute>
           }
         />
-      </Routes>
-    </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+        </LanguageProvider>
+      </CurrencyProvider>
     </ToastProvider>
   )
 }

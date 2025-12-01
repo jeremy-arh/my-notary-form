@@ -13,6 +13,24 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 }
 
+// Fonction de conversion de devises (EUR vers autres devises)
+// Les prix dans la base de données sont stockés en EUR
+const convertCurrency = (amountEUR: number, targetCurrency: string): number => {
+  const exchangeRates: { [key: string]: number } = {
+    'EUR': 1.0,
+    'USD': 1.10, // Exemple: 1 EUR = 1.10 USD
+    'GBP': 0.85, // Exemple: 1 EUR = 0.85 GBP
+    'CAD': 1.50, // Exemple: 1 EUR = 1.50 CAD
+    'AUD': 1.65, // Exemple: 1 EUR = 1.65 AUD
+    'CHF': 0.95, // Exemple: 1 EUR = 0.95 CHF
+    'JPY': 165.0, // Exemple: 1 EUR = 165 JPY
+    'CNY': 7.80, // Exemple: 1 EUR = 7.80 CNY
+  }
+  
+  const rate = exchangeRates[targetCurrency.toUpperCase()] || 1.0
+  return amountEUR * rate
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -25,10 +43,11 @@ serve(async (req) => {
   let stripeCustomerId: string | null = null
 
   try {
-    try {
-      const body = await req.json()
-      formData = body.formData
-      submissionId = body.submissionId
+      let body: any = null
+      try {
+        body = await req.json()
+        formData = body.formData
+        submissionId = body.submissionId
     } catch (jsonError: any) {
       console.error('❌ [ERROR] Failed to parse request body:', jsonError)
       return new Response(
@@ -43,6 +62,13 @@ serve(async (req) => {
     if (!formData) {
       throw new Error('Missing required field: formData')
     }
+
+    // Récupérer la devise : d'abord depuis le paramètre séparé, puis depuis formData (par défaut EUR)
+    let currency = (body.currency || formData.currency || 'EUR').toUpperCase()
+    let stripeCurrency = currency.toLowerCase() // Stripe utilise des codes en minuscules
+    console.log('💰 [CURRENCY] Devise détectée:', currency, '(Stripe:', stripeCurrency + ')')
+    console.log('💰 [CURRENCY] body.currency:', body.currency)
+    console.log('💰 [CURRENCY] formData.currency:', formData.currency)
 
     // Get the authorization header
     const authHeader = req.headers.get('Authorization')!
@@ -257,13 +283,13 @@ serve(async (req) => {
         data: {
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments, // Already converted
-          signatories: formData.signatories || [], // Signatories data (global list)
+          signatoryCount: formData.signatoryCount || null, // Number of signatories
+          currency: currency, // Stocker la devise dans les données de la submission
         },
       }
 
       console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
-      console.log('👥 [SIGNATORIES] Signatories in submission.data:', JSON.stringify(submissionData.data.signatories, null, 2))
-      console.log('👥 [SIGNATORIES] Signatories count:', submissionData.data.signatories?.length || 0)
+      console.log('👥 [SIGNATORIES] Signatory count in submission.data:', submissionData.data.signatoryCount)
 
       const { data: newSubmission, error: submissionError } = await supabase
         .from('submission')
@@ -323,6 +349,21 @@ serve(async (req) => {
       })
     }
 
+    // Si c'est une soumission existante, vérifier d'abord le paramètre currency séparé,
+    // puis les données de la submission, sinon utiliser la devise déjà récupérée
+    if (submissionId && submission) {
+      // Le paramètre currency séparé a la priorité (déjà récupéré au début)
+      // Si pas de paramètre séparé, utiliser la devise de la submission
+      if (!body.currency && submission.data?.currency) {
+        const submissionCurrency = (submission.data.currency || 'EUR').toUpperCase()
+        currency = submissionCurrency
+        stripeCurrency = currency.toLowerCase()
+        console.log('💰 [CURRENCY] Devise récupérée depuis la submission existante:', currency, '(Stripe:', stripeCurrency + ')')
+      } else {
+        console.log('💰 [CURRENCY] Utilisation de la devise du paramètre séparé:', currency, '(Stripe:', stripeCurrency + ')')
+      }
+    }
+
     // Calculate line items for Stripe from selected services and documents
     const lineItems = []
     const optionCounts = {} // Track total count per option across all services
@@ -336,19 +377,26 @@ serve(async (req) => {
           const documentCount = documentsForService.length
 
           if (documentCount > 0) {
+            // Convertir le prix depuis EUR vers la devise demandée
+            const priceInCurrency = convertCurrency(service.base_price || 0, currency)
+            // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
+            // Pour les autres devises, convertir en centimes
+            const unitAmount = currency === 'JPY' 
+              ? Math.round(priceInCurrency) 
+              : Math.round(priceInCurrency * 100)
+            
             // Add main service line item
             lineItems.push({
               price_data: {
-                currency: 'eur',
+                currency: stripeCurrency,
                 product_data: {
                   name: `${service.name} (${documentCount} document${documentCount > 1 ? 's' : ''})`,
-                  description: service.short_description || service.description,
                 },
-                unit_amount: Math.round(service.base_price * 100), // Convert to cents
+                unit_amount: unitAmount,
               },
               quantity: documentCount,
             })
-            console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = €${(service.base_price * documentCount).toFixed(2)}`)
+            console.log(`✅ [SERVICES] Added service: ${service.name} × ${documentCount} documents = ${currency}${(priceInCurrency * documentCount).toFixed(currency === 'JPY' ? 0 : 2)} (${service.base_price} EUR converted)`)
 
             // Count options for this service
             console.log(`📋 [OPTIONS DEBUG] Checking documents for service ${service.name}:`)
@@ -412,18 +460,24 @@ serve(async (req) => {
         console.log(`📋 [OPTIONS] Processing option ${optionId}:`, option ? option.name : 'NOT FOUND')
 
         if (option && option.additional_price) {
+          // Convertir le prix depuis EUR vers la devise demandée
+          const priceInCurrency = convertCurrency(option.additional_price || 0, currency)
+          // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
+          const unitAmount = currency === 'JPY' 
+            ? Math.round(priceInCurrency) 
+            : Math.round(priceInCurrency * 100)
+          
           lineItems.push({
             price_data: {
-              currency: 'eur',
+              currency: stripeCurrency,
               product_data: {
                 name: `${option.name} (${count} document${count > 1 ? 's' : ''})`,
-                description: option.description || '',
               },
-              unit_amount: Math.round(option.additional_price * 100),
+              unit_amount: unitAmount,
             },
             quantity: count,
           })
-          console.log(`✅ [OPTIONS] Added option: ${option.name} × ${count} documents = €${(option.additional_price * count).toFixed(2)}`)
+          console.log(`✅ [OPTIONS] Added option: ${option.name} × ${count} documents = ${currency}${(priceInCurrency * count).toFixed(currency === 'JPY' ? 0 : 2)} (${option.additional_price} EUR converted)`)
         } else {
           console.warn(`⚠️ [OPTIONS] Option ${optionId} not found or has no price`)
         }
@@ -434,30 +488,48 @@ serve(async (req) => {
 
     // Calculate additional signatories cost (€10 per additional signatory, first one is included)
     let additionalSignatoriesCount = 0
-    if (formData.signatories && Array.isArray(formData.signatories)) {
-      console.log('📋 [SIGNATORIES] Processing signatories:', formData.signatories.length, 'signatories (global)')
-      if (formData.signatories.length > 1) {
+    console.log('🔍 [SIGNATORIES DEBUG] formData.signatoryCount:', formData.signatoryCount, 'type:', typeof formData.signatoryCount)
+    
+    // Convert to number if it's a string, handle null/undefined
+    const signatoryCount = formData.signatoryCount != null ? Number(formData.signatoryCount) : 0
+    console.log('🔍 [SIGNATORIES DEBUG] signatoryCount (converted):', signatoryCount, 'type:', typeof signatoryCount, 'isNaN:', isNaN(signatoryCount))
+    
+    if (!isNaN(signatoryCount) && signatoryCount > 0) {
+      console.log('📋 [SIGNATORIES] Processing signatory count:', signatoryCount, 'signatories')
+      if (signatoryCount > 1) {
         // First signatory is included, count additional ones
-        additionalSignatoriesCount = formData.signatories.length - 1
-        console.log(`   Total: ${formData.signatories.length} signatories (${additionalSignatoriesCount} additional)`)
-      } else if (formData.signatories.length === 1) {
+        additionalSignatoriesCount = signatoryCount - 1
+        console.log(`   Total: ${signatoryCount} signatories (${additionalSignatoriesCount} additional)`)
+      } else if (signatoryCount === 1) {
         console.log(`   Total: 1 signatory (included)`)
+        additionalSignatoriesCount = 0
       }
       
+      console.log('🔍 [SIGNATORIES DEBUG] additionalSignatoriesCount:', additionalSignatoriesCount)
+      
       if (additionalSignatoriesCount > 0) {
-        const additionalSignatoriesPrice = 10.00 // €10 per additional signatory
-        lineItems.push({
+        const additionalSignatoriesPriceEUR = 10.00 // €10 per additional signatory (en EUR)
+        // Convertir le prix depuis EUR vers la devise demandée
+        const additionalSignatoriesPrice = convertCurrency(additionalSignatoriesPriceEUR, currency)
+        // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
+        const unitAmount = currency === 'JPY' 
+          ? Math.round(additionalSignatoriesPrice) 
+          : Math.round(additionalSignatoriesPrice * 100)
+        
+        const signatoriesLineItem = {
           price_data: {
-            currency: 'eur',
+            currency: stripeCurrency,
             product_data: {
               name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? 'ies' : ''})`,
-              description: 'Fee for additional signatories (the first signatory is included)',
             },
-            unit_amount: Math.round(additionalSignatoriesPrice * 100), // Convert to cents (€10 per signatory)
+            unit_amount: unitAmount,
           },
           quantity: additionalSignatoriesCount, // Quantity should match the number of additional signatories
-        })
-        console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = €${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(2)}`)
+        }
+        console.log('🔍 [SIGNATORIES DEBUG] Line item to add:', JSON.stringify(signatoriesLineItem, null, 2))
+        lineItems.push(signatoriesLineItem)
+        console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = ${currency}${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(currency === 'JPY' ? 0 : 2)} (${additionalSignatoriesPriceEUR} EUR converted)`)
+        console.log(`🔍 [SIGNATORIES DEBUG] Total lineItems count after adding signatories:`, lineItems.length)
       } else {
         console.log(`ℹ️ [SIGNATORIES] No additional signatories (only first signatory per document)`)
       }
@@ -470,6 +542,10 @@ serve(async (req) => {
       console.error('❌ [SERVICES] No valid services with documents selected')
       throw new Error('No valid services with documents selected')
     }
+
+    // Log all line items before creating Stripe session
+    console.log('🔍 [STRIPE DEBUG] All line items before creating session:', JSON.stringify(lineItems, null, 2))
+    console.log('🔍 [STRIPE DEBUG] Total line items:', lineItems.length)
 
     // Create Stripe Checkout Session with minimal metadata
     const sessionParams: any = {

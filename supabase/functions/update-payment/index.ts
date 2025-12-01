@@ -11,6 +11,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Fonction de conversion de devises (EUR vers autres devises)
+// Les prix dans la base de données sont stockés en EUR
+const convertCurrency = (amountEUR: number, targetCurrency: string): number => {
+  const exchangeRates: { [key: string]: number } = {
+    'EUR': 1.0,
+    'USD': 1.10, // Exemple: 1 EUR = 1.10 USD
+    'GBP': 0.85, // Exemple: 1 EUR = 0.85 GBP
+    'CAD': 1.50, // Exemple: 1 EUR = 1.50 CAD
+    'AUD': 1.65, // Exemple: 1 EUR = 1.65 AUD
+    'CHF': 0.95, // Exemple: 1 EUR = 0.95 CHF
+    'JPY': 165.0, // Exemple: 1 EUR = 165 JPY
+    'CNY': 7.80, // Exemple: 1 EUR = 7.80 CNY
+  }
+  
+  const rate = exchangeRates[targetCurrency.toUpperCase()] || 1.0
+  return amountEUR * rate
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -65,6 +83,11 @@ serve(async (req) => {
     if (fetchError || !submission) {
       throw new Error('Submission not found')
     }
+
+    // Récupérer la devise depuis la submission (par défaut EUR)
+    const currency = (submission.data?.currency || 'EUR').toUpperCase()
+    const stripeCurrency = currency.toLowerCase() // Stripe utilise des codes en minuscules
+    console.log('💰 [UPDATE-PAYMENT] Devise de la submission:', currency, '(Stripe:', stripeCurrency + ')')
 
     // Get Stripe customer ID from client record if available
     let stripeCustomerId: string | null = null
@@ -322,7 +345,7 @@ serve(async (req) => {
               
               const additionalPaymentIntent = await stripe.paymentIntents.create({
                 amount: Math.abs(differenceInCents),
-                currency: 'usd',
+                currency: stripeCurrency,
                 customer: customerId,
                 payment_method: paymentMethodId,
                 off_session: true,
@@ -386,10 +409,10 @@ serve(async (req) => {
                 line_items: [
                   {
                     price_data: {
-                      currency: 'usd',
+                      currency: stripeCurrency,
                       product_data: {
                         name: `Additional charge for submission ${submissionId.substring(0, 8)}`,
-                        description: `Price adjustment: Net paid $${netPaidAmount.toFixed(2)} → New $${validatedNewAmount.toFixed(2)}`
+                        description: `Price adjustment: Net paid ${currency}${netPaidAmount.toFixed(2)} → New ${currency}${validatedNewAmount.toFixed(2)}`
                       },
                       unit_amount: Math.abs(differenceInCents)
                     },
@@ -431,10 +454,10 @@ serve(async (req) => {
               line_items: [
                 {
                   price_data: {
-                    currency: 'usd',
+                    currency: stripeCurrency,
                     product_data: {
                       name: `Additional charge for submission ${submissionId.substring(0, 8)}`,
-                      description: `Price adjustment: Net paid $${netPaidAmount.toFixed(2)} → New $${validatedNewAmount.toFixed(2)}`
+                      description: `Price adjustment: Net paid ${currency}${netPaidAmount.toFixed(2)} → New ${currency}${validatedNewAmount.toFixed(2)}`
                     },
                     unit_amount: Math.abs(differenceInCents)
                   },
@@ -512,10 +535,10 @@ serve(async (req) => {
             line_items: [
               {
                 price_data: {
-                  currency: 'usd',
+                  currency: stripeCurrency,
                   product_data: {
                     name: `Additional charge for submission ${submissionId.substring(0, 8)}`,
-                    description: `Price adjustment: Net paid $${netPaidAmount.toFixed(2)} → New $${validatedNewAmount.toFixed(2)}`
+                    description: `Price adjustment: Net paid ${currency}${netPaidAmount.toFixed(2)} → New ${currency}${validatedNewAmount.toFixed(2)}`
                   },
                   unit_amount: Math.abs(differenceInCents)
                 },
@@ -640,7 +663,7 @@ serve(async (req) => {
         (paymentInfo.additional_payments || []).concat([{
           payment_intent_id: result.payment_intent_id,
           amount: Math.abs(differenceInCents),
-          currency: 'usd',
+          currency: stripeCurrency,
           status: 'succeeded',
           created_at: new Date().toISOString()
         }]) : paymentInfo.additional_payments || [],
@@ -648,7 +671,7 @@ serve(async (req) => {
         (paymentInfo.refunds || []).concat([{
           id: result.refund_id,
           amount: Math.abs(differenceInCents),
-          currency: 'usd',
+          currency: stripeCurrency,
           status: 'succeeded',
           reason: 'requested_by_customer',
           created_at: new Date().toISOString()

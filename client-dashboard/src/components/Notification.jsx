@@ -46,22 +46,23 @@ const Notification = ({ type = 'success', message, onClose, duration = 5000 }) =
   const style = styles[type] || styles.info;
 
   return (
-    <div className={`fixed top-4 right-4 z-50 max-w-md w-full animate-slide-in-right`}>
-      <div className={`${style.bg} border-2 rounded-xl p-4 shadow-lg`}>
+    <div className={`fixed top-2 right-2 sm:top-4 sm:right-4 z-[9999] max-w-[calc(100vw-1rem)] sm:max-w-md w-full animate-slide-in-right`}>
+      <div className={`${style.bg} border-2 rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-lg`}>
         <div className="flex items-start">
           <div className={`flex-shrink-0 ${style.iconColor}`}>
-            <Icon icon={style.icon} className="w-6 h-6" />
+            <Icon icon={style.icon} className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div className="ml-3 flex-1">
-            <p className={`text-sm font-medium ${style.textColor} whitespace-pre-line`}>
+          <div className="ml-2 sm:ml-3 flex-1 min-w-0">
+            <p className={`text-xs sm:text-sm font-medium ${style.textColor} whitespace-pre-line break-words`}>
               {message}
             </p>
           </div>
           <button
             onClick={onClose}
-            className={`ml-4 flex-shrink-0 ${style.textColor} hover:opacity-70 transition-opacity`}
+            className={`ml-2 sm:ml-4 flex-shrink-0 ${style.textColor} hover:opacity-70 transition-opacity`}
+            aria-label="Close notification"
           >
-            <Icon icon="heroicons:x-mark" className="w-5 h-5" />
+            <Icon icon="heroicons:x-mark" className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>

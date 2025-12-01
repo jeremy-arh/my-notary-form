@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import { trackBeginCheckout } from '../../utils/gtm';
+import { trackPaymentInitiated as trackAnalyticsPaymentInitiated } from '../../utils/analytics';
+import { formatPrice } from '../../utils/currency';
+import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const Summary = ({ formData, prevStep, handleSubmit }) => {
+const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t, language } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [services, setServices] = useState([]);
   const [servicesMap, setServicesMap] = useState({});
@@ -127,7 +132,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     }
 
     return {
-      currency: 'EUR',
+      currency: formData.currency || 'EUR',
       value: total,
       items: items
     };
@@ -140,6 +145,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       if (!loading && services.length > 0) {
         const checkoutData = calculateCheckoutData();
         trackBeginCheckout(checkoutData);
+        // Track analytics payment initiated
+        trackAnalyticsPaymentInitiated(checkoutData.value, checkoutData.currency);
       }
       
       await handleSubmit();
@@ -149,9 +156,17 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Not selected';
+    if (!dateString) return t('form.steps.summary.notSelected');
     const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', {
+    const localeMap = {
+      'en': 'en-US',
+      'fr': 'fr-FR',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'it': 'it-IT',
+      'pt': 'pt-PT',
+    };
+    return date.toLocaleDateString(localeMap[language] || 'en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -160,7 +175,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   };
 
   const formatTime = (time) => {
-    if (!time) return 'Not selected';
+    if (!time) return t('form.steps.summary.notSelected');
     // Simply display the time as stored, no conversion
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
@@ -172,25 +187,25 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   return (
     <>
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6" style={{ minHeight: 0 }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-[200px] sm:pb-[220px] md:pb-6 lg:pb-6 xl:pb-6" style={{ minHeight: 0 }}>
         <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-full">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
-              Review Your Information
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
+              {t('form.steps.summary.title')}
             </h2>
-            <p className="text-xs sm:text-sm lg:text-base text-gray-600">
-              Please review all details before submitting
+            <p className="text-xs sm:text-sm md:text-lg text-gray-600">
+              {t('form.steps.summary.subtitle')}
             </p>
           </div>
 
       {/* Selected Services with Documents */}
       {formData.selectedServices && formData.selectedServices.length > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-          <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
+          <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center">
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
               <Icon icon="heroicons:check-badge" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
             </div>
-            <span className="truncate">Selected Services</span>
+            <span className="truncate">{t('form.steps.summary.services')}</span>
           </h3>
           {loading ? (
             <div className="flex items-center justify-center py-4">
@@ -211,7 +226,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
-                          {documents.length} document{documents.length > 1 ? 's' : ''} × €{service?.base_price.toFixed(2)}
+                          {documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')} × {formatPrice(service?.base_price || 0)}
                         </p>
                       </div>
                     </div>
@@ -253,44 +268,21 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       )}
 
       {/* Signatories Information */}
-      {formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0 && (
+      {formData.signatoryCount && formData.signatoryCount > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-          <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
+          <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center">
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
               <Icon icon="heroicons:user-group" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
             </div>
-            <span className="truncate">Signatories</span>
+            <span className="truncate">{t('form.steps.summary.signatories')}</span>
           </h3>
-          <div className="space-y-2 sm:space-y-3">
-            {formData.signatories.map((signatory, sigIndex) => (
-              <div key={sigIndex} className="bg-gray-50 rounded-lg p-2 sm:p-3">
-                <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
-                    Signatory {sigIndex + 1}
-                    {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                    {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+€10)</span>}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
-                  <div>
-                    <span className="text-gray-600">Name:</span>
-                    <span className="ml-1.5 font-medium text-gray-900">{signatory.firstName} {signatory.lastName}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Date of Birth:</span>
-                    <span className="ml-1.5 font-medium text-gray-900">{signatory.birthDate}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Birth City:</span>
-                    <span className="ml-1.5 font-medium text-gray-900">{signatory.birthCity}</span>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-gray-600">Address:</span>
-                    <span className="ml-1.5 font-medium text-gray-900 break-words">{signatory.postalAddress}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+            <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">
+              {formData.signatoryCount} {formData.signatoryCount === 1 ? t('form.steps.summary.signatory') : t('form.steps.summary.signatoryPlural')}
+            </div>
+            <div className="text-xs sm:text-sm text-gray-600 mt-1">
+              {t('form.steps.summary.firstIncluded')} {formatPrice(10)}
+            </div>
           </div>
         </div>
       )}
@@ -301,7 +293,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
             <Icon icon="heroicons:calendar-days" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
           </div>
-          <span className="truncate">Appointment Details</span>
+          <span className="truncate">{t('form.steps.summary.appointment')}</span>
         </h3>
         <div className="space-y-2 sm:space-y-3">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
@@ -309,12 +301,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words">{formatDate(formData.appointmentDate)}</span>
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
-            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Time</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">{t('form.steps.bookAppointment.time')}</span>
             <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right">{formatTime(formData.appointmentTime)}</span>
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
-            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Timezone</span>
-            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words min-w-0">{formData.timezone || 'Not specified'}</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">{t('form.steps.bookAppointment.timezone')}</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words min-w-0">{formData.timezone || t('form.steps.summary.notSpecified')}</span>
           </div>
         </div>
       </div>
@@ -325,7 +317,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
             <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
           </div>
-          <span className="truncate">Personal Information</span>
+          <span className="truncate">{t('form.steps.summary.personalInfo')}</span>
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
@@ -339,10 +331,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-all">{formData.email}</p>
           </div>
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
-            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Phone</p>
-            <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-words">{formData.phone}</p>
-          </div>
-          <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
             <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Country</p>
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-words">{formData.country}</p>
           </div>
@@ -354,149 +342,13 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           </div>
           {formData.notes && (
             <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl sm:col-span-2 overflow-hidden">
-              <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Additional Notes</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">{t('form.steps.summary.additionalNotes')}</p>
               <p className="text-[10px] sm:text-xs lg:text-sm text-gray-900 break-words">{formData.notes}</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Price Breakdown */}
-      <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-        <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-            <Icon icon="heroicons:currency-dollar" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
-          </div>
-          <span className="truncate">Price Details</span>
-        </h3>
-        {loading ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
-          </div>
-        ) : (
-          <div className="space-y-2 sm:space-y-3">
-            {/* Services with file count pricing */}
-            {formData.selectedServices && formData.selectedServices.length > 0 && (
-              <>
-                {formData.selectedServices.map((serviceId, index) => {
-                  const service = servicesMap[serviceId];
-                  if (!service) return null;
-
-                  const documents = formData.serviceDocuments?.[serviceId] || [];
-                  const serviceTotal = documents.length * (service.base_price || 0);
-
-                  // Calculate options total for this service
-                  let optionsTotal = 0;
-                  const optionCounts = {}; // Track count per option
-
-                  documents.forEach(doc => {
-                    if (doc.selectedOptions && doc.selectedOptions.length > 0) {
-                      doc.selectedOptions.forEach(optionId => {
-                        const option = optionsMap[optionId];
-                        if (option) {
-                          optionsTotal += option.additional_price || 0;
-                          optionCounts[optionId] = (optionCounts[optionId] || 0) + 1;
-                        }
-                      });
-                    }
-                  });
-
-                  return (
-                    <div key={serviceId}>
-                      <div
-                        className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 ${index === 0 ? 'pb-2 sm:pb-3 border-b border-gray-200' : ''}`}
-                      >
-                        <span className="text-[10px] sm:text-xs lg:text-sm text-gray-600 flex-1 min-w-0 break-words sm:truncate sm:pr-2">
-                          {service.name} ({documents.length} document{documents.length > 1 ? 's' : ''})
-                        </span>
-                        <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 flex-shrink-0">
-                          €{serviceTotal.toFixed(2)}
-                        </span>
-                      </div>
-                      {/* Show options breakdown */}
-                      {Object.keys(optionCounts).length > 0 && (
-                        <div className="ml-3 sm:ml-4 mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
-                          {Object.entries(optionCounts).map(([optionId, count]) => {
-                            const option = optionsMap[optionId];
-                            if (!option) return null;
-                            const optionTotal = count * (option.additional_price || 0);
-                            return (
-                              <div key={optionId} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-1 lg:gap-2">
-                                <span className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 italic break-words">
-                                  + {option.name} ({count} document{count > 1 ? 's' : ''})
-                                </span>
-                                <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                                  €{optionTotal.toFixed(2)}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </>
-            )}
-
-            {/* Show signatories breakdown - global for all services */}
-            {formData.signatories && formData.signatories.length > 1 && (
-              <div className="pt-2 sm:pt-3 border-t border-gray-200">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-1 lg:gap-2">
-                  <span className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 italic break-words">
-                    + Additional Signatories ({formData.signatories.length - 1} signatory{(formData.signatories.length - 1) > 1 ? 'ies' : ''})
-                  </span>
-                  <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-gray-700 flex-shrink-0">
-                    €{((formData.signatories.length - 1) * 10).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Total */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2 sm:pt-3 border-t-2 border-gray-300 gap-1 sm:gap-2">
-              <span className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 flex-shrink-0">Total Amount</span>
-              <span className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 flex-shrink-0">
-                €{(() => {
-                  let total = 0;
-                  // Calculate total from selected services × files + options
-                  if (formData.selectedServices) {
-                    formData.selectedServices.forEach(serviceId => {
-                      const service = servicesMap[serviceId];
-                      const documents = formData.serviceDocuments?.[serviceId] || [];
-                      if (service) {
-                        // Add service cost
-                        total += documents.length * (service.base_price || 0);
-
-                        // Add options cost
-                        documents.forEach(doc => {
-                          if (doc.selectedOptions && doc.selectedOptions.length > 0) {
-                            doc.selectedOptions.forEach(optionId => {
-                              const option = optionsMap[optionId];
-                              if (option) {
-                                total += option.additional_price || 0;
-                              }
-                            });
-                          }
-                        });
-                      }
-                    });
-                  }
-                  
-                  // Add signatories cost (€10 per additional signatory) - global for all services
-                  // Only add once, not per service
-                  if (formData.signatories && formData.signatories.length > 1) {
-                    total += (formData.signatories.length - 1) * 10;
-                  }
-                  
-                  console.log('💰 Summary Total:', total);
-                  return total.toFixed(2);
-                })()}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Confirmation Notice */}
       <div className="bg-gray-50 border-2 border-gray-200 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 lg:p-4 lg:p-6 overflow-hidden">
@@ -511,24 +363,29 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               What happens next?
             </h4>
             <p className="text-[10px] sm:text-xs lg:text-sm text-gray-700 break-words">
-              After submitting, you'll receive a confirmation email at <strong className="break-all">{formData.email}</strong>. Within 24 hours, a certified notary will send you a secure video link to complete your notarization appointment at your scheduled time.
+              {t('form.steps.summary.confirmationMessage').replace('{email}', formData.email)}
             </p>
           </div>
         </div>
       </div>
-        </div>
+      </div>
       </div>
 
-      {/* Fixed Navigation */}
-      <div className="hidden lg:block flex-shrink-0 px-4 py-4 bg-[#F3F4F6] lg:relative bottom-20 lg:bottom-auto left-0 right-0 z-50 lg:z-auto lg:border-t lg:border-gray-300">
-        <div className="flex justify-between">
+      {/* Price Details + Fixed Navigation */}
+      <div className="hidden xl:block flex-shrink-0 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
+        <PriceDetails 
+          formData={formData} 
+          isOpen={isPriceDetailsOpen}
+          onToggle={setIsPriceDetailsOpen}
+        />
+        <div className="px-4 py-4 flex justify-between border-t border-gray-300">
           <button
             type="button"
             onClick={prevStep}
             disabled={isSubmitting}
             className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Back
+            {t('form.navigation.back')}
           </button>
           <button
             type="button"
@@ -539,10 +396,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             {isSubmitting ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Processing...
+                {t('form.steps.summary.submitting') || 'Processing...'}
               </>
             ) : (
-              'Complete Payment'
+              t('form.steps.summary.submit')
             )}
           </button>
         </div>

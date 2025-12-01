@@ -8,3 +8,6 @@ COMMENT ON COLUMN signatories.email IS 'Email address of the signatory';
 COMMENT ON COLUMN signatories.phone IS 'Phone number of the signatory (formatted with country code)';
 
 
+
+
+

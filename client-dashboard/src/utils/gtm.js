@@ -33,11 +33,6 @@ export const pushGTMEvent = (eventName, eventData = {}) => {
 
   // Push to dataLayer
   window.dataLayer.push(eventPayload);
-
-  // Debug log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('📊 [GTM] Event pushed to dataLayer:', eventPayload);
-  }
 };
 
 /**
@@ -70,6 +65,87 @@ export const trackFormStart = (options = {}) => {
     service_type: options.serviceType || 'Document Notarization',
     cta_location: options.ctaLocation || 'homepage_hero',
     cta_text: options.ctaText || 'Commencer ma notarisation'
+  });
+};
+
+/**
+ * Track service selection
+ * @param {number} servicesCount - Number of services selected
+ * @param {array} serviceIds - Array of selected service IDs
+ */
+export const trackServiceSelected = (servicesCount, serviceIds = []) => {
+  pushGTMEvent('service_selected', {
+    services_count: servicesCount,
+    service_ids: serviceIds.join(',')
+  });
+};
+
+/**
+ * Track document upload
+ * @param {number} documentsCount - Total number of documents uploaded
+ * @param {number} servicesWithDocs - Number of services with documents
+ */
+export const trackDocumentUploaded = (documentsCount, servicesWithDocs) => {
+  pushGTMEvent('document_uploaded', {
+    documents_count: documentsCount,
+    services_with_docs: servicesWithDocs
+  });
+};
+
+/**
+ * Track appointment booking
+ * @param {object} appointmentData - Appointment data
+ */
+export const trackAppointmentBooked = (appointmentData) => {
+  pushGTMEvent('appointment_booked', {
+    appointment_date: appointmentData.date,
+    appointment_time: appointmentData.time,
+    timezone: appointmentData.timezone
+  });
+};
+
+/**
+ * Track signatories added
+ * @param {number} signatoriesCount - Number of signatories
+ */
+export const trackSignatoriesAdded = (signatoriesCount) => {
+  pushGTMEvent('signatories_added', {
+    signatories_count: signatoriesCount
+  });
+};
+
+/**
+ * Track personal info completed
+ * @param {boolean} isAuthenticated - Whether user is authenticated
+ */
+export const trackPersonalInfoCompleted = (isAuthenticated) => {
+  pushGTMEvent('personal_info_completed', {
+    is_authenticated: isAuthenticated
+  });
+};
+
+/**
+ * Track summary viewed
+ * @param {object} summaryData - Summary data
+ */
+export const trackSummaryViewed = (summaryData) => {
+  pushGTMEvent('summary_viewed', {
+    total_services: summaryData.totalServices || 0,
+    total_documents: summaryData.totalDocuments || 0,
+    total_signatories: summaryData.totalSignatories || 0,
+    has_appointment: summaryData.hasAppointment || false
+  });
+};
+
+/**
+ * Track payment initiated
+ * @param {object} paymentData - Payment data
+ */
+export const trackPaymentInitiated = (paymentData) => {
+  pushGTMEvent('payment_initiated', {
+    total_amount: paymentData.amount || 0,
+    currency: paymentData.currency || 'EUR',
+    services_count: paymentData.servicesCount || 0
   });
 };
 

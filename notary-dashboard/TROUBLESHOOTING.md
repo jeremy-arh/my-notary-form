@@ -98,3 +98,6 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 5. Vérifiez la console du navigateur
 
 
+
+
+

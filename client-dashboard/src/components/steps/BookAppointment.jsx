@@ -1,13 +1,31 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
+import { trackAppointmentBooked as trackAnalyticsAppointmentBooked } from '../../utils/analytics';
+import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
+const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t } = useTranslation();
   const [selectedDate, setSelectedDate] = useState(formData.appointmentDate || '');
   const [selectedTime, setSelectedTime] = useState(formData.appointmentTime || '');
   const [isDetectingTimezone, setIsDetectingTimezone] = useState(true);
   const [timezoneSearchTerm, setTimezoneSearchTerm] = useState('');
   const [isTimezoneDropdownOpen, setIsTimezoneDropdownOpen] = useState(false);
   const timezoneDropdownRef = useRef(null);
+
+  const handleContinue = () => {
+    // Track appointment booked if both date and time are selected
+    if (selectedDate && selectedTime && timezone) {
+      trackAnalyticsAppointmentBooked(selectedDate, selectedTime, timezone);
+    }
+    
+    // Call original handleContinueClick or nextStep
+    if (handleContinueClick) {
+      handleContinueClick();
+    } else {
+      nextStep();
+    }
+  };
 
   // Get default timezone - if formData has a UTC value, use it; otherwise default to UTC-5 (Eastern Time)
   const getDefaultTimezone = () => {
@@ -376,8 +394,13 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
 
     setSelectedDate(formattedDate);
     updateFormData({ appointmentDate: formattedDate });
+    
+    // Track appointment booked when both date and time are selected
+    if (selectedTime && formattedDate) {
+      trackAnalyticsAppointmentBooked(formattedDate, selectedTime, timezone);
+    }
 
-    // Scroll to time slots on mobile
+    // Scroll to time slots on mobile and tablet
     if (window.innerWidth < 1024 && timeSlotsRef.current) {
       setTimeout(() => {
         timeSlotsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -388,6 +411,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
   const handleTimeClick = (time) => {
     setSelectedTime(time);
     updateFormData({ appointmentTime: time });
+    
+    // Track appointment booked when both date and time are selected
+    if (selectedDate && time) {
+      trackAnalyticsAppointmentBooked(selectedDate, time, timezone);
+    }
   };
 
   const handleTimezoneChange = (tz) => {
@@ -451,26 +479,27 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
 
   return (
     <>
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 sm:px-3 md:px-4 pt-4 sm:pt-6 md:pt-10 pb-32 sm:pb-36 lg:pb-6" style={{ minHeight: 0 }}>
-        <div className="space-y-3 sm:space-y-4 md:space-y-6 max-w-full">
+      {/* Scrollable Content - MOBILE LAYOUT for all sizes up to xl */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 sm:px-3 xl:px-6 pt-3 sm:pt-4 xl:pt-8 pb-24 sm:pb-28 xl:pb-6" style={{ minHeight: 0 }}>
+        <div className="space-y-3 sm:space-y-4 xl:space-y-6 max-w-full">
+          {/* Title - Same as mobile until xl */}
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
-              Book Your Appointment
+            <h2 className="text-lg sm:text-xl xl:text-3xl font-bold text-gray-900 mb-1 sm:mb-1.5 xl:mb-2">
+              {t('form.steps.bookAppointment.title')}
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600">
-              Select a date and time that works best for you
+            <p className="text-[10px] sm:text-xs xl:text-base text-gray-600">
+              {t('form.steps.bookAppointment.subtitle')}
             </p>
           </div>
 
-      {/* Timezone Selector */}
-      <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-2.5 sm:p-3 md:p-4 lg:p-6 border border-gray-200 overflow-visible">
-        <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 md:mb-3 flex items-center flex-wrap gap-1 sm:gap-2">
-          <Icon icon="heroicons:globe-alt" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600 flex-shrink-0" />
-          <span>Your Timezone</span>
+      {/* Timezone Selector - Same as mobile until xl */}
+      <div className="bg-white rounded-lg sm:rounded-xl xl:rounded-2xl p-2.5 sm:p-3 xl:p-5 border border-gray-200 overflow-visible">
+        <label className="block text-xs sm:text-sm xl:text-lg font-semibold text-gray-900 mb-1.5 sm:mb-2 xl:mb-3 flex items-center flex-wrap gap-1.5 sm:gap-2">
+          <Icon icon="heroicons:globe-alt" className="w-3.5 h-3.5 sm:w-4 sm:h-4 xl:w-5 xl:h-5 text-gray-600 flex-shrink-0" />
+          <span>{t('form.steps.bookAppointment.timezone')}</span>
           {isDetectingTimezone && (
-            <span className="text-[9px] sm:text-[10px] md:text-xs text-gray-500 flex items-center">
-              <Icon icon="heroicons:arrow-path" className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 mr-1 animate-spin" />
+            <span className="text-[10px] sm:text-xs xl:text-sm text-gray-500 flex items-center">
+              <Icon icon="heroicons:arrow-path" className="w-2.5 h-2.5 sm:w-3 sm:h-3 xl:w-4 xl:h-4 mr-1 sm:mr-1.5 animate-spin" />
               Detecting...
             </span>
           )}
@@ -480,36 +509,31 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
             type="button"
             onClick={() => !isDetectingTimezone && setIsTimezoneDropdownOpen(!isTimezoneDropdownOpen)}
             disabled={isDetectingTimezone}
-            className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl cursor-pointer flex items-center justify-between gap-1.5 sm:gap-2 transition-all text-left ${
+            className={`w-full px-2.5 sm:px-3 xl:px-5 py-1.5 sm:py-2 xl:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl cursor-pointer flex items-center justify-between gap-1.5 sm:gap-2 transition-all text-left ${
               isDetectingTimezone ? 'opacity-50 cursor-wait' : 'hover:border-gray-300'
             } ${isTimezoneDropdownOpen ? 'ring-2 ring-black border-black' : ''}`}
           >
-            <span className="text-gray-900 flex-1 min-w-0 text-[11px] sm:text-xs md:text-sm truncate">
-              <span className="hidden sm:inline-block truncate">
-                {timezones.find(tz => tz.value === timezone)?.label || timezone}
-              </span>
-              <span className="sm:hidden truncate">
-                {timezone}
-              </span>
+            <span className="text-gray-900 flex-1 min-w-0 text-[10px] sm:text-xs xl:text-base truncate">
+              {timezone}
             </span>
             <Icon 
               icon={isTimezoneDropdownOpen ? "heroicons:chevron-up" : "heroicons:chevron-down"} 
-              className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-500 flex-shrink-0 ml-1"
+              className="w-3.5 h-3.5 sm:w-4 sm:h-4 xl:w-5 xl:h-5 text-gray-500 flex-shrink-0 ml-1.5 sm:ml-2"
             />
           </button>
           
           {isTimezoneDropdownOpen && !isDetectingTimezone && (
-            <div className="absolute z-50 w-full mt-1.5 sm:mt-2 bg-white border-2 border-gray-200 rounded-lg sm:rounded-xl shadow-lg max-h-[60vh] sm:max-h-96 overflow-hidden" style={{ left: 0, right: 0 }}>
+            <div className="absolute z-50 w-full mt-1 sm:mt-1.5 md:mt-2 bg-white border-2 border-gray-200 rounded-lg sm:rounded-xl shadow-lg max-h-[60vh] sm:max-h-96 overflow-hidden" style={{ left: 0, right: 0 }}>
               {/* Search Input */}
-              <div className="p-2 sm:p-3 border-b border-gray-200 sticky top-0 bg-white">
+              <div className="p-1.5 sm:p-2 md:p-3 border-b border-gray-200 sticky top-0 bg-white">
                 <div className="relative">
-                  <Icon icon="heroicons:magnifying-glass" className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-400" />
+                  <Icon icon="heroicons:magnifying-glass" className="absolute left-1.5 sm:left-2 md:left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 text-gray-400" />
                   <input
                     type="text"
                     value={timezoneSearchTerm}
                     onChange={(e) => setTimezoneSearchTerm(e.target.value)}
-                    placeholder="Search timezone..."
-                    className="w-full pl-7 sm:pl-8 md:pl-10 pr-2 sm:pr-3 md:pr-4 py-1 sm:py-1.5 md:py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-xs sm:text-sm"
+                    placeholder={t('form.steps.bookAppointment.searchTimezone')}
+                    className="w-full pl-6 sm:pl-7 md:pl-8 xl:pl-10 pr-1.5 sm:pr-2 md:pr-3 xl:pr-4 py-1 sm:py-1.5 md:py-1.5 xl:py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-[10px] sm:text-xs md:text-sm"
                     autoFocus
                   />
                 </div>
@@ -518,8 +542,8 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
               {/* Timezone List */}
               <div className="max-h-[50vh] sm:max-h-80 overflow-y-auto">
                 {filteredTimezones.length === 0 ? (
-                  <div className="p-2 sm:p-3 md:p-4 text-center text-gray-500 text-xs sm:text-sm">
-                    No timezone found matching "{timezoneSearchTerm}"
+                  <div className="p-1.5 sm:p-2 md:p-3 xl:p-4 text-center text-gray-500 text-[10px] sm:text-xs md:text-sm">
+                    {t('form.steps.bookAppointment.noTimezoneFound').replace('{term}', timezoneSearchTerm)}
                   </div>
                 ) : (
                   filteredTimezones.map((tz) => (
@@ -527,14 +551,14 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
                       key={tz.value}
                       type="button"
                       onClick={() => handleTimezoneChange(tz.value)}
-                      className={`w-full text-left px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 hover:bg-gray-50 transition-colors ${
+                      className={`w-full text-left px-1.5 sm:px-2 md:px-3 xl:px-4 py-1 sm:py-1.5 md:py-2 xl:py-3 hover:bg-gray-50 transition-colors ${
                         timezone === tz.value ? 'bg-gray-100 font-semibold' : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-                        <span className="text-xs sm:text-sm text-gray-900 break-words flex-1">{tz.label}</span>
+                      <div className="flex items-center justify-between gap-1 sm:gap-1.5 md:gap-2">
+                        <span className="text-[10px] sm:text-xs md:text-sm text-gray-900 break-words flex-1">{tz.label}</span>
                         {timezone === tz.value && (
-                          <Icon icon="heroicons:check" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-black flex-shrink-0" />
+                          <Icon icon="heroicons:check" className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 text-black flex-shrink-0" />
                         )}
                       </div>
                     </button>
@@ -545,52 +569,51 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           )}
         </div>
         {!isDetectingTimezone && (
-          <p className="mt-1 sm:mt-1.5 md:mt-2 text-[9px] sm:text-[10px] md:text-xs text-gray-500 break-words">
-            Your timezone has been automatically detected. You can change it if needed.
+          <p className="mt-1 sm:mt-1.5 md:mt-1.5 xl:mt-2 text-[8px] sm:text-[9px] md:text-[10px] xl:text-xs text-gray-500 break-words">
+            {t('form.steps.bookAppointment.timezoneDetected')}
           </p>
         )}
       </div>
 
-      {/* Calendar and Time Slots - Stack on mobile, side by side on desktop */}
-      <div className="flex flex-col lg:flex-row gap-2.5 sm:gap-3 md:gap-4 w-full">
-        {/* Calendar - Full width on mobile, ensure no clipping */}
-        <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-2 sm:p-2.5 md:p-3 lg:p-6 border border-gray-200 lg:w-96 lg:flex-shrink-0 w-full">
-          <div className="flex items-center justify-between mb-2 sm:mb-2.5 md:mb-3 lg:mb-4 gap-1 sm:gap-1.5 md:gap-2">
-            <h3 className="text-[11px] sm:text-xs md:text-sm lg:text-base font-semibold text-gray-900 flex-1 min-w-0">
+      {/* Calendar and Time Slots - Column layout until xl, then Row */}
+      <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 xl:gap-6 w-full">
+        {/* Calendar - Same as mobile until xl */}
+        <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl xl:rounded-2xl p-3 sm:p-4 md:p-4 xl:p-6 border border-gray-200 xl:w-96 xl:flex-shrink-0 w-full">
+          <div className="flex items-center justify-between mb-2 sm:mb-3 md:mb-3 xl:mb-4 gap-2 sm:gap-2.5 md:gap-2.5 xl:gap-3">
+            <h3 className="text-xs sm:text-sm md:text-sm xl:text-lg font-semibold text-gray-900 flex-1 min-w-0 truncate">
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h3>
-            <div className="flex space-x-0.5 sm:space-x-1 flex-shrink-0">
+            <div className="flex space-x-1 sm:space-x-1.5 md:space-x-1.5 xl:space-x-2 flex-shrink-0">
               <button
                 type="button"
                 onClick={goToPreviousMonth}
-                className="p-1 sm:p-1.5 md:p-2 hover:bg-gray-100 rounded-md sm:rounded-lg transition-colors"
-                aria-label="Previous month"
+                className="p-1.5 sm:p-2 md:p-2 xl:p-2.5 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label={t('form.steps.bookAppointment.previousMonth')}
               >
-                <Icon icon="heroicons:chevron-left" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600" />
+                <Icon icon="heroicons:chevron-left" className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 xl:w-5 text-gray-600" />
               </button>
               <button
                 type="button"
                 onClick={goToNextMonth}
-                className="p-1 sm:p-1.5 md:p-2 hover:bg-gray-100 rounded-md sm:rounded-lg transition-colors"
-                aria-label="Next month"
+                className="p-1.5 sm:p-2 md:p-2 xl:p-2.5 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label={t('form.steps.bookAppointment.nextMonth')}
               >
-                <Icon icon="heroicons:chevron-right" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600" />
+                <Icon icon="heroicons:chevron-right" className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 xl:w-5 text-gray-600" />
               </button>
             </div>
           </div>
 
-          {/* Day names - Very compact on mobile */}
-          <div className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-1 sm:mb-1.5 md:mb-2">
+          {/* Day names */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-1.5 xl:gap-2 mb-2 sm:mb-2.5 md:mb-2.5 xl:mb-3">
             {dayNames.map((day) => (
-              <div key={day} className="text-center text-[9px] sm:text-[10px] md:text-xs font-semibold text-gray-500 py-0.5">
-                <span className="hidden sm:inline">{day}</span>
-                <span className="sm:hidden text-[8px]">{day.charAt(0)}</span>
+              <div key={day} className="text-center text-xs sm:text-sm md:text-sm font-semibold text-gray-500 py-1">
+                {day}
               </div>
             ))}
           </div>
 
-          {/* Calendar grid - Compact gaps on mobile to fit all days */}
-          <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-1.5 w-full">
+          {/* Calendar grid - Same as mobile until xl */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-1.5 xl:gap-2 w-full">
             {calendarDays.map((day, index) => {
               const disabled = !day.isCurrentMonth || isPast(day.date);
               const selected = isSelected(day.date);
@@ -602,11 +625,11 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="button"
                   onClick={() => !disabled && handleDateClick(day.date)}
                   disabled={disabled}
-                  className={`w-full aspect-square min-w-0 min-h-[28px] sm:min-h-[32px] md:min-h-[36px] lg:min-h-[40px] flex items-center justify-center rounded sm:rounded-md md:rounded-lg text-[10px] sm:text-[11px] md:text-xs lg:text-sm font-medium transition-all ${
+                  className={`w-full aspect-square min-w-0 min-h-[32px] sm:min-h-[36px] md:min-h-[38px] xl:min-h-[44px] flex items-center justify-center rounded-lg text-xs sm:text-sm md:text-sm xl:text-base font-medium transition-all ${
                     disabled
                       ? 'text-gray-300 cursor-not-allowed bg-transparent'
                       : selected
-                      ? 'bg-black text-white shadow-md'
+                      ? 'bg-black text-white shadow-md scale-105'
                       : today
                       ? 'bg-gray-200 text-gray-900 hover:bg-gray-300'
                       : 'text-gray-700 hover:bg-gray-100 bg-gray-50'
@@ -619,30 +642,30 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
           </div>
         </div>
 
-        {/* Time Slots - Full width on mobile */}
-        <div ref={timeSlotsRef} className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-2.5 sm:p-3 md:p-4 border border-gray-200 lg:flex-1 w-full overflow-visible">
-          <h3 className="text-xs sm:text-sm md:text-base font-semibold text-gray-900 mb-2 sm:mb-2.5 md:mb-3 flex items-center">
-            <Icon icon="heroicons:clock" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-4 md:h-4 mr-1.5 sm:mr-2 text-gray-600 flex-shrink-0" />
+        {/* Time Slots - Same as mobile until xl */}
+        <div ref={timeSlotsRef} className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl xl:rounded-2xl p-3 sm:p-4 md:p-4 xl:p-6 border border-gray-200 xl:flex-1 w-full overflow-visible">
+          <h3 className="text-sm sm:text-base md:text-base xl:text-lg font-semibold text-gray-900 mb-3 sm:mb-3.5 md:mb-3 xl:mb-4 flex items-center">
+            <Icon icon="heroicons:clock" className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 xl:w-5 mr-2 text-gray-600 flex-shrink-0" />
             <span>Available Time Slots</span>
           </h3>
           {!selectedDate && (
-            <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 italic mb-2 sm:mb-2.5 md:mb-3">
-              Please select a date first to choose a time slot
+            <p className="text-xs sm:text-sm md:text-sm xl:text-base text-gray-500 italic mb-3 sm:mb-3.5 md:mb-3 xl:mb-4">
+              {t('form.steps.bookAppointment.selectDateFirst')}
             </p>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-1.5 sm:gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-2 sm:gap-2.5 md:gap-2.5 xl:gap-3">
             {timeSlots.map((slot) => (
               <button
                 key={slot.value}
                 type="button"
                 onClick={() => selectedDate && handleTimeClick(slot.value)}
                 disabled={!selectedDate}
-                className={`py-2 sm:py-2.5 px-2 sm:px-2.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-medium transition-all w-full ${
+                className={`py-2.5 sm:py-3 md:py-2.5 xl:py-3 px-3 sm:px-3.5 md:px-3.5 xl:px-4 rounded-lg text-xs sm:text-sm md:text-sm font-medium transition-all w-full ${
                   !selectedDate
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : selectedTime === slot.value
                     ? 'bg-black text-white shadow-md scale-105'
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:scale-[1.02]'
                 }`}
               >
                 {slot.label}
@@ -654,23 +677,31 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep }) => {
         </div>
       </div>
 
-      {/* Navigation Buttons - Desktop only (mobile handled by parent) */}
-      <div className="hidden lg:block lg:border-t lg:border-gray-300 bg-[#F3F4F6]">
-        <div className="px-4 py-4 flex justify-between">
+      {/* Price Details + Navigation Buttons - Desktop only */}
+      <div className="hidden xl:flex flex-col border-t border-gray-300 bg-[#F3F4F6] flex-shrink-0">
+        <PriceDetails 
+          formData={formData} 
+          isOpen={isPriceDetailsOpen}
+          onToggle={setIsPriceDetailsOpen}
+        />
+        <div className="w-full px-4 xl:px-8 py-3 xl:py-4 flex justify-between gap-3 xl:gap-4 border-t border-gray-300">
           <button
             type="button"
             onClick={prevStep}
-            className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+            className="btn-glassy-secondary px-4 xl:px-8 py-2.5 xl:py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 text-sm xl:text-base flex-shrink-0"
           >
-            Back
+            {t('form.navigation.back')}
           </button>
           <button
             type="button"
-            onClick={nextStep}
-            disabled={!selectedDate || !selectedTime}
-            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            onClick={handleContinue}
+            className={`btn-glassy px-4 xl:px-8 py-2.5 xl:py-3 text-white font-semibold rounded-full transition-all text-sm xl:text-base flex-shrink-0 ${
+              !selectedDate || !selectedTime
+                ? 'opacity-50 hover:opacity-70 active:opacity-90'
+                : 'hover:scale-105 active:scale-95'
+            }`}
           >
-            Continue
+            {t('form.navigation.continue')}
           </button>
         </div>
       </div>
