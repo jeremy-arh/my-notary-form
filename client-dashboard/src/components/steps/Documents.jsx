@@ -35,6 +35,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showOptionInfo, setShowOptionInfo] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   const scrollContainerRef = useRef(null);
   const savedScrollPositionRef = useRef(null);
   const fileInputRefs = useRef({});
@@ -43,6 +44,16 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     fetchSelectedServices();
     fetchOptions();
   }, [formData.selectedServices]);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640); // sm breakpoint
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Restaurer la position de scroll après les mises à jour du DOM
   useEffect(() => {
@@ -154,6 +165,17 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     }
 
     updateFormData({ serviceDocuments });
+  };
+
+  // Helper function to truncate file name on mobile
+  const truncateFileName = (fileName) => {
+    if (isMobile && fileName.length > 50) {
+      const extension = fileName.substring(fileName.lastIndexOf('.'));
+      const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+      const truncatedName = nameWithoutExt.substring(0, 50 - extension.length - 3) + '...';
+      return truncatedName + extension;
+    }
+    return fileName;
   };
 
   const toggleOption = (serviceId, fileIndex, optionId) => {
@@ -316,7 +338,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                             <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
                               <Icon icon="heroicons:document" className="w-6 h-6 sm:w-8 sm:h-8 text-gray-600 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                <p className="text-xs sm:text-sm font-medium text-gray-900 truncate" title={file.name}>{truncateFileName(file.name)}</p>
                                 <p className="text-[10px] sm:text-xs text-gray-500">
                                   {(file.size / 1024).toFixed(2)} KB
                                 </p>

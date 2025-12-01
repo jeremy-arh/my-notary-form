@@ -15,10 +15,21 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
   const [options, setOptions] = useState([]);
   const [optionsMap, setOptionsMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     fetchServices();
     fetchOptions();
+  }, []);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640); // sm breakpoint
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const fetchServices = async () => {
@@ -69,6 +80,17 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
       setOptions([]);
       setOptionsMap({});
     }
+  };
+
+  // Helper function to truncate file name on mobile
+  const truncateFileName = (fileName) => {
+    if (isMobile && fileName.length > 50) {
+      const extension = fileName.substring(fileName.lastIndexOf('.'));
+      const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+      const truncatedName = nameWithoutExt.substring(0, 50 - extension.length - 3) + '...';
+      return truncatedName + extension;
+    }
+    return fileName;
   };
 
   // Calculate checkout data for GTM begin_checkout event
@@ -238,7 +260,7 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
                             <div className="flex items-center flex-1 min-w-0">
                               <Icon icon="heroicons:document" className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 mr-1.5 sm:mr-2 text-gray-600 flex-shrink-0" />
                               <div className="min-w-0 flex-1">
-                                <p className="text-[10px] sm:text-xs font-medium text-gray-900 truncate">{doc.name}</p>
+                                <p className="text-[10px] sm:text-xs font-medium text-gray-900 truncate" title={doc.name}>{truncateFileName(doc.name)}</p>
                                 <p className="text-[10px] sm:text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
                               </div>
                             </div>
