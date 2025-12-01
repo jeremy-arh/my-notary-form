@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import { trackSignatoriesCompleted } from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
+import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
+const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t } = useTranslation();
   const [errors, setErrors] = useState({});
 
   const signatoryOptions = [1, 2, 3, 4, 5, 6];
@@ -19,7 +22,7 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
     const newErrors = {};
 
     if (!formData.signatoryCount) {
-      newErrors.signatoryCount = 'Please select the number of signatories';
+      newErrors.signatoryCount = t('form.validation.selectSignatories');
     }
 
     setErrors(newErrors);
@@ -49,10 +52,10 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
       {/* Header */}
       <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4">
         <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
-          Number of Signatories
+          {t('form.steps.signatoryCount.title')}
         </h2>
         <p className="text-sm sm:text-base md:text-lg text-gray-600">
-          How many people will need to sign this document? The first signatory is included, each additional signatory costs {formatPrice(10)}.
+          {t('form.steps.signatoryCount.subtitle')}
         </p>
       </div>
 
@@ -94,7 +97,7 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
                       <div className={`text-xs sm:text-sm mt-1 ${
                         isSelected ? 'text-white/80' : 'text-gray-600'
                       }`}>
-                        {count === 1 ? 'signatory' : 'signatories'}
+                        {count === 1 ? t('form.steps.signatoryCount.count') : t('form.steps.signatoryCount.countPlural')}
                       </div>
                       {count > 1 && (
                         <div className={`text-xs sm:text-sm mt-1 font-medium ${
@@ -107,7 +110,7 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
                         <div className={`text-xs sm:text-sm mt-1 ${
                           isSelected ? 'text-white/70' : 'text-gray-500'
                         }`}>
-                          Included
+                          {t('form.steps.signatoryCount.included')}
                         </div>
                       )}
                     </div>
@@ -130,7 +133,7 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
                 : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
             }`}
             onClick={() => {
-              const count = prompt('How many signatories? (Enter a number)');
+              const count = prompt(t('form.steps.signatoryCount.howManyPrompt'));
               if (count && !isNaN(count) && parseInt(count) > 6) {
                 handleSelect(parseInt(count));
               }
@@ -153,13 +156,13 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
                     formData.signatoryCount > 6 ? 'text-white' : 'text-gray-900'
                   }`}>
                     {formData.signatoryCount > 6 
-                      ? `${formData.signatoryCount} signatories` 
-                      : 'More than 6 signatories'}
+                      ? `${formData.signatoryCount} ${t('form.steps.signatoryCount.countPlural')}` 
+                      : t('form.steps.signatoryCount.moreThan6')}
                   </div>
                   <div className={`text-xs sm:text-sm ${
                     formData.signatoryCount > 6 ? 'text-white/80' : 'text-gray-600'
                   }`}>
-                    Click to enter a custom number
+                    {t('form.steps.signatoryCount.clickToEnter')}
                   </div>
                   {formData.signatoryCount > 6 && (
                     <div className={`text-xs sm:text-sm mt-1 font-medium ${
@@ -184,13 +187,13 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                    Signatories Summary
+                    {t('form.steps.signatoryCount.summary')}
                   </h3>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                    {formData.signatoryCount} {formData.signatoryCount === 1 ? 'signatory' : 'signatories'}
+                    {formData.signatoryCount} {formData.signatoryCount === 1 ? t('form.steps.signatoryCount.count') : t('form.steps.signatoryCount.countPlural')}
                     {formData.signatoryCount > 1 && (
                       <span className="ml-2">
-                        (1 included, {formData.signatoryCount - 1} additional)
+                        {t('form.steps.signatoryCount.includedCount').replace('{count}', formData.signatoryCount - 1)}
                       </span>
                     )}
                   </p>
@@ -198,7 +201,7 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
                 <div className="text-right">
                   {formData.signatoryCount === 1 ? (
                     <div className="text-sm sm:text-base font-semibold text-gray-900">
-                      Included
+                      {t('form.steps.signatoryCount.included')}
                     </div>
                   ) : (
                     <div>
@@ -230,23 +233,28 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
             <div className="flex items-start space-x-2 sm:space-x-3">
               <Icon icon="heroicons:information-circle" className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 flex-shrink-0 mt-0.5" />
               <div className="text-xs sm:text-sm text-blue-900">
-                <p className="font-semibold mb-1">Information</p>
-                <p>The number of signatories corresponds to the total number of people who will need to sign the notarized document.</p>
+                <p className="font-semibold mb-1">{t('form.steps.signatoryCount.infoTitle')}</p>
+                <p>{t('form.steps.signatoryCount.infoText')}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Fixed Navigation - Desktop only */}
-      <div className="hidden xl:block xl:border-t xl:border-gray-300 bg-[#F3F4F6]">
-        <div className="px-4 py-4 flex justify-between">
+      {/* Price Details + Fixed Navigation - Desktop only */}
+      <div className="hidden xl:block xl:border-t xl:border-gray-300 bg-[#F3F4F6] flex-shrink-0">
+        <PriceDetails 
+          formData={formData} 
+          isOpen={isPriceDetailsOpen}
+          onToggle={setIsPriceDetailsOpen}
+        />
+        <div className="px-4 py-4 flex justify-between border-t border-gray-300">
           <button
             type="button"
             onClick={prevStep}
             className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
           >
-            Back
+            {t('form.navigation.back')}
           </button>
           <button
             type="button"
@@ -257,7 +265,7 @@ const SignatoryCount = ({ formData, updateFormData, nextStep, prevStep, handleCo
                 : 'hover:scale-105 active:scale-95'
             }`}
           >
-            Continue
+            {t('form.navigation.continue')}
           </button>
         </div>
       </div>

@@ -6,10 +6,13 @@ import {
   trackDocumentsUploadCompleted 
 } from '../../utils/analytics';
 import { formatPrice, convertPrice } from '../../utils/currency';
+import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
-const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
+const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t } = useTranslation();
   const handleContinue = () => {
     // Track documents upload completed before continuing
     const totalFiles = Object.values(formData.serviceDocuments || {}).reduce(
@@ -198,10 +201,10 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       {/* Header */}
       <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4">
         <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
-          Upload Documents
+          {t('form.steps.documents.title')}
         </h2>
         <p className="text-sm sm:text-base md:text-lg text-gray-600">
-          Upload documents for each selected service
+          {t('form.steps.documents.subtitle')}
         </p>
       </div>
 
@@ -217,7 +220,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
           </div>
         ) : services.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-600">No services selected. Please go back and select services.</p>
+            <p className="text-gray-600">{t('form.steps.documents.noServicesSelected')}</p>
           </div>
         ) : (
           <div className="space-y-3 sm:space-y-4">
@@ -241,11 +244,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
                       <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
-                        {formatPrice(service.base_price)} per document
+                        {t('form.steps.documents.from')} {formatPrice(service.base_price)} {t('form.steps.documents.perDocument')}
                       </p>
                       {fileCount > 0 && (
                         <p className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
-                          Total: {getTotalPrice(service)} ({fileCount} document{fileCount > 1 ? 's' : ''})
+                          {t('form.steps.documents.total')}: {getTotalPrice(service)} ({fileCount} {fileCount > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                         </p>
                       )}
                     </div>
@@ -271,9 +274,9 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                         className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3"
                       />
                       <p className="text-xs sm:text-sm text-gray-700 font-medium mb-0.5 sm:mb-1">
-                        Click to upload or drag and drop
+                        {t('form.steps.documents.clickToUpload')}
                       </p>
-                      <p className="text-[10px] sm:text-xs text-gray-500">PDF, PNG, JPG, or other documents</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500">{t('form.steps.documents.fileTypes')}</p>
                       <input
                         ref={(el) => {
                           if (el) {
@@ -323,7 +326,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                               type="button"
                               onClick={() => removeFile(service.service_id, index)}
                               className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                              aria-label="Remove file"
+                              aria-label={t('form.steps.documents.remove')}
                             >
                               <Icon icon="heroicons:trash" className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
                             </button>
@@ -380,9 +383,9 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                         icon="heroicons:document-arrow-up"
                         className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 mx-auto mb-1.5 sm:mb-2"
                       />
-                      <p className="text-xs sm:text-sm text-gray-600">No documents uploaded yet</p>
+                      <p className="text-xs sm:text-sm text-gray-600">{t('form.steps.documents.noDocuments')}</p>
                       <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">
-                        Use the upload area above to add documents
+                        {t('form.steps.documents.useUploadArea')}
                       </p>
                     </div>
                   )}
@@ -393,15 +396,20 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
         )}
       </div>
 
-      {/* Fixed Navigation - Desktop only (mobile handled by parent) */}
-      <div className="hidden xl:block xl:border-t xl:border-gray-300 bg-[#F3F4F6]">
-        <div className="px-4 py-4 flex justify-between">
+      {/* Price Details + Fixed Navigation - Desktop only */}
+      <div className="hidden xl:block xl:border-t xl:border-gray-300 bg-[#F3F4F6] flex-shrink-0">
+        <PriceDetails 
+          formData={formData} 
+          isOpen={isPriceDetailsOpen}
+          onToggle={setIsPriceDetailsOpen}
+        />
+        <div className="px-4 py-4 flex justify-between border-t border-gray-300">
           <button
             type="button"
             onClick={prevStep}
             className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
           >
-            Back
+            {t('form.navigation.back')}
           </button>
           <button
             type="button"
@@ -418,7 +426,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                 : 'hover:scale-105 active:scale-95'
             }`}
           >
-            Continue
+            {t('form.navigation.continue')}
           </button>
         </div>
       </div>
@@ -450,7 +458,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
               {showOptionInfo.additional_price && (
                 <div className="border-t border-gray-200 pt-3 sm:pt-4">
                   <p className="text-xs sm:text-sm text-gray-600">
-                    <strong>Additional Fee:</strong> {formatPrice(showOptionInfo.additional_price)} per document
+                    <strong>{t('form.steps.documents.additionalFee')}</strong> {formatPrice(showOptionInfo.additional_price)} {t('form.steps.documents.perDocument')}
                   </p>
                 </div>
               )}

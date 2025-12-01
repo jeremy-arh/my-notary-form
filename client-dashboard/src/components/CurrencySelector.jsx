@@ -1,268 +1,127 @@
-import { useState, useEffect, useRef } from 'react';
-import { Icon } from '@iconify/react';
-import { getCurrency } from '../utils/currency';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useCurrency } from '../contexts/CurrencyContext';
 
-const CurrencySelector = ({ formData, updateFormData }) => {
+const CURRENCIES = [
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
+  { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
+  { code: 'MXN', symbol: '$', name: 'Mexican Peso' },
+  { code: 'SEK', symbol: 'kr', name: 'Swedish Krona' },
+  { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone' },
+  { code: 'DKK', symbol: 'kr', name: 'Danish Krone' },
+  { code: 'PLN', symbol: 'zł', name: 'Polish Zloty' },
+  { code: 'CZK', symbol: 'Kč', name: 'Czech Koruna' },
+  { code: 'HUF', symbol: 'Ft', name: 'Hungarian Forint' },
+  { code: 'RON', symbol: 'lei', name: 'Romanian Leu' },
+  { code: 'BGN', symbol: 'лв', name: 'Bulgarian Lev' },
+  { code: 'HRK', symbol: 'kn', name: 'Croatian Kuna' },
+  { code: 'RUB', symbol: '₽', name: 'Russian Ruble' },
+  { code: 'TRY', symbol: '₺', name: 'Turkish Lira' },
+  { code: 'ZAR', symbol: 'R', name: 'South African Rand' },
+  { code: 'KRW', symbol: '₩', name: 'South Korean Won' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+  { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar' },
+  { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar' },
+  { code: 'THB', symbol: '฿', name: 'Thai Baht' },
+  { code: 'MYR', symbol: 'RM', name: 'Malaysian Ringgit' },
+  { code: 'PHP', symbol: '₱', name: 'Philippine Peso' },
+  { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah' },
+  { code: 'VND', symbol: '₫', name: 'Vietnamese Dong' },
+];
+
+const CurrencySelector = ({ openDirection = 'top' }) => {
+  const { currency, setCurrency } = useCurrency();
   const [isOpen, setIsOpen] = useState(false);
-  const [currentCurrency, setCurrentCurrency] = useState(formData.currency || 'EUR');
   const dropdownRef = useRef(null);
-  const buttonRef = useRef(null);
 
-  const currencies = [
-    { code: 'EUR', name: 'Euro', symbol: '€' },
-    { code: 'USD', name: 'US Dollar', symbol: '$' },
-    { code: 'GBP', name: 'British Pound', symbol: '£' },
-    { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$' },
-    { code: 'AUD', name: 'Australian Dollar', symbol: 'A$' },
-    { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' },
-    { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
-    { code: 'CNY', name: 'Chinese Yuan', symbol: '¥' }
-  ];
+  // Recalculate selectedCurrency whenever currency changes
+  const selectedCurrency = useMemo(() => {
+    const found = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
+    console.log('💰 [CurrencySelector] selectedCurrency recalculated:', found.code, 'from currency:', currency);
+    return found;
+  }, [currency]);
 
+  // Debug: Log currency changes
   useEffect(() => {
-    setCurrentCurrency(formData.currency || getCurrency());
-  }, [formData.currency]);
+    console.log('💰 [CurrencySelector] Currency changed to:', currency);
+    console.log('💰 [CurrencySelector] selectedCurrency.code:', selectedCurrency.code);
+  }, [currency, selectedCurrency]);
 
-  // Fermer le dropdown quand on clique en dehors
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        dropdownRef.current &&
-        buttonRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        !buttonRef.current.contains(event.target)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('touchstart', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [isOpen]);
 
-  // Fermer le dropdown avec Escape
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen]);
-
-  const handleCurrencyChange = (currencyCode) => {
-    setCurrentCurrency(currencyCode);
-    updateFormData({ currency: currencyCode });
-    
-    // Sauvegarder dans localStorage
-    try {
-      localStorage.setItem('notaryCurrency', currencyCode);
-      console.log('💰 [CURRENCY] Devise changée:', currencyCode);
-    } catch (error) {
-      console.error('❌ [CURRENCY] Erreur lors de la sauvegarde:', error);
-    }
-    
+  const handleCurrencyChange = (newCurrency) => {
+    console.log('💰 [CurrencySelector] handleCurrencyChange called with:', newCurrency);
+    console.log('💰 [CurrencySelector] Current currency before change:', currency);
+    setCurrency(newCurrency);
+    console.log('💰 [CurrencySelector] setCurrency called');
     setIsOpen(false);
   };
 
-  const currentCurrencyData = currencies.find(c => c.code === currentCurrency) || currencies[0];
-
   return (
-    <div className="relative w-full">
-      {/* Bouton principal - Responsive */}
+    <div className="relative" ref={dropdownRef}>
       <button
-        ref={buttonRef}
-        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="
-          w-full
-          flex items-center justify-between gap-1.5
-          px-2 py-1.5
-          sm:px-3 sm:py-2
-          lg:px-4 lg:py-2.5
-          rounded-lg
-          border border-gray-300
-          bg-white
-          hover:bg-gray-50
-          active:bg-gray-100
-          transition-all duration-200
-          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
-          text-gray-700
-          font-medium
-          min-w-0
-        "
-        aria-label="Sélectionner une devise"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50"
+        aria-label="Select currency"
         aria-expanded={isOpen}
-        aria-haspopup="listbox"
       >
-        {/* Icône devise */}
-        <Icon 
-          icon="heroicons:currency-dollar" 
-          className="
-            w-3.5 h-3.5
-            sm:w-4 sm:h-4
-            lg:w-5 lg:h-5
-            text-gray-600
-            flex-shrink-0
-          " 
-        />
-        
-        {/* Code devise */}
-        <span className="
-          font-semibold
-          text-xs
-          sm:text-sm
-          lg:text-base
-          text-gray-900
-          truncate
-          flex-1
-          text-left
-        ">
-          {currentCurrencyData.code}
-        </span>
-        
-        {/* Icône chevron */}
-        <Icon 
-          icon={isOpen ? "heroicons:chevron-up" : "heroicons:chevron-down"} 
-          className="
-            w-3.5 h-3.5
-            sm:w-4 sm:h-4
-            lg:w-5 lg:h-5
-            text-gray-500
-            flex-shrink-0
-            transition-transform duration-200
-          " 
-        />
+        <span className="text-lg">{selectedCurrency.symbol}</span>
+        <svg
+          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
-      {/* Dropdown menu - Responsive */}
       {isOpen && (
-        <>
-          {/* Overlay pour mobile */}
-          <div 
-            className="
-              fixed inset-0 z-[100]
-              lg:hidden
-            " 
-            onClick={() => setIsOpen(false)}
-            aria-hidden="true"
-          />
-          
-          {/* Menu dropdown */}
-          <div 
-            ref={dropdownRef}
-            className="
-              absolute
-              left-0
-              right-0
-              lg:left-auto lg:right-0
-              mt-1.5
-              sm:mt-2
-              w-full
-              lg:w-64
-              bg-white
-              rounded-lg
-              shadow-xl
-              border-2 border-gray-300
-              z-[200]
-              max-h-[70vh]
-              sm:max-h-80
-              overflow-hidden
-              animate-in fade-in slide-in-from-top-2
-            "
-            role="listbox"
-            style={{ position: 'absolute' }}
-          >
-            {/* Liste des devises */}
-            <div className="py-1 overflow-y-auto max-h-[70vh] sm:max-h-80">
-              {currencies.map((currency) => (
-                <button
-                  key={currency.code}
-                  type="button"
-                  onClick={() => handleCurrencyChange(currency.code)}
-                  className={`
-                    w-full
-                    text-left
-                    px-3 py-2.5
-                    sm:px-4 sm:py-3
-                    hover:bg-gray-50
-                    active:bg-gray-100
-                    transition-colors duration-150
-                    flex items-center justify-between
-                    gap-2
-                    min-w-0
-                    ${currentCurrency === currency.code 
-                      ? 'bg-blue-50 hover:bg-blue-100' 
-                      : ''
-                    }
-                  `}
-                  role="option"
-                  aria-selected={currentCurrency === currency.code}
+        <div className={`absolute left-1/2 -translate-x-1/2 ${openDirection === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'} w-44 bg-white rounded-lg shadow-lg py-1 z-[200] max-h-96 overflow-y-auto`}>
+          {CURRENCIES.map((curr) => (
+            <button
+              key={curr.code}
+              onClick={() => handleCurrencyChange(curr.code)}
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center space-x-3 ${
+                currency === curr.code ? 'bg-gray-50 font-semibold' : ''
+              }`}
+            >
+              <span className="text-lg">{curr.code.toLowerCase()}</span>
+              <span>{curr.symbol}</span>
+              {currency === curr.code && (
+                <svg
+                  className="w-4 h-4 ml-auto text-gray-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  {/* Informations devise */}
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="
-                      text-gray-700
-                      text-sm
-                      sm:text-base
-                      font-medium
-                      flex-shrink-0
-                    ">
-                      {currency.symbol}
-                    </span>
-                    <span className="
-                      text-gray-900
-                      font-semibold
-                      text-sm
-                      sm:text-base
-                      flex-shrink-0
-                    ">
-                      {currency.code}
-                    </span>
-                    <span className="
-                      text-gray-500
-                      text-xs
-                      sm:text-sm
-                      truncate
-                      hidden
-                      sm:inline
-                      flex-1
-                    ">
-                      {currency.name}
-                    </span>
-                  </div>
-                  
-                  {/* Icône de sélection */}
-                  {currentCurrency === currency.code && (
-                    <Icon 
-                      icon="heroicons:check" 
-                      className="
-                        w-4 h-4
-                        sm:w-5 sm:h-5
-                        text-blue-600
-                        flex-shrink-0
-                      " 
-                    />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

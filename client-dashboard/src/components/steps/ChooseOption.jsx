@@ -6,8 +6,11 @@ import {
   trackServicesSelectionCompleted 
 } from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
+import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick, getValidationErrorMessage }) => {
+const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t } = useTranslation();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -76,10 +79,10 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
         <div className="space-y-4 sm:space-y-6 md:space-y-8 max-w-full">
           <div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
-              Choose Your Services
+              {t('form.steps.chooseOption.title')}
             </h2>
             <p className="text-sm sm:text-base md:text-lg text-gray-600">
-              Select one or more notary services you need
+              {t('form.steps.chooseOption.subtitle')}
             </p>
           </div>
 
@@ -90,7 +93,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
         </div>
       ) : services.length === 0 ? (
         <div className="text-center py-8 sm:py-12 md:py-16">
-          <p className="text-sm sm:text-base md:text-lg text-gray-600">No services available at the moment.</p>
+          <p className="text-sm sm:text-base md:text-lg text-gray-600">{t('form.steps.chooseOption.noServices')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
@@ -132,7 +135,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
                     {service.short_description || service.description}
                   </p>
                   <p className="text-xs sm:text-sm md:text-base font-semibold text-gray-900">
-                    from {formatPrice(service.base_price || 0)} per document
+                    {t('form.steps.documents.from')} {formatPrice(service.base_price || 0)} {t('form.steps.documents.perDocument')}
                   </p>
                 </div>
               </div>
@@ -144,9 +147,14 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
         </div>
       </div>
 
-      {/* Fixed Navigation - Desktop only */}
-      <div className="hidden xl:block flex-shrink-0 px-4 py-4 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
-        <div className="flex justify-end">
+      {/* Price Details + Fixed Navigation - Desktop only */}
+      <div className="hidden xl:block flex-shrink-0 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
+        <PriceDetails 
+          formData={formData} 
+          isOpen={isPriceDetailsOpen}
+          onToggle={setIsPriceDetailsOpen}
+        />
+        <div className="px-4 py-4 flex justify-end border-t border-gray-300">
           <button
             type="button"
             onClick={handleContinue}
@@ -156,7 +164,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
                 : 'hover:scale-105 active:scale-95'
             }`}
           >
-            Continue
+            {t('form.navigation.continue')}
           </button>
         </div>
       </div>

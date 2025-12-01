@@ -5,15 +5,16 @@ import { trackBeginCheckout } from '../../utils/gtm';
 import { trackPaymentInitiated as trackAnalyticsPaymentInitiated } from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
 import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const Summary = ({ formData, prevStep, handleSubmit }) => {
+const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t, language } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [services, setServices] = useState([]);
   const [servicesMap, setServicesMap] = useState({});
   const [options, setOptions] = useState([]);
   const [optionsMap, setOptionsMap] = useState({});
   const [loading, setLoading] = useState(true);
-  const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(true);
 
   useEffect(() => {
     fetchServices();
@@ -155,9 +156,17 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Not selected';
+    if (!dateString) return t('form.steps.summary.notSelected');
     const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', {
+    const localeMap = {
+      'en': 'en-US',
+      'fr': 'fr-FR',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'it': 'it-IT',
+      'pt': 'pt-PT',
+    };
+    return date.toLocaleDateString(localeMap[language] || 'en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -166,7 +175,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   };
 
   const formatTime = (time) => {
-    if (!time) return 'Not selected';
+    if (!time) return t('form.steps.summary.notSelected');
     // Simply display the time as stored, no conversion
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
@@ -182,10 +191,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-full">
           <div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
-              Review Your Information
+              {t('form.steps.summary.title')}
             </h2>
             <p className="text-xs sm:text-sm md:text-lg text-gray-600">
-              Please review all details before submitting
+              {t('form.steps.summary.subtitle')}
             </p>
           </div>
 
@@ -196,7 +205,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
               <Icon icon="heroicons:check-badge" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
             </div>
-            <span className="truncate">Selected Services</span>
+            <span className="truncate">{t('form.steps.summary.services')}</span>
           </h3>
           {loading ? (
             <div className="flex items-center justify-center py-4">
@@ -217,7 +226,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
-                          {documents.length} document{documents.length > 1 ? 's' : ''} × {formatPrice(service?.base_price || 0)}
+                          {documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')} × {formatPrice(service?.base_price || 0)}
                         </p>
                       </div>
                     </div>
@@ -265,14 +274,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
               <Icon icon="heroicons:user-group" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
             </div>
-            <span className="truncate">Signatories</span>
+            <span className="truncate">{t('form.steps.summary.signatories')}</span>
           </h3>
           <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
             <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">
-              {formData.signatoryCount} {formData.signatoryCount === 1 ? 'signatory' : 'signatories'}
+              {formData.signatoryCount} {formData.signatoryCount === 1 ? t('form.steps.summary.signatory') : t('form.steps.summary.signatoryPlural')}
             </div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">
-              The first signatory is included, each additional signatory costs {formatPrice(10)}
+              {t('form.steps.summary.firstIncluded')} {formatPrice(10)}
             </div>
           </div>
         </div>
@@ -284,7 +293,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
             <Icon icon="heroicons:calendar-days" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
           </div>
-          <span className="truncate">Appointment Details</span>
+          <span className="truncate">{t('form.steps.summary.appointment')}</span>
         </h3>
         <div className="space-y-2 sm:space-y-3">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
@@ -292,12 +301,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words">{formatDate(formData.appointmentDate)}</span>
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
-            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Time</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">{t('form.steps.bookAppointment.time')}</span>
             <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right">{formatTime(formData.appointmentTime)}</span>
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
-            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Timezone</span>
-            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words min-w-0">{formData.timezone || 'Not specified'}</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">{t('form.steps.bookAppointment.timezone')}</span>
+            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words min-w-0">{formData.timezone || t('form.steps.summary.notSpecified')}</span>
           </div>
         </div>
       </div>
@@ -308,7 +317,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
             <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
           </div>
-          <span className="truncate">Personal Information</span>
+          <span className="truncate">{t('form.steps.summary.personalInfo')}</span>
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
@@ -322,10 +331,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-all">{formData.email}</p>
           </div>
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
-            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Phone</p>
-            <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-words">{formData.phone}</p>
-          </div>
-          <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
             <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Country</p>
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-words">{formData.country}</p>
           </div>
@@ -337,7 +342,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           </div>
           {formData.notes && (
             <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl sm:col-span-2 overflow-hidden">
-              <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Additional Notes</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">{t('form.steps.summary.additionalNotes')}</p>
               <p className="text-[10px] sm:text-xs lg:text-sm text-gray-900 break-words">{formData.notes}</p>
             </div>
           )}
@@ -358,7 +363,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               What happens next?
             </h4>
             <p className="text-[10px] sm:text-xs lg:text-sm text-gray-700 break-words">
-              After submitting, you'll receive a confirmation email at <strong className="break-all">{formData.email}</strong>. Within 24 hours, a certified notary will send you a secure video link to complete your notarization appointment at your scheduled time.
+              {t('form.steps.summary.confirmationMessage').replace('{email}', formData.email)}
             </p>
           </div>
         </div>
@@ -366,25 +371,21 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       </div>
       </div>
 
-      {/* Fixed Price Details - Toggleable - Desktop only */}
-      <div className="hidden xl:block flex-shrink-0 bg-[#F3F4F6] border-t border-gray-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1),0_-2px_4px_-1px_rgba(0,0,0,0.06)]">
+      {/* Price Details + Fixed Navigation */}
+      <div className="hidden xl:block flex-shrink-0 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
         <PriceDetails 
           formData={formData} 
           isOpen={isPriceDetailsOpen}
           onToggle={setIsPriceDetailsOpen}
         />
-      </div>
-
-      {/* Fixed Navigation */}
-      <div className="hidden xl:block flex-shrink-0 px-4 py-4 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
-        <div className="flex justify-between">
+        <div className="px-4 py-4 flex justify-between border-t border-gray-300">
           <button
             type="button"
             onClick={prevStep}
             disabled={isSubmitting}
             className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Back
+            {t('form.navigation.back')}
           </button>
           <button
             type="button"
@@ -395,10 +396,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             {isSubmitting ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Processing...
+                {t('form.steps.summary.submitting') || 'Processing...'}
               </>
             ) : (
-              'Complete Payment'
+              t('form.steps.summary.submit')
             )}
           </button>
         </div>

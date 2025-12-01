@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { trackAppointmentBooked as trackAnalyticsAppointmentBooked } from '../../utils/analytics';
+import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
+const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t } = useTranslation();
   const [selectedDate, setSelectedDate] = useState(formData.appointmentDate || '');
   const [selectedTime, setSelectedTime] = useState(formData.appointmentTime || '');
   const [isDetectingTimezone, setIsDetectingTimezone] = useState(true);
@@ -482,10 +485,10 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
           {/* Title - Same as mobile until xl */}
           <div>
             <h2 className="text-lg sm:text-xl xl:text-3xl font-bold text-gray-900 mb-1 sm:mb-1.5 xl:mb-2">
-              Book Your Appointment
+              {t('form.steps.bookAppointment.title')}
             </h2>
             <p className="text-[10px] sm:text-xs xl:text-base text-gray-600">
-              Select a date and time that works best for you
+              {t('form.steps.bookAppointment.subtitle')}
             </p>
           </div>
 
@@ -493,7 +496,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
       <div className="bg-white rounded-lg sm:rounded-xl xl:rounded-2xl p-2.5 sm:p-3 xl:p-5 border border-gray-200 overflow-visible">
         <label className="block text-xs sm:text-sm xl:text-lg font-semibold text-gray-900 mb-1.5 sm:mb-2 xl:mb-3 flex items-center flex-wrap gap-1.5 sm:gap-2">
           <Icon icon="heroicons:globe-alt" className="w-3.5 h-3.5 sm:w-4 sm:h-4 xl:w-5 xl:h-5 text-gray-600 flex-shrink-0" />
-          <span>Your Timezone</span>
+          <span>{t('form.steps.bookAppointment.timezone')}</span>
           {isDetectingTimezone && (
             <span className="text-[10px] sm:text-xs xl:text-sm text-gray-500 flex items-center">
               <Icon icon="heroicons:arrow-path" className="w-2.5 h-2.5 sm:w-3 sm:h-3 xl:w-4 xl:h-4 mr-1 sm:mr-1.5 animate-spin" />
@@ -529,7 +532,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
                     type="text"
                     value={timezoneSearchTerm}
                     onChange={(e) => setTimezoneSearchTerm(e.target.value)}
-                    placeholder="Search timezone..."
+                    placeholder={t('form.steps.bookAppointment.searchTimezone')}
                     className="w-full pl-6 sm:pl-7 md:pl-8 xl:pl-10 pr-1.5 sm:pr-2 md:pr-3 xl:pr-4 py-1 sm:py-1.5 md:py-1.5 xl:py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-all text-[10px] sm:text-xs md:text-sm"
                     autoFocus
                   />
@@ -540,7 +543,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
               <div className="max-h-[50vh] sm:max-h-80 overflow-y-auto">
                 {filteredTimezones.length === 0 ? (
                   <div className="p-1.5 sm:p-2 md:p-3 xl:p-4 text-center text-gray-500 text-[10px] sm:text-xs md:text-sm">
-                    No timezone found matching "{timezoneSearchTerm}"
+                    {t('form.steps.bookAppointment.noTimezoneFound').replace('{term}', timezoneSearchTerm)}
                   </div>
                 ) : (
                   filteredTimezones.map((tz) => (
@@ -567,7 +570,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
         </div>
         {!isDetectingTimezone && (
           <p className="mt-1 sm:mt-1.5 md:mt-1.5 xl:mt-2 text-[8px] sm:text-[9px] md:text-[10px] xl:text-xs text-gray-500 break-words">
-            Your timezone has been automatically detected. You can change it if needed.
+            {t('form.steps.bookAppointment.timezoneDetected')}
           </p>
         )}
       </div>
@@ -585,7 +588,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
                 type="button"
                 onClick={goToPreviousMonth}
                 className="p-1.5 sm:p-2 md:p-2 xl:p-2.5 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Previous month"
+                aria-label={t('form.steps.bookAppointment.previousMonth')}
               >
                 <Icon icon="heroicons:chevron-left" className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 xl:w-5 text-gray-600" />
               </button>
@@ -593,7 +596,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
                 type="button"
                 onClick={goToNextMonth}
                 className="p-1.5 sm:p-2 md:p-2 xl:p-2.5 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Next month"
+                aria-label={t('form.steps.bookAppointment.nextMonth')}
               >
                 <Icon icon="heroicons:chevron-right" className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 xl:w-5 text-gray-600" />
               </button>
@@ -647,7 +650,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
           </h3>
           {!selectedDate && (
             <p className="text-xs sm:text-sm md:text-sm xl:text-base text-gray-500 italic mb-3 sm:mb-3.5 md:mb-3 xl:mb-4">
-              Please select a date first to choose a time slot
+              {t('form.steps.bookAppointment.selectDateFirst')}
             </p>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-2 sm:gap-2.5 md:gap-2.5 xl:gap-3">
@@ -674,15 +677,20 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
         </div>
       </div>
 
-      {/* Navigation Buttons - Desktop only (mobile and tablet handled by parent) */}
-      <div className="hidden xl:flex border-t border-gray-300 bg-[#F3F4F6] flex-shrink-0">
-        <div className="w-full px-4 xl:px-8 py-3 xl:py-4 flex justify-between gap-3 xl:gap-4">
+      {/* Price Details + Navigation Buttons - Desktop only */}
+      <div className="hidden xl:flex flex-col border-t border-gray-300 bg-[#F3F4F6] flex-shrink-0">
+        <PriceDetails 
+          formData={formData} 
+          isOpen={isPriceDetailsOpen}
+          onToggle={setIsPriceDetailsOpen}
+        />
+        <div className="w-full px-4 xl:px-8 py-3 xl:py-4 flex justify-between gap-3 xl:gap-4 border-t border-gray-300">
           <button
             type="button"
             onClick={prevStep}
             className="btn-glassy-secondary px-4 xl:px-8 py-2.5 xl:py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 text-sm xl:text-base flex-shrink-0"
           >
-            Back
+            {t('form.navigation.back')}
           </button>
           <button
             type="button"
@@ -693,7 +701,7 @@ const BookAppointment = ({ formData, updateFormData, nextStep, prevStep, handleC
                 : 'hover:scale-105 active:scale-95'
             }`}
           >
-            Continue
+            {t('form.navigation.continue')}
           </button>
         </div>
       </div>

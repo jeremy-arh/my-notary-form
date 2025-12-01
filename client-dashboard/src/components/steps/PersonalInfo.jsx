@@ -3,8 +3,11 @@ import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import { trackPersonalInfoCompleted as trackAnalyticsPersonalInfoCompleted } from '../../utils/analytics';
 import AddressAutocomplete from '../AddressAutocomplete';
+import PriceDetails from '../PriceDetails';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false, handleContinueClick, getValidationErrorMessage }) => {
+const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+  const { t } = useTranslation();
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [emailExists, setEmailExists] = useState(false);
@@ -47,48 +50,50 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
     const newErrors = {};
 
     if (!formData.firstName?.trim()) {
-      newErrors.firstName = 'First name is required';
+      newErrors.firstName = t('form.steps.personalInfo.validationFirstName');
     }
 
     if (!formData.lastName?.trim()) {
-      newErrors.lastName = 'Last name is required';
+      newErrors.lastName = t('form.steps.personalInfo.validationLastName');
     }
 
     // Only validate email and password if user is not authenticated
     if (!isAuthenticated) {
       if (!formData.email?.trim()) {
-        newErrors.email = 'Email is required';
+        newErrors.email = t('form.steps.personalInfo.validationEmail');
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        newErrors.email = 'Invalid email format';
+        newErrors.email = t('form.steps.personalInfo.validationEmailInvalid');
       }
 
       // Password validation
       if (!formData.password?.trim()) {
-        newErrors.password = 'Password is required';
+        newErrors.password = t('form.steps.personalInfo.validationPassword');
       } else if (formData.password.length < 6) {
-        newErrors.password = 'Password must be at least 6 characters';
+        newErrors.password = t('form.steps.personalInfo.validationPasswordMin');
       }
     }
 
     if (!formData.address?.trim()) {
-      newErrors.address = 'Address is required';
+      newErrors.address = t('form.steps.personalInfo.validationAddress');
     }
 
-    if (!formData.city?.trim()) {
-      newErrors.city = 'City is required';
-    }
+    // Les champs auto-remplis ne sont pas obligatoires
+    // Ils seront remplis automatiquement si disponibles dans l'adresse sélectionnée
+    // if (!formData.city?.trim()) {
+    //   newErrors.city = 'City is required';
+    // }
 
-    if (!formData.postalCode?.trim()) {
-      newErrors.postalCode = 'Postal code is required';
-    }
+    // if (!formData.postalCode?.trim()) {
+    //   newErrors.postalCode = 'Postal code is required';
+    // }
 
-    if (!formData.country?.trim()) {
-      newErrors.country = 'Country is required';
-    }
+    // if (!formData.country?.trim()) {
+    //   newErrors.country = 'Country is required';
+    // }
 
-    if (!formData.timezone?.trim()) {
-      newErrors.timezone = 'Timezone is required';
-    }
+    // if (!formData.timezone?.trim()) {
+    //   newErrors.timezone = 'Timezone is required';
+    // }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -125,10 +130,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
         <div className="space-y-4 sm:space-y-6 md:space-y-8 max-w-full">
           <div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
-              Your Personal Information
+              {t('form.steps.personalInfo.title')}
             </h2>
             <p className="text-sm sm:text-base md:text-lg text-gray-600">
-              Please fill in your contact details
+              {t('form.steps.personalInfo.subtitle')}
             </p>
           </div>
 
@@ -138,7 +143,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div>
             <label htmlFor="firstName" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>First Name <span className="text-red-500 ml-1">*</span></span>
+              <span>{t('form.steps.personalInfo.firstName')} <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="text"
@@ -148,7 +153,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                 errors.firstName ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="John"
+              placeholder={t('form.steps.personalInfo.placeholderFirstName')}
             />
             {errors.firstName && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -161,7 +166,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div>
             <label htmlFor="lastName" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>Last Name <span className="text-red-500 ml-1">*</span></span>
+              <span>{t('form.steps.personalInfo.lastName')} <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="text"
@@ -171,7 +176,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                 errors.lastName ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="Doe"
+              placeholder={t('form.steps.personalInfo.placeholderLastName')}
             />
             {errors.lastName && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -187,7 +192,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div>
             <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:envelope" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>Email Address <span className="text-red-500 ml-1">*</span></span>
+              <span>{t('form.steps.personalInfo.email')} <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="email"
@@ -198,7 +203,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                 errors.email || emailExists ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="john.doe@example.com"
+              placeholder={t('form.steps.personalInfo.placeholderEmail')}
             />
             {errors.email && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -209,7 +214,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             {emailExists && !errors.email && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-start">
                 <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5" />
-                <span className="break-words">This email is already registered. Please login or use a different email.</span>
+                <span className="break-words">{t('form.steps.personalInfo.emailExists')}</span>
               </p>
             )}
           </div>
@@ -220,7 +225,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div>
             <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>Password <span className="text-red-500 ml-1">*</span></span>
+              <span>{t('form.steps.personalInfo.password')} <span className="text-red-500 ml-1">*</span></span>
             </label>
             <div className="relative">
               <input
@@ -231,13 +236,13 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                   errors.password ? 'border-red-500' : 'border-gray-200'
                 }`}
-                placeholder="••••••••"
+                placeholder={t('form.steps.personalInfo.placeholderPassword')}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t('form.steps.personalInfo.hidePassword') : t('form.steps.personalInfo.showPassword')}
               >
                 <Icon
                   icon={showPassword ? "heroicons:eye-slash" : "heroicons:eye"}
@@ -258,14 +263,14 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
         <div>
           <label htmlFor="address" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
             <Icon icon="heroicons:map-pin" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-            <span>Street Address <span className="text-red-500 ml-1">*</span></span>
+            <span>{t('form.steps.personalInfo.address')} <span className="text-red-500 ml-1">*</span></span>
           </label>
           <div className={errors.address ? 'border-2 border-red-500 rounded-xl' : ''}>
             <AddressAutocomplete
               value={formData.address || ''}
               onChange={(value) => handleChange('address', value)}
               onAddressSelect={handleAddressSelect}
-              placeholder="Start typing an address..."
+              placeholder={t('form.steps.personalInfo.placeholderAddress')}
               className={errors.address ? 'border-red-500' : ''}
             />
           </div>
@@ -282,7 +287,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div>
             <label htmlFor="city" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:building-office-2" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>City <span className="text-red-500 ml-1">*</span></span>
+              <span>{t('form.steps.personalInfo.city')}</span>
             </label>
             <input
               type="text"
@@ -292,7 +297,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
                 errors.city ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="Auto-filled from address"
+              placeholder={t('form.steps.personalInfo.placeholderAutoFilled')}
             />
             {errors.city && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -304,7 +309,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
 
           <div>
             <label htmlFor="postalCode" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2">
-              Postal Code <span className="text-red-500 ml-1">*</span>
+              {t('form.steps.personalInfo.postalCode')}
             </label>
             <input
               type="text"
@@ -314,7 +319,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
                 errors.postalCode ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="Auto-filled from address"
+              placeholder={t('form.steps.personalInfo.placeholderAutoFilled')}
             />
             {errors.postalCode && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -327,7 +332,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
             <label htmlFor="country" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:globe-americas" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>Country <span className="text-red-500 ml-1">*</span></span>
+              <span>{t('form.steps.personalInfo.country')}</span>
             </label>
             <input
               type="text"
@@ -337,7 +342,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
                 errors.country ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder="Auto-filled from address"
+              placeholder={t('form.steps.personalInfo.placeholderAutoFilled')}
             />
             {errors.country && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -352,7 +357,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
         <div>
           <label htmlFor="timezone" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
             <Icon icon="heroicons:clock" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-            <span>Timezone <span className="text-red-500 ml-1">*</span></span>
+            <span>Timezone</span>
           </label>
           <input
             type="text"
@@ -362,7 +367,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
               errors.timezone ? 'border-red-500' : 'border-gray-200'
             }`}
-            placeholder="Auto-filled from address (precise timezone)"
+            placeholder={t('form.steps.personalInfo.placeholderTimezone')}
           />
           {errors.timezone && (
             <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -376,7 +381,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
         <div>
           <label htmlFor="notes" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
             <Icon icon="heroicons:pencil-square" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-            <span>Additional Notes (Optional)</span>
+            <span>{t('form.steps.personalInfo.additionalNotesOptional')}</span>
           </label>
           <textarea
             id="notes"
@@ -384,22 +389,27 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             onChange={(e) => handleChange('notes', e.target.value)}
             rows="4"
             className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all resize-none text-sm sm:text-base"
-            placeholder="Any additional information or special requests..."
+            placeholder={t('form.steps.personalInfo.placeholderNotes')}
           />
         </div>
           </div>
         </div>
       </div>
 
-      {/* Fixed Navigation */}
-      <div className="hidden xl:block flex-shrink-0 px-4 py-4 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
-        <div className="flex justify-between">
+      {/* Price Details + Fixed Navigation */}
+      <div className="hidden xl:block flex-shrink-0 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
+        <PriceDetails 
+          formData={formData} 
+          isOpen={isPriceDetailsOpen}
+          onToggle={setIsPriceDetailsOpen}
+        />
+        <div className="px-4 py-4 flex justify-between border-t border-gray-300">
           <button
             type="button"
             onClick={prevStep}
             className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
           >
-            Back
+            {t('form.navigation.back')}
           </button>
           <button
             type="button"
@@ -410,7 +420,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 : 'btn-glassy hover:scale-105 active:scale-95'
             }`}
           >
-            Continue
+            {t('form.navigation.continue')}
           </button>
         </div>
       </div>
