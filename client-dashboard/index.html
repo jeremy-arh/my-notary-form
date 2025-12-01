@@ -7,46 +7,73 @@
     <title>client-dashboard</title>
     
     <!-- Plausible Analytics - Custom Events enabled -->
-    <!-- Use different domain for localhost to avoid "Ignoring Event: localhost" -->
     <script>
       // Detect if we're on localhost
       const isLocalhost = window.location.hostname === 'localhost' || 
                          window.location.hostname === '127.0.0.1' ||
                          window.location.hostname === '';
       
-      // Use production domain for Plausible (events will work in production)
-      // For localhost, Plausible will ignore unless "Ignore localhost" is disabled in Plausible settings
-      const plausibleDomain = isLocalhost ? 'mynotary.io' : 'mynotary.io';
+      const plausibleDomain = 'mynotary.io';
       
-      console.log('🔍 [Plausible] Domain:', plausibleDomain, 'Hostname:', window.location.hostname);
+      console.log('🔍 [Plausible] Initializing...');
+      console.log('🔍 [Plausible] Domain:', plausibleDomain);
+      console.log('🔍 [Plausible] Hostname:', window.location.hostname);
+      console.log('🔍 [Plausible] Is localhost:', isLocalhost);
       
-      // Load Plausible script
-      const script = document.createElement('script');
-      script.defer = true;
-      script.setAttribute('data-domain', plausibleDomain);
-      script.src = 'https://plausible.io/js/script.js';
-      document.head.appendChild(script);
-      
-      // Initialize Plausible queue immediately
+      // Initialize Plausible queue IMMEDIATELY (before script loads)
       window.plausible = window.plausible || function() { 
         (window.plausible.q = window.plausible.q || []).push(arguments);
         console.log('🔍 [Plausible] Event queued:', arguments);
       };
       
+      // Load Plausible script
+      const script = document.createElement('script');
+      script.defer = true;
+      script.setAttribute('data-domain', plausibleDomain);
+      // IMPORTANT: Add data-api to use custom API endpoint (allows localhost testing)
+      // This requires Plausible Self-Hosted or Plausible Cloud with API access
+      // For now, we'll use the standard script but log warnings
+      script.src = 'https://plausible.io/js/script.js';
+      
       // Log when Plausible script loads
       script.addEventListener('load', function() {
-        console.log('✅ [Plausible] Script loaded');
-        console.log('🔍 [Plausible] window.plausible:', typeof window.plausible);
+        console.log('✅ [Plausible] Script loaded successfully');
+        console.log('🔍 [Plausible] window.plausible type:', typeof window.plausible);
+        console.log('🔍 [Plausible] window.plausible value:', window.plausible);
+        
         if (typeof window.plausible === 'function') {
-          console.log('✅ [Plausible] Function is available');
+          console.log('✅ [Plausible] Function is available and callable');
+          
+          // Test event to verify it works
+          try {
+            window.plausible('test_event', { props: { test: true } });
+            console.log('✅ [Plausible] Test event sent');
+          } catch (error) {
+            console.error('❌ [Plausible] Error sending test event:', error);
+          }
         } else {
           console.error('❌ [Plausible] Function is NOT available');
+          console.error('❌ [Plausible] This usually means:');
+          console.error('   1. Script blocked by ad blocker');
+          console.error('   2. Script failed to load');
+          console.error('   3. Plausible script error');
+        }
+        
+        // Check if events are being ignored (localhost)
+        if (isLocalhost) {
+          console.warn('⚠️ [Plausible] Running on localhost');
+          console.warn('⚠️ [Plausible] Plausible may ignore events from localhost');
+          console.warn('⚠️ [Plausible] To fix: Go to Plausible Settings > General > Disable "Ignore localhost"');
+          console.warn('⚠️ [Plausible] Or test on production/staging domain');
         }
       });
       
       script.addEventListener('error', function() {
         console.error('❌ [Plausible] Script failed to load');
+        console.error('❌ [Plausible] Check network tab for errors');
       });
+      
+      document.head.appendChild(script);
     </script>
     
     <!-- Google Tag Manager -->

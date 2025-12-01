@@ -142,9 +142,13 @@ export const trackEvent = async (eventName, props = {}) => {
     return;
   }
 
-  console.log(`🔍 [Plausible] Attempting to track: ${eventName}`, props);
-  console.log(`🔍 [Plausible] window.plausible exists:`, typeof window.plausible);
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`🔍 [Plausible] Tracking event: ${eventName}`);
+  console.log(`🔍 [Plausible] Props:`, props);
+  console.log(`🔍 [Plausible] window.plausible exists:`, typeof window.plausible !== 'undefined');
   console.log(`🔍 [Plausible] window.plausible type:`, typeof window.plausible);
+  console.log(`🔍 [Plausible] window.plausible value:`, window.plausible);
+  console.log(`🔍 [Plausible] Queue length:`, window.plausible?.q?.length || 0);
 
   // Check if Plausible is available
   const isPlausibleAvailable = await checkPlausibleAvailability();
@@ -165,14 +169,19 @@ export const trackEvent = async (eventName, props = {}) => {
         console.log(`✅ [Plausible] Event sent without props: ${eventName}`);
       }
       
+      // Log queue after sending
+      console.log(`🔍 [Plausible] Queue after send:`, window.plausible?.q?.length || 0);
+      
       // Wait a bit to ensure event is processed
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       // Also send to Supabase as backup (dual tracking)
       const supabaseEvent = mapToSupabaseEvent(eventName, props);
       trackEventSupabase(supabaseEvent.eventType, supabaseEvent.pagePath, supabaseEvent.metadata)
         .catch(err => console.warn('⚠️ [Plausible] Supabase fallback failed:', err));
       
+      console.log(`✅ [Plausible] Event tracking completed: ${eventName}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       return;
     } catch (error) {
       console.error('❌ [Plausible] Tracking error:', error);
@@ -190,6 +199,8 @@ export const trackEvent = async (eventName, props = {}) => {
   const supabaseEvent = mapToSupabaseEvent(eventName, props);
   trackEventSupabase(supabaseEvent.eventType, supabaseEvent.pagePath, supabaseEvent.metadata)
     .catch(err => console.error('❌ [Plausible] Supabase fallback error:', err));
+  
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 };
 
 /**
