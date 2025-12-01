@@ -73,12 +73,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       }
     }
 
-    // Seul le pays est obligatoire dans la section adresse
-    if (!formData.country?.trim()) {
-      newErrors.country = t('form.steps.personalInfo.validationCountry');
-    }
-
-    // Les autres champs d'adresse ne sont pas obligatoires
+    // Aucun des champs d'adresse auto-remplis ne sont obligatoires
     // Ils seront remplis automatiquement si disponibles dans l'adresse sélectionnée
     // if (!formData.address?.trim()) {
     //   newErrors.address = 'Address is required';
@@ -90,6 +85,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
 
     // if (!formData.postalCode?.trim()) {
     //   newErrors.postalCode = 'Postal code is required';
+    // }
+
+    // if (!formData.country?.trim()) {
+    //   newErrors.country = 'Country is required';
     // }
 
     // if (!formData.timezone?.trim()) {
@@ -335,7 +334,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
             <label htmlFor="country" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:globe-americas" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>{t('form.steps.personalInfo.country')} <span className="text-red-500 ml-1">*</span></span>
+              <span>{t('form.steps.personalInfo.country')}</span>
             </label>
             <input
               type="text"

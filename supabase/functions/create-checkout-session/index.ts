@@ -13,22 +13,73 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 }
 
-// Fonction de conversion de devises (EUR vers autres devises)
-// Les prix dans la base de données sont stockés en EUR
-const convertCurrency = (amountEUR: number, targetCurrency: string): number => {
-  const exchangeRates: { [key: string]: number } = {
-    'EUR': 1.0,
-    'USD': 1.10, // Exemple: 1 EUR = 1.10 USD
-    'GBP': 0.85, // Exemple: 1 EUR = 0.85 GBP
-    'CAD': 1.50, // Exemple: 1 EUR = 1.50 CAD
-    'AUD': 1.65, // Exemple: 1 EUR = 1.65 AUD
-    'CHF': 0.95, // Exemple: 1 EUR = 0.95 CHF
-    'JPY': 165.0, // Exemple: 1 EUR = 165 JPY
-    'CNY': 7.80, // Exemple: 1 EUR = 7.80 CNY
+// Cache pour les taux de change (évite de multiples appels API)
+let exchangeRatesCache: { [key: string]: { rates: any, timestamp: number } } = {}
+const EXCHANGE_RATE_CACHE_TTL = 60 * 60 * 1000 // 1 heure
+
+// Fonction pour récupérer les taux de change depuis l'API
+async function fetchExchangeRates(): Promise<any> {
+  const now = Date.now()
+  
+  // Vérifier le cache
+  if (exchangeRatesCache['EUR'] && (now - exchangeRatesCache['EUR'].timestamp) < EXCHANGE_RATE_CACHE_TTL) {
+    console.log('💰 [EXCHANGE] Using cached exchange rates')
+    return exchangeRatesCache['EUR'].rates
   }
   
-  const rate = exchangeRates[targetCurrency.toUpperCase()] || 1.0
-  return amountEUR * rate
+  try {
+    console.log('💰 [EXCHANGE] Fetching exchange rates from API...')
+    const response = await fetch('https://api.exchangerate-api.com/v4/latest/EUR')
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch exchange rates')
+    }
+    
+    const data = await response.json()
+    
+    if (data.rates) {
+      exchangeRatesCache['EUR'] = {
+        rates: data.rates,
+        timestamp: now
+      }
+      console.log('✅ [EXCHANGE] Exchange rates fetched and cached')
+      return data.rates
+    }
+  } catch (error) {
+    console.warn('⚠️ [EXCHANGE] Error fetching exchange rates:', error)
+  }
+  
+  // Fallback vers des taux fixes si l'API échoue
+  console.warn('⚠️ [EXCHANGE] Using fallback exchange rates')
+  return {
+    'EUR': 1.0,
+    'USD': 1.10,
+    'GBP': 0.85,
+    'CAD': 1.50,
+    'AUD': 1.65,
+    'CHF': 0.95,
+    'JPY': 165.0,
+    'CNY': 7.80,
+  }
+}
+
+// Fonction de conversion de devises (EUR vers autres devises)
+// Les prix dans la base de données sont stockés en EUR
+// Utilise maintenant l'API exchangerate-api.com pour avoir les mêmes taux que le frontend
+async function convertCurrency(amountEUR: number, targetCurrency: string): Promise<number> {
+  if (!targetCurrency || targetCurrency.toUpperCase() === 'EUR') {
+    return amountEUR
+  }
+  
+  const rates = await fetchExchangeRates()
+  const rate = rates[targetCurrency.toUpperCase()] || 1.0
+  
+  // Arrondir à 2 décimales (sauf pour JPY qui n'a pas de décimales)
+  if (targetCurrency.toUpperCase() === 'JPY') {
+    return Math.round(amountEUR * rate)
+  }
+  
+  return Math.round(amountEUR * rate * 100) / 100
 }
 
 serve(async (req) => {
@@ -69,6 +120,17 @@ serve(async (req) => {
     console.log('💰 [CURRENCY] Devise détectée:', currency, '(Stripe:', stripeCurrency + ')')
     console.log('💰 [CURRENCY] body.currency:', body.currency)
     console.log('💰 [CURRENCY] formData.currency:', formData.currency)
+
+    // Récupérer le code promo et l'ID du promotion code s'ils sont fournis
+    const promoCode = body.promoCode || formData?.promoCode || null
+    const promoCodeId = body.promoCodeId || formData?.promoCodeId || null
+    console.log('🎟️ [PROMO] Code promo détecté:', promoCode || 'Aucun')
+    console.log('🎟️ [PROMO] Promotion code ID détecté:', promoCodeId || 'Aucun')
+    console.log('🎟️ [PROMO] body.promoCode:', body.promoCode)
+    console.log('🎟️ [PROMO] body.promoCodeId:', body.promoCodeId)
+    console.log('🎟️ [PROMO] formData.promoCode:', formData?.promoCode)
+    console.log('🎟️ [PROMO] formData.promoCodeId:', formData?.promoCodeId)
+    console.log('🎟️ [PROMO] body complet:', JSON.stringify({ promoCode: body.promoCode, hasFormData: !!body.formData }))
 
     // Get the authorization header
     const authHeader = req.headers.get('Authorization')!
@@ -378,7 +440,7 @@ serve(async (req) => {
 
           if (documentCount > 0) {
             // Convertir le prix depuis EUR vers la devise demandée
-            const priceInCurrency = convertCurrency(service.base_price || 0, currency)
+            const priceInCurrency = await convertCurrency(service.base_price || 0, currency)
             // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
             // Pour les autres devises, convertir en centimes
             const unitAmount = currency === 'JPY' 
@@ -461,7 +523,7 @@ serve(async (req) => {
 
         if (option && option.additional_price) {
           // Convertir le prix depuis EUR vers la devise demandée
-          const priceInCurrency = convertCurrency(option.additional_price || 0, currency)
+          const priceInCurrency = await convertCurrency(option.additional_price || 0, currency)
           // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
           const unitAmount = currency === 'JPY' 
             ? Math.round(priceInCurrency) 
@@ -510,7 +572,7 @@ serve(async (req) => {
       if (additionalSignatoriesCount > 0) {
         const additionalSignatoriesPriceEUR = 10.00 // €10 per additional signatory (en EUR)
         // Convertir le prix depuis EUR vers la devise demandée
-        const additionalSignatoriesPrice = convertCurrency(additionalSignatoriesPriceEUR, currency)
+        const additionalSignatoriesPrice = await convertCurrency(additionalSignatoriesPriceEUR, currency)
         // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
         const unitAmount = currency === 'JPY' 
           ? Math.round(additionalSignatoriesPrice) 
@@ -561,6 +623,162 @@ serve(async (req) => {
       },
     }
 
+    // Ajouter le support des codes promo
+    // IMPORTANT: Stripe ne permet pas d'utiliser allow_promotion_codes ET discounts en même temps
+    // Si un code promo est fourni et valide, on utilise discounts
+    // Sinon, on active allow_promotion_codes pour permettre la saisie dans le checkout
+    
+    let promoCodeApplied = false
+    
+    // PRIORITÉ 1: Si on a l'ID du promotion code directement, l'utiliser sans recherche
+    if (promoCodeId) {
+      try {
+        console.log('🎟️ [PROMO] Utilisation directe du promotion code ID:', promoCodeId)
+        // Vérifier que le promotion code existe et est actif
+        const promotionCode = await stripe.promotionCodes.retrieve(promoCodeId)
+        
+        console.log('🎟️ [PROMO] Promotion code récupéré:', {
+          id: promotionCode.id,
+          code: promotionCode.code,
+          active: promotionCode.active,
+          couponValid: promotionCode.coupon?.valid
+        })
+        
+        // Vérifier les restrictions du promotion code
+        console.log('🎟️ [PROMO] Détails du promotion code:', {
+          id: promotionCode.id,
+          code: promotionCode.code,
+          active: promotionCode.active,
+          max_redemptions: promotionCode.max_redemptions,
+          times_redeemed: promotionCode.times_redeemed,
+          expires_at: promotionCode.expires_at,
+          restrictions: promotionCode.restrictions
+        })
+        
+        if (promotionCode.active && promotionCode.coupon && promotionCode.coupon.valid) {
+          // Vérifier les restrictions de rédemption
+          const canRedeem = !promotionCode.max_redemptions || 
+                           !promotionCode.times_redeemed || 
+                           promotionCode.times_redeemed < promotionCode.max_redemptions
+          
+          if (!canRedeem) {
+            console.warn('⚠️ [PROMO] Promotion code a atteint sa limite de rédemptions')
+            console.warn('⚠️ [PROMO] Times redeemed:', promotionCode.times_redeemed, 'Max:', promotionCode.max_redemptions)
+          } else {
+            // Appliquer le discount - format exact pour Stripe
+            sessionParams.discounts = [{ promotion_code: String(promoCodeId) }]
+            promoCodeApplied = true
+            console.log('✅ [PROMO] Promotion code appliqué directement via ID:', promoCodeId)
+            console.log('✅ [PROMO] Code:', promotionCode.code)
+            console.log('✅ [PROMO] Discount appliqué:', JSON.stringify(sessionParams.discounts))
+            console.log('✅ [PROMO] Coupon:', {
+              id: promotionCode.coupon.id,
+              percent_off: promotionCode.coupon.percent_off,
+              amount_off: promotionCode.coupon.amount_off
+            })
+          }
+        } else {
+          console.warn('⚠️ [PROMO] Promotion code ID fourni mais inactif ou coupon invalide')
+          console.warn('⚠️ [PROMO] Active:', promotionCode.active, 'Coupon valid:', promotionCode.coupon?.valid)
+        }
+      } catch (promoIdError: any) {
+        console.error('❌ [PROMO] Erreur lors de la récupération du promotion code par ID:', promoIdError.message)
+        console.log('🎟️ [PROMO] Tentative de recherche par code...')
+      }
+    }
+    
+    // PRIORITÉ 2: Si le code promo n'a pas encore été appliqué et qu'on a un code, chercher par code
+    if (!promoCodeApplied && promoCode) {
+      const promoCodeUpper = String(promoCode).toUpperCase().trim()
+      console.log('🎟️ [PROMO] Recherche du code promo:', promoCodeUpper)
+      
+      // Si un code promo spécifique est fourni, essayer de l'appliquer via promotion code
+      try {
+        // Essayer de récupérer le promotion code (code alphanumérique)
+        console.log('🎟️ [PROMO] Recherche dans les promotion codes...')
+        const promotionCodes = await stripe.promotionCodes.list({
+          code: promoCodeUpper,
+          limit: 1,
+          active: true
+        })
+        
+        console.log('🎟️ [PROMO] Résultat recherche promotion codes:', {
+          found: promotionCodes.data.length > 0,
+          count: promotionCodes.data.length,
+          active: promotionCodes.data.length > 0 ? promotionCodes.data[0].active : false
+        })
+        
+        if (promotionCodes.data.length > 0 && promotionCodes.data[0].active) {
+          const promotionCodeId = promotionCodes.data[0].id
+          const promotionCode = promotionCodes.data[0]
+          
+          // Vérifier que le promotion code est vraiment actif et valide
+          if (promotionCode.active && promotionCode.coupon && promotionCode.coupon.valid) {
+            // Vérifier les restrictions de rédemption
+            const canRedeem = !promotionCode.max_redemptions || 
+                             !promotionCode.times_redeemed || 
+                             promotionCode.times_redeemed < promotionCode.max_redemptions
+            
+            if (!canRedeem) {
+              console.warn('⚠️ [PROMO] Promotion code a atteint sa limite de rédemptions')
+            } else {
+              // Utiliser le promotion code trouvé - format correct pour Stripe (string)
+              sessionParams.discounts = [{ promotion_code: String(promotionCodeId) }]
+              promoCodeApplied = true
+              console.log('✅ [PROMO] Code promo appliqué via promotion code:', promoCodeUpper)
+              console.log('✅ [PROMO] Promotion code ID:', promotionCodeId)
+              console.log('✅ [PROMO] Discount appliqué:', JSON.stringify(sessionParams.discounts))
+              console.log('✅ [PROMO] Coupon associé:', {
+                id: promotionCode.coupon.id,
+                percent_off: promotionCode.coupon.percent_off,
+                amount_off: promotionCode.coupon.amount_off
+              })
+            }
+          } else {
+            console.warn('⚠️ [PROMO] Promotion code trouvé mais inactif ou coupon invalide')
+            console.log('🎟️ [PROMO] Activation de allow_promotion_codes pour permettre la saisie dans le checkout')
+          }
+        } else {
+          console.log('🎟️ [PROMO] Aucun promotion code actif trouvé avec le code:', promoCodeUpper)
+          console.log('🎟️ [PROMO] Vérifiez que le promotion code existe et est actif dans Stripe')
+          console.log('🎟️ [PROMO] Activation de allow_promotion_codes pour permettre la saisie dans le checkout')
+        }
+      } catch (promoError: any) {
+        console.error('❌ [PROMO] Erreur lors de la recherche du code promo:', promoError.message)
+        console.log('🎟️ [PROMO] Activation de allow_promotion_codes pour saisie manuelle')
+      }
+    } else {
+      console.log('🎟️ [PROMO] Aucun code promo fourni')
+    }
+    
+    // Si aucun code promo n'a été appliqué, activer allow_promotion_codes pour permettre la saisie dans le checkout
+    if (!promoCodeApplied) {
+      sessionParams.allow_promotion_codes = true
+      console.log('🎟️ [PROMO] Saisie de code promo activée dans le checkout')
+    }
+
+    // Log final session params for debugging
+    console.log('🎟️ [PROMO] Session params avant création:', {
+      hasDiscounts: !!sessionParams.discounts,
+      discounts: sessionParams.discounts,
+      allow_promotion_codes: sessionParams.allow_promotion_codes,
+      promoCodeApplied: promoCodeApplied,
+      promoCodeReceived: promoCode
+    })
+    
+    // Log the full session params structure (without sensitive data)
+    console.log('🔍 [DEBUG] Session params structure:', {
+      payment_method_types: sessionParams.payment_method_types,
+      mode: sessionParams.mode,
+      hasLineItems: !!sessionParams.line_items && sessionParams.line_items.length > 0,
+      lineItemsCount: sessionParams.line_items?.length || 0,
+      hasDiscounts: !!sessionParams.discounts,
+      discounts: sessionParams.discounts,
+      allow_promotion_codes: sessionParams.allow_promotion_codes,
+      hasCustomer: !!sessionParams.customer,
+      hasCustomerEmail: !!sessionParams.customer_email
+    })
+
     // Use Stripe customer ID if available, otherwise use customer_email
     if (stripeCustomerId) {
       sessionParams.customer = stripeCustomerId
@@ -584,7 +802,84 @@ serve(async (req) => {
       console.log('💳 [STRIPE] Payment method will be saved (will be attached when customer is created)')
     }
 
+    console.log('🔍 [DEBUG] Création de la session Stripe avec params:', {
+      hasDiscounts: !!sessionParams.discounts,
+      discounts: sessionParams.discounts,
+      allow_promotion_codes: sessionParams.allow_promotion_codes,
+      lineItemsCount: sessionParams.line_items?.length || 0
+    })
+
+    // Vérifier le format exact du discount avant création
+    console.log('🔍 [DEBUG] Création session Stripe avec:', {
+      hasDiscounts: !!sessionParams.discounts,
+      discounts: sessionParams.discounts,
+      allow_promotion_codes: sessionParams.allow_promotion_codes,
+      discountsType: sessionParams.discounts ? typeof sessionParams.discounts : 'none',
+      discountsLength: sessionParams.discounts ? sessionParams.discounts.length : 0
+    })
+    
+    // Vérifier que le format du discount est correct
+    if (sessionParams.discounts && sessionParams.discounts.length > 0) {
+      const discount = sessionParams.discounts[0]
+      console.log('🔍 [DEBUG] Format du discount:', {
+        hasPromotionCode: !!discount.promotion_code,
+        hasCoupon: !!discount.coupon,
+        promotionCode: discount.promotion_code,
+        coupon: discount.coupon
+      })
+      
+      // S'assurer que le format est correct
+      if (discount.promotion_code && typeof discount.promotion_code !== 'string') {
+        console.error('❌ [PROMO] ERREUR: promotion_code doit être une string, reçu:', typeof discount.promotion_code)
+      }
+    }
+
+    // VÉRIFICATION FINALE AVANT CRÉATION
+    console.log('🔍 [FINAL CHECK] Paramètres de session AVANT création Stripe:')
+    console.log('🔍 [FINAL CHECK] discounts:', JSON.stringify(sessionParams.discounts))
+    console.log('🔍 [FINAL CHECK] allow_promotion_codes:', sessionParams.allow_promotion_codes)
+    console.log('🔍 [FINAL CHECK] promoCodeApplied:', promoCodeApplied)
+    
+    if (promoCodeApplied && sessionParams.discounts && sessionParams.discounts.length > 0) {
+      console.log('✅ [FINAL CHECK] Discount sera appliqué:', JSON.stringify(sessionParams.discounts[0]))
+    } else if (promoCodeApplied) {
+      console.error('❌ [FINAL CHECK] ERREUR: promoCodeApplied=true mais pas de discounts dans sessionParams!')
+    }
+
     const session = await stripe.checkout.sessions.create(sessionParams)
+
+    // Vérifier que la session a bien été créée avec le discount
+    try {
+      const retrievedSession = await stripe.checkout.sessions.retrieve(session.id, {
+        expand: ['total_details.breakdown', 'discount', 'line_items']
+      })
+      
+      console.log('✅ [SESSION] Session créée:', {
+        id: session.id,
+        url: session.url,
+        hasDiscount: !!retrievedSession.total_details?.breakdown?.discounts,
+        discounts: retrievedSession.total_details?.breakdown?.discounts,
+        discount: retrievedSession.discount,
+        totalDetails: retrievedSession.total_details,
+        amountTotal: retrievedSession.amount_total,
+        amountSubtotal: retrievedSession.amount_subtotal,
+        amountDiscount: retrievedSession.total_details?.breakdown?.discounts?.reduce((sum: number, d: any) => sum + (d.amount || 0), 0) || 0
+      })
+      
+      if (promoCodeApplied) {
+        if (retrievedSession.total_details?.breakdown?.discounts && retrievedSession.total_details.breakdown.discounts.length > 0) {
+          console.log('✅ [PROMO] SUCCÈS: Le discount est bien appliqué dans la session Stripe!')
+          const discountAmount = retrievedSession.total_details.breakdown.discounts.reduce((sum: number, d: any) => sum + (d.amount || 0), 0)
+          console.log('✅ [PROMO] Montant de la réduction:', discountAmount / 100, 'EUR')
+        } else {
+          console.error('❌ [PROMO] ÉCHEC: Le code promo était appliqué mais aucun discount trouvé dans la session!')
+          console.error('❌ [PROMO] Vérifiez les logs ci-dessus pour identifier le problème')
+          console.error('❌ [PROMO] Session params avaient:', JSON.stringify(sessionParams.discounts))
+        }
+      }
+    } catch (retrieveError: any) {
+      console.error('❌ [SESSION] Erreur lors de la récupération de la session:', retrieveError.message)
+    }
 
     return new Response(
       JSON.stringify({ url: session.url, submissionId: submission.id }),

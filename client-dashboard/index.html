@@ -7,8 +7,47 @@
     <title>client-dashboard</title>
     
     <!-- Plausible Analytics - Custom Events enabled -->
-    <script defer data-domain="mynotary.io" src="https://plausible.io/js/script.js"></script>
-    <script>window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
+    <!-- Use different domain for localhost to avoid "Ignoring Event: localhost" -->
+    <script>
+      // Detect if we're on localhost
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                         window.location.hostname === '127.0.0.1' ||
+                         window.location.hostname === '';
+      
+      // Use production domain for Plausible (events will work in production)
+      // For localhost, Plausible will ignore unless "Ignore localhost" is disabled in Plausible settings
+      const plausibleDomain = isLocalhost ? 'mynotary.io' : 'mynotary.io';
+      
+      console.log('🔍 [Plausible] Domain:', plausibleDomain, 'Hostname:', window.location.hostname);
+      
+      // Load Plausible script
+      const script = document.createElement('script');
+      script.defer = true;
+      script.setAttribute('data-domain', plausibleDomain);
+      script.src = 'https://plausible.io/js/script.js';
+      document.head.appendChild(script);
+      
+      // Initialize Plausible queue immediately
+      window.plausible = window.plausible || function() { 
+        (window.plausible.q = window.plausible.q || []).push(arguments);
+        console.log('🔍 [Plausible] Event queued:', arguments);
+      };
+      
+      // Log when Plausible script loads
+      script.addEventListener('load', function() {
+        console.log('✅ [Plausible] Script loaded');
+        console.log('🔍 [Plausible] window.plausible:', typeof window.plausible);
+        if (typeof window.plausible === 'function') {
+          console.log('✅ [Plausible] Function is available');
+        } else {
+          console.error('❌ [Plausible] Function is NOT available');
+        }
+      });
+      
+      script.addEventListener('error', function() {
+        console.error('❌ [Plausible] Script failed to load');
+      });
+    </script>
     
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':

@@ -928,8 +928,9 @@ const NotaryForm = () => {
       const authToken = session?.access_token || supabaseAnonKey;
       
       // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
-      const currency = (submissionData.currency || 'EUR').toUpperCase();
-      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
+      // Utiliser un nom différent pour éviter le conflit avec la variable du contexte
+      const stripeCurrency = (submissionData.currency || 'EUR').toUpperCase();
+      console.log('💰 [CURRENCY] Devise finale envoyée:', stripeCurrency);
 
       console.log('📤 Calling Edge Function directly with fetch...');
       
@@ -955,7 +956,7 @@ const NotaryForm = () => {
           currency: String(cleanFormData.currency || 'EUR'),
           serviceDocuments: {},
         },
-        currency: String(currency)
+        currency: String(stripeCurrency)
       };
 
       // Add password only if present

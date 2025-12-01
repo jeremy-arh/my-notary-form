@@ -132,17 +132,33 @@ const AddressAutocomplete = ({
         // Parse address components
         place.address_components.forEach(component => {
           const types = component.types;
-          if (types.includes('street_number') || types.includes('route')) {
+          
+          // Parse street address (street_number and route)
+          if (types.includes('street_number')) {
+            addressData.address = component.long_name;
+          } else if (types.includes('route')) {
             if (addressData.address) {
               addressData.address += ' ' + component.long_name;
             } else {
               addressData.address = component.long_name;
             }
-          } else if (types.includes('locality')) {
+          }
+          // Parse city - check multiple possible types
+          else if (types.includes('locality')) {
             addressData.city = component.long_name;
-          } else if (types.includes('postal_code')) {
+          } else if (types.includes('sublocality') && !addressData.city) {
+            // Use sublocality if locality is not available
+            addressData.city = component.long_name;
+          } else if (types.includes('administrative_area_level_2') && !addressData.city) {
+            // Fallback to administrative_area_level_2 if needed
+            addressData.city = component.long_name;
+          }
+          // Parse postal code
+          else if (types.includes('postal_code')) {
             addressData.postal_code = component.long_name;
-          } else if (types.includes('country')) {
+          }
+          // Parse country
+          else if (types.includes('country')) {
             addressData.country = component.long_name;
           }
         });
