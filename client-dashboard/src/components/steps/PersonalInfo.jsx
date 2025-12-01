@@ -73,22 +73,23 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       }
     }
 
-    if (!formData.address?.trim()) {
-      newErrors.address = t('form.steps.personalInfo.validationAddress');
+    // Seul le pays est obligatoire dans la section adresse
+    if (!formData.country?.trim()) {
+      newErrors.country = t('form.steps.personalInfo.validationCountry');
     }
 
-    // Les champs auto-remplis ne sont pas obligatoires
+    // Les autres champs d'adresse ne sont pas obligatoires
     // Ils seront remplis automatiquement si disponibles dans l'adresse sélectionnée
+    // if (!formData.address?.trim()) {
+    //   newErrors.address = 'Address is required';
+    // }
+
     // if (!formData.city?.trim()) {
     //   newErrors.city = 'City is required';
     // }
 
     // if (!formData.postalCode?.trim()) {
     //   newErrors.postalCode = 'Postal code is required';
-    // }
-
-    // if (!formData.country?.trim()) {
-    //   newErrors.country = 'Country is required';
     // }
 
     // if (!formData.timezone?.trim()) {
@@ -263,7 +264,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
         <div>
           <label htmlFor="address" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
             <Icon icon="heroicons:map-pin" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-            <span>{t('form.steps.personalInfo.address')} <span className="text-red-500 ml-1">*</span></span>
+            <span>{t('form.steps.personalInfo.address')}</span>
           </label>
           <div className={errors.address ? 'border-2 border-red-500 rounded-xl' : ''}>
             <AddressAutocomplete
@@ -332,17 +333,17 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
             <label htmlFor="country" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
               <Icon icon="heroicons:globe-americas" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-              <span>{t('form.steps.personalInfo.country')}</span>
+              <span>{t('form.steps.personalInfo.country')} <span className="text-red-500 ml-1">*</span></span>
             </label>
             <input
               type="text"
               id="country"
               value={formData.country || ''}
-              disabled
-              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-2 rounded-xl text-gray-500 cursor-not-allowed text-sm sm:text-base ${
+              onChange={(e) => handleChange('country', e.target.value)}
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
                 errors.country ? 'border-red-500' : 'border-gray-200'
               }`}
-              placeholder={t('form.steps.personalInfo.placeholderAutoFilled')}
+              placeholder={t('form.steps.personalInfo.placeholderCountry')}
             />
             {errors.country && (
               <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
