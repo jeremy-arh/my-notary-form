@@ -437,4 +437,187 @@ export const getSubmissionById = async (submissionId) => {
   return data;
 };
 
+/**
+ * Save form draft to database
+ * @param {Object} formData - The form data to save
+ * @param {string} email - Optional email to identify the user
+ * @param {string} sessionId - Session ID for anonymous users
+ * @returns {Promise<Object>} - Result with draft ID or error
+ */
+export const saveFormDraft = async (formData, email = null, sessionId = null) => {
+  if (!supabase) {
+    console.warn('⚠️ saveFormDraft(): Supabase not configured');
+    return { success: false, error: 'Supabase not configured' };
+  }
+
+  try {
+    // Clean formData to remove non-serializable data (like File objects)
+    const cleanFormData = {
+      selectedServices: formData.selectedServices || [],
+      serviceDocuments: {},
+      appointmentDate: formData.appointmentDate || '',
+      appointmentTime: formData.appointmentTime || '',
+      timezone: formData.timezone || '',
+      firstName: formData.firstName || '',
+      lastName: formData.lastName || '',
+      email: formData.email || '',
+      password: formData.password || '', // Will be hashed on final submission
+      phone: formData.phone || '',
+      address: formData.address || '',
+      city: formData.city || '',
+      postalCode: formData.postalCode || '',
+      country: formData.country || '',
+      notes: formData.notes || '',
+      currency: formData.currency || 'EUR'
+    };
+
+    // Convert serviceDocuments to a serializable format (without File objects)
+    if (formData.serviceDocuments) {
+      Object.keys(formData.serviceDocuments).forEach(serviceId => {
+        cleanFormData.serviceDocuments[serviceId] = formData.serviceDocuments[serviceId].map(doc => ({
+          name: doc.name || '',
+          size: doc.size || 0,
+          type: doc.type || '',
+          lastModified: doc.lastModified || 0,
+          dataUrl: doc.dataUrl || '', // Keep dataUrl for draft restoration
+          selectedOptions: doc.selectedOptions || []
+        }));
+      });
+    }
+
+    // Use email from formData if not provided
+    const userEmail = email || formData.email || null;
+    
+    // Generate or use session ID
+    let userSessionId = sessionId;
+    if (!userSessionId) {
+      // Try to get existing session ID from localStorage
+      userSessionId = localStorage.getItem('formSessionId');
+      if (!userSessionId) {
+        // Generate new session ID
+        userSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        localStorage.setItem('formSessionId', userSessionId);
+      }
+    }
+
+    // Check if draft already exists
+    let query = supabase.from('form_draft');
+    let existingDraft = null;
+
+    if (userEmail) {
+      // Try to find by email first
+      const { data: emailDraft } = await query
+        .select('id')
+        .eq('email', userEmail)
+        .maybeSingle();
+      existingDraft = emailDraft;
+    }
+
+    if (!existingDraft && userSessionId) {
+      // Try to find by session ID
+      const { data: sessionDraft } = await query
+        .select('id')
+        .eq('session_id', userSessionId)
+        .maybeSingle();
+      existingDraft = sessionDraft;
+    }
+
+    const draftData = {
+      email: userEmail,
+      session_id: userSessionId,
+      form_data: cleanFormData,
+      updated_at: new Date().toISOString()
+    };
+
+    let result;
+    if (existingDraft) {
+      // Update existing draft
+      const { data, error } = await supabase
+        .from('form_draft')
+        .update(draftData)
+        .eq('id', existingDraft.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      result = { success: true, draftId: data.id, updated: true };
+    } else {
+      // Create new draft
+      const { data, error } = await supabase
+        .from('form_draft')
+        .insert({
+          ...draftData,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      result = { success: true, draftId: data.id, updated: false };
+    }
+
+    console.log('✅ Form draft saved:', result.draftId);
+    return result;
+  } catch (error) {
+    console.error('❌ Error saving form draft:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Load form draft from database
+ * @param {string} email - Optional email to identify the user
+ * @param {string} sessionId - Optional session ID for anonymous users
+ * @returns {Promise<Object|null>} - The draft data or null
+ */
+export const loadFormDraft = async (email = null, sessionId = null) => {
+  if (!supabase) {
+    console.warn('⚠️ loadFormDraft(): Supabase not configured');
+    return null;
+  }
+
+  try {
+    let query = supabase.from('form_draft').select('*');
+
+    if (email) {
+      const { data, error } = await query.eq('email', email).maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+      if (data) {
+        console.log('✅ Form draft loaded by email');
+        return data.form_data;
+      }
+    }
+
+    if (sessionId) {
+      const { data, error } = await query.eq('session_id', sessionId).maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) {
+        console.log('✅ Form draft loaded by session ID');
+        return data.form_data;
+      }
+    }
+
+    // Try to load by session ID from localStorage
+    const storedSessionId = localStorage.getItem('formSessionId');
+    if (storedSessionId && !sessionId) {
+      const { data, error } = await supabase
+        .from('form_draft')
+        .select('*')
+        .eq('session_id', storedSessionId)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) {
+        console.log('✅ Form draft loaded by stored session ID');
+        return data.form_data;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('❌ Error loading form draft:', error);
+    return null;
+  }
+};
+
 export { supabase };

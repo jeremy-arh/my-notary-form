@@ -289,26 +289,6 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
         </div>
       )}
 
-      {/* Signatories Information */}
-      {formData.signatoryCount && formData.signatoryCount > 0 && (
-        <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-          <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-              <Icon icon="heroicons:user-group" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
-            </div>
-            <span className="truncate">{t('form.steps.summary.signatories')}</span>
-          </h3>
-          <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-            <div className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">
-              {formData.signatoryCount} {formData.signatoryCount === 1 ? t('form.steps.summary.signatory') : t('form.steps.summary.signatoryPlural')}
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600 mt-1">
-              {t('form.steps.summary.firstIncluded')} {formatPrice(10)}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Appointment Details */}
       <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
         <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
@@ -351,10 +331,6 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
             <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Email</p>
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-all">{formData.email}</p>
-          </div>
-          <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
-            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Country</p>
-            <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-words">{formData.country}</p>
           </div>
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl sm:col-span-2 overflow-hidden">
             <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Address</p>

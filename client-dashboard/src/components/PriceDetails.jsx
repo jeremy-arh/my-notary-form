@@ -86,11 +86,6 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
         });
       }
       
-      // Add signatory price
-      if (formData.signatoryCount && formData.signatoryCount > 1) {
-        pricesToConvert.add((formData.signatoryCount - 1) * 10);
-      }
-      
       // Convert all prices
       const conversions = await Promise.all(
         Array.from(pricesToConvert).map(async (price) => {
@@ -120,7 +115,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
       preloadPrices();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currency, loading, formData.selectedServices, formData.serviceDocuments, formData.signatoryCount]);
+  }, [currency, loading, formData.selectedServices, formData.serviceDocuments]);
 
   // Calculate total amount
   const calculateTotal = () => {
@@ -143,9 +138,6 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
           });
         }
       });
-    }
-    if (formData.signatoryCount && formData.signatoryCount > 1) {
-      total += (formData.signatoryCount - 1) * 10;
     }
     return total;
   };
@@ -292,20 +284,6 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                     <p className="text-xs sm:text-sm text-gray-500">
                       {t('form.priceDetails.noServices')}
                     </p>
-                  </div>
-                )}
-
-                {/* Show signatories breakdown - global for all services */}
-                {formData.signatoryCount && formData.signatoryCount > 1 && (
-                  <div className="pt-1.5 sm:pt-2 border-t border-gray-200">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5">
-                      <span className="text-[9px] sm:text-[10px] text-gray-500 italic break-words">
-                        + {t('form.priceDetails.additionalSignatories')} ({formData.signatoryCount - 1} {(formData.signatoryCount - 1) > 1 ? t('form.priceDetails.signatoryPlural') : t('form.priceDetails.signatory')})
-                      </span>
-                      <span className="text-[9px] sm:text-[10px] font-semibold text-gray-700 flex-shrink-0">
-                        {formatPrice((formData.signatoryCount - 1) * 10)}
-                      </span>
-                    </div>
                   </div>
                 )}
 

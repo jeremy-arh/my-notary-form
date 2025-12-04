@@ -416,6 +416,25 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             })}
           </div>
         )}
+
+        {/* Security Notice */}
+        <div className="mt-3 sm:mt-4 bg-gray-50 border-2 border-gray-200 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 lg:p-4 lg:p-6 overflow-hidden">
+          <div className="flex items-start gap-2 sm:gap-3 lg:gap-4">
+            <div className="flex-shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                <Icon icon="heroicons:lock-closed" className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
+              </div>
+            </div>
+            <div className="ml-2 sm:ml-3 lg:ml-4 min-w-0 flex-1">
+              <h4 className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 mb-0.5 sm:mb-1">
+                {t('form.steps.documents.securityTitle')}
+              </h4>
+              <p className="text-[10px] sm:text-xs lg:text-sm text-gray-700 break-words">
+                {t('form.steps.documents.securityMessage')}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Price Details + Fixed Navigation - Desktop only */}

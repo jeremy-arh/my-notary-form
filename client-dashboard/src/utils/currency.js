@@ -387,3 +387,4 @@ export const formatPrice = (eurAmount) => {
   
   return `${symbol}${convertedAmount.toFixed(2)}`;
 };
+

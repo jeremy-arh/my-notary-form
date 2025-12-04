@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { submitNotaryRequest, supabase } from '../lib/supabase';
+import { submitNotaryRequest, saveFormDraft, supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
 import { 
@@ -13,7 +13,6 @@ import {
   trackServiceSelected as trackGTMServiceSelected,
   trackDocumentUploaded as trackGTMDocumentUploaded,
   trackAppointmentBooked as trackGTMAppointmentBooked,
-  trackSignatoriesAdded as trackGTMSignatoriesAdded,
   trackPersonalInfoCompleted as trackGTMPersonalInfoCompleted,
   trackSummaryViewed as trackGTMSummaryViewed,
   trackPaymentInitiated as trackGTMPaymentInitiated
@@ -22,7 +21,6 @@ import {
   trackFormStart as trackPlausibleFormStart,
   trackServicesSelected,
   trackDocumentsUploaded,
-  trackSignatoriesAdded,
   trackAppointmentBooked,
   trackPersonalInfoCompleted,
   trackSummaryViewed,
@@ -41,9 +39,6 @@ import {
   trackDocumentScreenOpened,
   trackDocumentUploaded as trackAnalyticsDocumentUploaded,
   trackDocumentsUploadCompleted,
-  trackSignatoryScreenOpened,
-  trackSignatoryAdded as trackAnalyticsSignatoryAdded,
-  trackSignatoriesCompleted,
   trackAppointmentScreenOpened,
   trackAppointmentBooked as trackAnalyticsAppointmentBooked,
   trackPersonalInfoScreenOpened,
@@ -56,7 +51,6 @@ import {
 import { openCrisp } from '../utils/crisp';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
-import SignatoryCount from './steps/SignatoryCount';
 import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
@@ -88,9 +82,6 @@ const NotaryForm = () => {
     // Documents (step 2) - organized by service
     serviceDocuments: {}, // { serviceId: [files] }
 
-    // Signatories (step 3) - number of signatories
-    signatoryCount: null, // Number of signatories
-
     // Appointment
     appointmentDate: '',
     appointmentTime: '',
@@ -116,10 +107,9 @@ const NotaryForm = () => {
   const steps = [
     { id: 1, name: t('form.steps.chooseOption.title'), icon: 'heroicons:check-badge', path: '/form/choose-services' },
     { id: 2, name: t('form.steps.documents.title'), icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 3, name: t('form.steps.signatoryCount.title'), icon: 'heroicons:user-group', path: '/form/signatories' },
+    { id: 3, name: t('form.steps.personalInfo.title'), icon: 'heroicons:user', path: '/form/personal-info' },
     { id: 4, name: t('form.steps.bookAppointment.title'), icon: 'heroicons:calendar-days', path: '/form/book-appointment' },
-    { id: 5, name: t('form.steps.personalInfo.title'), icon: 'heroicons:user', path: '/form/personal-info' },
-    { id: 6, name: t('form.steps.summary.title'), icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
+    { id: 5, name: t('form.steps.summary.title'), icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
 
   // Validation function to check if current step can proceed
@@ -138,21 +128,11 @@ const NotaryForm = () => {
           return docs && docs.length > 0;
         });
 
-      case 3: // Add Signatories
-        // Check that signatory count is selected
-        return formData.signatoryCount && formData.signatoryCount > 0;
-
-      case 4: // Book an appointment
-        return formData.appointmentDate && formData.appointmentTime;
-
-      case 5: // Personal informations
+      case 3: // Personal informations
         const requiredFields = [
           formData.firstName,
           formData.lastName,
-          formData.address,
-          formData.city,
-          formData.postalCode,
-          formData.country
+          formData.address
         ];
 
         // If not authenticated, also require email and password
@@ -163,7 +143,10 @@ const NotaryForm = () => {
         // Check all required fields are filled
         return requiredFields.every(field => field && field.trim() !== '');
 
-      case 6: // Summary
+      case 4: // Book an appointment
+        return formData.appointmentDate && formData.appointmentTime;
+
+      case 4: // Summary
         return true; // No validation needed for summary
 
       default:
@@ -180,14 +163,11 @@ const NotaryForm = () => {
       case 2: // Upload Documents
         return t('form.validation.uploadDocuments');
 
-      case 3: // Add Signatories
-        return t('form.validation.selectSignatories');
+      case 3: // Personal informations
+        return t('form.validation.completePersonalInfo');
 
       case 4: // Book an appointment
         return t('form.validation.selectAppointment');
-
-      case 5: // Personal informations
-        return t('form.validation.completePersonalInfo');
 
       default:
         return t('form.validation.completeStep');
@@ -226,9 +206,9 @@ const NotaryForm = () => {
 
   const currentStep = getCurrentStepFromPath();
 
-  // Open PriceDetails only on Summary step (step 6)
+  // Open PriceDetails only on Summary step (step 5)
   useEffect(() => {
-    setIsPriceDetailsOpen(currentStep === 6);
+    setIsPriceDetailsOpen(currentStep === 5);
   }, [currentStep]);
 
   // Update page title with current step name
@@ -246,7 +226,6 @@ const NotaryForm = () => {
     const stepNameMap = {
       'Choose Services': 'service_selection',
       'Upload Documents': 'document_upload',
-      'Add Signatories': 'signatories',
       'Book an appointment': 'appointment_booking',
       'Your personal informations': 'personal_info',
       'Summary': 'review_summary'
@@ -362,16 +341,13 @@ const NotaryForm = () => {
         trackScreenOpened('Upload Documents', '/form/documents', 2);
         trackDocumentScreenOpened(formData.selectedServices?.length || 0);
       } else if (currentStepData.id === 3) {
-        trackScreenOpened('Add Signatories', '/form/signatories', 3);
-        trackSignatoryScreenOpened();
+        trackScreenOpened('Personal Info', '/form/personal-info', 3);
+        trackPersonalInfoScreenOpened();
       } else if (currentStepData.id === 4) {
         trackScreenOpened('Book Appointment', '/form/book-appointment', 4);
         trackAppointmentScreenOpened();
       } else if (currentStepData.id === 5) {
-        trackScreenOpened('Personal Info', '/form/personal-info', 5);
-        trackPersonalInfoScreenOpened();
-      } else if (currentStepData.id === 6) {
-        trackScreenOpened('Summary', '/form/summary', 6);
+        trackScreenOpened('Summary', '/form/summary', 5);
         trackSummaryScreenOpened();
       }
     }
@@ -527,8 +503,31 @@ const NotaryForm = () => {
     }
   }, [searchParams, location.pathname, formData.selectedServices, setFormData, setCompletedSteps, navigate]);
 
+  // Debounce function for saving drafts
+  const saveDraftTimeoutRef = useRef(null);
+  
   const updateFormData = (data) => {
-    setFormData(prev => ({ ...prev, ...data }));
+    setFormData(prev => {
+      const updated = { ...prev, ...data };
+      
+      // Clear existing timeout
+      if (saveDraftTimeoutRef.current) {
+        clearTimeout(saveDraftTimeoutRef.current);
+      }
+      
+      // Save to database after 1 second of inactivity (debounce)
+      saveDraftTimeoutRef.current = setTimeout(async () => {
+        try {
+          const sessionId = localStorage.getItem('formSessionId') || null;
+          await saveFormDraft(updated, updated.email || null, sessionId);
+        } catch (error) {
+          console.error('Error saving draft:', error);
+          // Don't show error to user, just log it
+        }
+      }, 1000);
+      
+      return updated;
+    });
   };
 
   const markStepCompleted = (stepId) => {
@@ -580,16 +579,13 @@ const NotaryForm = () => {
           // GTM
           trackGTMDocumentUploaded(totalDocs, servicesWithDocs);
           break;
-        case 3: // Signatories Added
+        case 3: // Personal Info Completed
           // Analytics
-          if (formData.signatoryCount && formData.signatoryCount > 0) {
-            trackAnalyticsSignatoryAdded(formData.signatoryCount);
-            trackSignatoriesCompleted(formData.signatoryCount);
-          }
+          trackAnalyticsPersonalInfoCompleted(isAuthenticated);
           // Plausible
-          trackSignatoriesAdded(formData.signatoryCount || 0);
+          trackPersonalInfoCompleted(isAuthenticated);
           // GTM
-          trackGTMSignatoriesAdded(formData.signatoryCount || 0);
+          trackGTMPersonalInfoCompleted(isAuthenticated);
           break;
         case 4: // Appointment Booked
           // Analytics
@@ -613,14 +609,6 @@ const NotaryForm = () => {
             timezone: formData.timezone || ''
           });
           break;
-        case 5: // Personal Info Completed
-          // Analytics
-          trackAnalyticsPersonalInfoCompleted(isAuthenticated);
-          // Plausible
-          trackPersonalInfoCompleted(isAuthenticated);
-          // GTM
-          trackGTMPersonalInfoCompleted(isAuthenticated);
-          break;
       }
     }
   };
@@ -638,8 +626,8 @@ const NotaryForm = () => {
       if (nextStepData) {
         navigate(nextStepData.path);
         
-        // Track summary viewed when reaching step 6
-        if (nextStepData.id === 6) {
+        // Track summary viewed when reaching step 5
+        if (nextStepData.id === 5) {
           const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
             (sum, docs) => sum + (docs?.length || 0), 0
           );
@@ -647,21 +635,18 @@ const NotaryForm = () => {
           trackAnalyticsSummaryViewed({
             servicesCount: formData.selectedServices?.length || 0,
             documentsCount: totalDocs,
-            signatoriesCount: formData.signatoryCount || 0,
             hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
           });
           // Plausible
           trackSummaryViewed({
             servicesCount: formData.selectedServices?.length || 0,
             documentsCount: totalDocs,
-            signatoriesCount: formData.signatoryCount || 0,
             hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
           });
           // GTM
           trackGTMSummaryViewed({
             totalServices: formData.selectedServices?.length || 0,
             totalDocuments: totalDocs,
-            totalSignatories: formData.signatoryCount || 0,
             hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
           });
         }
@@ -702,7 +687,7 @@ const NotaryForm = () => {
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       // Only track abandonment if user has started the form (completed at least step 1)
-      if (completedSteps.length > 0 && currentStep < 6) {
+      if (completedSteps.length > 0 && currentStep < 5) {
         const currentStepData = steps.find(s => s.id === currentStep);
         trackFormAbandoned(currentStep, currentStepData?.name || 'Unknown');
       }
@@ -714,6 +699,15 @@ const NotaryForm = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [currentStep, completedSteps]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveDraftTimeoutRef.current) {
+        clearTimeout(saveDraftTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Helper function to deep clean objects for JSON serialization
   // Avoids any reference to window or other non-serializable objects
@@ -794,6 +788,24 @@ const NotaryForm = () => {
     return cleaned;
   };
 
+  // Function to sanitize file name for storage
+  const sanitizeFileName = (fileName) => {
+    // Get file extension
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const extension = lastDotIndex !== -1 ? fileName.substring(lastDotIndex) : '';
+    const nameWithoutExt = lastDotIndex !== -1 ? fileName.substring(0, lastDotIndex) : fileName;
+    
+    // Remove accents and special characters, replace spaces with underscores
+    const sanitized = nameWithoutExt
+      .normalize('NFD') // Decompose accented characters
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+      .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace invalid characters with underscore
+      .replace(/_{2,}/g, '_') // Replace multiple underscores with single underscore
+      .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+    
+    return sanitized + extension;
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -819,10 +831,11 @@ const NotaryForm = () => {
             // Convert serialized file back to Blob for upload
             const blob = await fetch(file.dataUrl).then(r => r.blob());
 
-            // Generate unique file name
+            // Generate unique file name with sanitized original name
             const timestamp = Date.now();
             const randomId = Math.random().toString(36).substring(7);
-            const fileName = `temp/${serviceId}/${timestamp}_${randomId}_${file.name}`;
+            const sanitizedFileName = sanitizeFileName(file.name);
+            const fileName = `temp/${serviceId}/${timestamp}_${randomId}_${sanitizedFileName}`;
 
             console.log(`📤 Uploading for service ${serviceId}:`, fileName);
 
@@ -878,7 +891,6 @@ const NotaryForm = () => {
         appointmentTime: formData.appointmentTime,
         timezone: formData.timezone,
         selectedServices: formData.selectedServices,
-        signatoryCount: formData.signatoryCount,
         currency: currency,
         password: formData.password, // Only if not authenticated
       };
@@ -909,7 +921,6 @@ const NotaryForm = () => {
       // The Edge Function will fetch services from database and calculate the amount
       console.log('📤 Calling Edge Function with data...');
       console.log('   selectedServices:', Array.isArray(submissionData.selectedServices) ? submissionData.selectedServices.length : 0, 'services');
-      console.log('   signatoryCount:', submissionData.signatoryCount);
       console.log('   currency:', submissionData.currency || 'EUR (default)');
 
       // Log document count per service (avoid logging full objects)
@@ -952,7 +963,6 @@ const NotaryForm = () => {
           selectedServices: Array.isArray(cleanFormData.selectedServices) 
             ? cleanFormData.selectedServices.map(s => String(s))
             : [],
-          signatoryCount: cleanFormData.signatoryCount ? Number(cleanFormData.signatoryCount) : null,
           currency: String(cleanFormData.currency || 'EUR'),
           serviceDocuments: {},
         },
@@ -1429,13 +1439,14 @@ const NotaryForm = () => {
               }
             />
             <Route
-              path="signatories"
+              path="personal-info"
               element={
-                <SignatoryCount
+                <PersonalInfo
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}
                   prevStep={prevStep}
+                  isAuthenticated={isAuthenticated}
                   handleContinueClick={handleContinueClick}
                   getValidationErrorMessage={getValidationErrorMessage}
                   currentStep={3}
@@ -1455,23 +1466,6 @@ const NotaryForm = () => {
                   handleContinueClick={handleContinueClick}
                   getValidationErrorMessage={getValidationErrorMessage}
                   currentStep={4}
-                  isPriceDetailsOpen={isPriceDetailsOpen}
-                  setIsPriceDetailsOpen={setIsPriceDetailsOpen}
-                />
-              }
-            />
-            <Route
-              path="personal-info"
-              element={
-                <PersonalInfo
-                  formData={formData}
-                  updateFormData={updateFormData}
-                  nextStep={nextStep}
-                  prevStep={prevStep}
-                  isAuthenticated={isAuthenticated}
-                  handleContinueClick={handleContinueClick}
-                  getValidationErrorMessage={getValidationErrorMessage}
-                  currentStep={5}
                   isPriceDetailsOpen={isPriceDetailsOpen}
                   setIsPriceDetailsOpen={setIsPriceDetailsOpen}
                 />

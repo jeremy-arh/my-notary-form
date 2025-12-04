@@ -230,3 +230,4 @@ Pour voir les événements en temps réel :
 Si vous voyez `⚠️ [Plausible] Using Supabase fallback`, cela signifie que Plausible est bloqué par un ad blocker, mais les événements sont quand même sauvegardés dans Supabase.
 
 
+

@@ -25,6 +25,16 @@ const AddressAutocomplete = ({
     }
   }, [value]);
 
+  // Update placeholder when it changes (e.g., language change)
+  useEffect(() => {
+    if (containerRef.current) {
+      const input = containerRef.current.querySelector('input');
+      if (input && input.placeholder !== placeholder) {
+        input.placeholder = placeholder;
+      }
+    }
+  }, [placeholder]);
+
   useEffect(() => {
     // Check if API key is configured
     if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
@@ -64,7 +74,7 @@ const AddressAutocomplete = ({
         // Cleanup if needed
       }
     };
-  }, []);
+  }, [placeholder]);
 
   const initializeAutocomplete = () => {
     if (!containerRef.current || !window.google?.maps?.places) {
@@ -163,13 +173,16 @@ const AddressAutocomplete = ({
           }
         });
 
-        // Update input value with formatted address
-        const formattedAddress = addressData.address || place.formatted_address;
+        // Update input value with full formatted address
+        const formattedAddress = place.formatted_address || addressData.address || '';
         setInputValue(formattedAddress);
         input.value = formattedAddress;
         if (onChange) {
           onChange(formattedAddress);
         }
+        
+        // Store the full formatted address in addressData
+        addressData.address = formattedAddress;
 
         // Get timezone from Google Time Zone API
         getTimezoneFromCoordinates(addressData.latitude, addressData.longitude)

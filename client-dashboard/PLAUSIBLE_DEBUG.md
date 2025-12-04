@@ -147,3 +147,4 @@ Si les noms ne correspondent pas, vous avez deux options :
 - [ ] Funnel affiche des données après conversion complète
 
 
+
