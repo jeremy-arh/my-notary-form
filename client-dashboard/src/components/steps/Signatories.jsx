@@ -26,6 +26,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
   const [autocompleteInstances, setAutocompleteInstances] = useState({});
   const [phoneErrors, setPhoneErrors] = useState({}); // Store phone errors by signatoryIndex
   const [emailErrors, setEmailErrors] = useState({}); // Store email errors by signatoryIndex
+  const [editingIndex, setEditingIndex] = useState(null); // Track which signatory is being edited
   const autocompleteRefs = useRef({});
   const googleMapsLoaded = useRef(false);
 
@@ -34,40 +35,24 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
     if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0) {
       setSignatories(formData.signatories);
     } else {
-      // Initialize with first signatory (free)
-      const initialSignatories = [
-        {
-          id: Date.now(),
-          firstName: '',
-          lastName: '',
-          birthDate: '',
-          birthCity: '',
-          postalAddress: '',
-          email: '',
-          phone: ''
-        }
-      ];
-      setSignatories(initialSignatories);
-      updateFormData({ signatories: initialSignatories });
+      // Don't create empty signatory - start with empty array
+      setSignatories([]);
+      updateFormData({ signatories: [] });
     }
   }, []);
 
-  // Sync local state with formData when formData changes externally
-  useEffect(() => {
-    if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0) {
-      // Only update if formData has different length or content
-      if (formData.signatories.length !== signatories.length) {
-        setSignatories(formData.signatories);
-      }
-    }
-  }, [formData.signatories]);
-
-  // Load Google Maps Places API
+  // Load Google Maps API for address autocomplete
   useEffect(() => {
     if (googleMapsLoaded.current) return;
 
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      console.warn('Google Maps API key not configured, address autocomplete will not work');
+      return;
+    }
+
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
@@ -76,14 +61,15 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
     document.head.appendChild(script);
 
     return () => {
-      // Cleanup if needed
+      // Cleanup script if component unmounts
+      const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`);
+      if (existingScript) {
+        existingScript.remove();
+      }
     };
   }, []);
 
-  // Initialize Google Places Autocomplete for an input
   const initAutocomplete = (inputId, signatoryIndex) => {
-    if (!googleMapsLoaded.current || !window.google) return;
-
     const input = document.getElementById(inputId);
     if (!input || autocompleteInstances[inputId]) return;
 
@@ -149,7 +135,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (value && value.trim()) {
         if (!emailRegex.test(value.trim())) {
-          setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email address' }));
+setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email address' }));
         } else {
           setEmailErrors(prev => {
             const newErrors = { ...prev };
@@ -172,7 +158,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
 
   const addSignatory = () => {
     const updated = [...signatories];
-    updated.push({
+    const newSignatory = {
       id: Date.now(),
       firstName: '',
       lastName: '',
@@ -180,55 +166,63 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
       birthCity: '',
       postalAddress: '',
       email: '',
-      phone: ''
-    });
+      phone: '',
+      _isNew: true // Flag to mark as new/temporary
+    };
+    updated.push(newSignatory);
     setSignatories(updated);
     updateFormData({ signatories: updated });
     
-    // Track signatory added in analytics
-    trackAnalyticsSignatoryAdded(updated.length);
+    // Set the new signatory to editing mode
+    setEditingIndex(updated.length - 1);
   };
 
   const removeSignatory = (signatoryIndex) => {
     const updated = [...signatories];
-    if (updated.length > 1) {
-      updated.splice(signatoryIndex, 1);
-      setSignatories(updated);
-      updateFormData({ signatories: updated });
-      
-      // Clean up errors for removed signatory
-      setPhoneErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[signatoryIndex];
-        // Shift error keys for signatories after the removed one
-        const shiftedErrors = {};
-        Object.keys(newErrors).forEach(key => {
-          const keyNum = parseInt(key);
-          if (keyNum > signatoryIndex) {
-            shiftedErrors[keyNum - 1] = newErrors[key];
-          } else if (keyNum < signatoryIndex) {
-            shiftedErrors[keyNum] = newErrors[key];
-          }
-        });
-        return shiftedErrors;
-      });
-      
-      setEmailErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[signatoryIndex];
-        // Shift error keys for signatories after the removed one
-        const shiftedErrors = {};
-        Object.keys(newErrors).forEach(key => {
-          const keyNum = parseInt(key);
-          if (keyNum > signatoryIndex) {
-            shiftedErrors[keyNum - 1] = newErrors[key];
-          } else if (keyNum < signatoryIndex) {
-            shiftedErrors[keyNum] = newErrors[key];
-          }
-        });
-        return shiftedErrors;
-      });
+    updated.splice(signatoryIndex, 1);
+    setSignatories(updated);
+    updateFormData({ signatories: updated });
+    
+    // If removing the one being edited, exit edit mode
+    if (editingIndex === signatoryIndex) {
+      setEditingIndex(null);
+    } else if (editingIndex > signatoryIndex) {
+      // Adjust editing index if removing a signatory before the one being edited
+      setEditingIndex(editingIndex - 1);
     }
+    
+    // Clean up errors for removed signatory
+    setPhoneErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[signatoryIndex];
+      // Shift error keys for signatories after the removed one
+      const shiftedErrors = {};
+      Object.keys(newErrors).forEach(key => {
+        const keyNum = parseInt(key);
+        if (keyNum > signatoryIndex) {
+          shiftedErrors[keyNum - 1] = newErrors[key];
+        } else if (keyNum < signatoryIndex) {
+          shiftedErrors[keyNum] = newErrors[key];
+        }
+      });
+      return shiftedErrors;
+    });
+    
+    setEmailErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[signatoryIndex];
+      // Shift error keys for signatories after the removed one
+      const shiftedErrors = {};
+      Object.keys(newErrors).forEach(key => {
+        const keyNum = parseInt(key);
+        if (keyNum > signatoryIndex) {
+          shiftedErrors[keyNum - 1] = newErrors[key];
+        } else if (keyNum < signatoryIndex) {
+          shiftedErrors[keyNum] = newErrors[key];
+        }
+      });
+      return shiftedErrors;
+    });
   };
 
   const validate = () => {
@@ -250,29 +244,16 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
       }
       const firstName = signatory.firstName?.trim();
       const lastName = signatory.lastName?.trim();
-      const birthDate = signatory.birthDate?.trim();
-      const birthCity = signatory.birthCity?.trim();
-      const postalAddress = signatory.postalAddress?.trim();
       const email = signatory.email?.trim();
       const phone = signatory.phone?.trim();
       
-      if (!firstName || !lastName || !birthDate || !birthCity || !postalAddress || !email || !phone) {
+      if (!firstName || !lastName || !email || !phone) {
         console.log(`❌ [VALIDATION] Signatory ${i} missing fields:`, {
           firstName: !!firstName,
           lastName: !!lastName,
-          birthDate: !!birthDate,
-          birthCity: !!birthCity,
-          postalAddress: !!postalAddress,
           email: !!email,
-          phone: !!phone,
-          signatory
+          phone: !!phone
         });
-        return false;
-      }
-      
-      // Validate email format
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        console.log(`❌ [VALIDATION] Signatory ${i} has invalid email:`, email);
         return false;
       }
       
@@ -304,256 +285,277 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
     return validate();
   }, [signatories, formData.signatories]);
 
+  // Get initials from name
+  const getInitials = (firstName, lastName) => {
+    const first = firstName?.charAt(0)?.toUpperCase() || '';
+    const last = lastName?.charAt(0)?.toUpperCase() || '';
+    return (first + last) || '?';
+  };
+
+  // Check if signatory is the user (from formData)
+  const isUserSignatory = (signatory) => {
+    return signatory.email === formData.email && 
+           signatory.firstName === formData.firstName && 
+           signatory.lastName === formData.lastName;
+  };
+
   return (
-    <div className="h-full w-full flex flex-col relative">
-      {/* Header */}
-      <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4">
-        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
-          Add Signatories
-        </h2>
-        <p className="text-sm sm:text-base md:text-lg text-gray-600">
-          Add signatory information for your order. The first signatory is included, each additional signatory costs {formatPrice(10)}.
-        </p>
-      </div>
-
-      {/* Content Area - Scrollable */}
-      <div className="flex-1 px-3 sm:px-4 md:px-6 pb-32 sm:pb-36 md:pb-6 lg:pb-24 overflow-y-auto overflow-x-hidden" style={{ minHeight: 0 }}>
-        {signatories.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600">No signatories added yet.</p>
+    <>
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-32 sm:pb-36 md:pb-6 lg:pb-6" style={{ minHeight: 0 }}>
+        <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
+          <div>
+            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
+              Signatories Overview
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-600">
+              Verify and complete the persons appearing as signatories on the document.
+              {signatories.length > 1 && (
+                <span className="block mt-1">
+                  The first signatory is included. Each additional signatory costs {formatPrice(45)}.
+                </span>
+              )}
+            </p>
           </div>
-        ) : (
-          <div className="space-y-4 sm:space-y-6">
-            {/* Summary card showing total signatories and cost */}
-            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                    Total Signatories
-                  </h3>
-                  <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                    {signatories.length} signatory{signatories.length > 1 ? 'ies' : ''}
-                    {signatories.length > 1 && (
-                      <span className="ml-2 text-gray-500">
-                        (+{formatPrice((signatories.length - 1) * 10)})
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* Signatories list */}
-            {signatories.map((signatory, signatoryIndex) => (
-              <div
-                key={signatory.id || signatoryIndex}
-                className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200"
-              >
-                <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                    Signatory {signatoryIndex + 1}
-                    {signatoryIndex === 0 && (
-                      <span className="ml-2 text-xs text-gray-500">(included)</span>
-                    )}
-                    {signatoryIndex > 0 && (
-                      <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPrice(10)})</span>
-                    )}
-                  </h3>
-                  {signatoryIndex > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => removeSignatory(signatoryIndex)}
-                      className="p-1.5 sm:p-2 hover:bg-red-100 rounded-lg transition-colors flex-shrink-0"
-                      aria-label="Remove signatory"
-                    >
-                      <Icon icon="heroicons:trash" className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                      First Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={signatory.firstName || ''}
-                      onChange={(e) => updateSignatoryField(signatoryIndex, 'firstName', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="First Name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                      Last Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={signatory.lastName || ''}
-                      onChange={(e) => updateSignatoryField(signatoryIndex, 'lastName', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="Last Name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                      Date of Birth <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={signatory.birthDate || ''}
-                      onChange={(e) => updateSignatoryField(signatoryIndex, 'birthDate', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                      Birth City <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={signatory.birthCity || ''}
-                      onChange={(e) => updateSignatoryField(signatoryIndex, 'birthCity', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="Birth City"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                      Postal Address <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id={`address_${signatoryIndex}`}
-                      value={signatory.postalAddress || ''}
-                      onChange={(e) => {
-                        updateSignatoryField(signatoryIndex, 'postalAddress', e.target.value);
-                        // Initialize autocomplete when user starts typing
-                        if (googleMapsLoaded.current && window.google && !autocompleteInstances[`address_${signatoryIndex}`]) {
-                          setTimeout(() => {
-                            initAutocomplete(`address_${signatoryIndex}`, signatoryIndex);
-                          }, 100);
-                        }
-                      }}
-                      onFocus={() => {
-                        if (googleMapsLoaded.current && window.google && !autocompleteInstances[`address_${signatoryIndex}`]) {
-                          initAutocomplete(`address_${signatoryIndex}`, signatoryIndex);
-                        }
-                      }}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="Start typing an address..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                      Email <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={signatory.email || ''}
-                      onChange={(e) => updateSignatoryField(signatoryIndex, 'email', e.target.value)}
-                      className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border rounded-lg focus:ring-2 text-sm ${
-                        emailErrors[signatoryIndex] 
-                          ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                          : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
-                      }`}
-                      placeholder="email@example.com"
-                    />
-                    {emailErrors[signatoryIndex] && (
-                      <p className="mt-1 text-xs text-red-600 flex items-center">
-                        <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
-                        <span>{emailErrors[signatoryIndex]}</span>
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                      Phone Number <span className="text-red-500">*</span>
-                    </label>
-                    <div className={`flex items-center bg-white border ${
-                      phoneErrors[signatoryIndex] ? 'border-red-500' : 'border-gray-300'
-                    } rounded-lg overflow-hidden transition-all focus-within:ring-2 ${
-                      phoneErrors[signatoryIndex] ? 'focus-within:ring-red-500 focus-within:border-red-500' : 'focus-within:ring-indigo-500'
-                    } pl-2 sm:pl-3 pr-2 sm:pr-3`}>
-                      <PhoneInput
-                        international
-                        defaultCountry="US"
-                        value={signatory.phone || ''}
-                        onChange={(value) => updateSignatoryField(signatoryIndex, 'phone', value || '')}
-                        className="phone-input-integrated w-full flex text-sm"
-                        countrySelectProps={{
-                          className: "pr-1 sm:pr-2 py-2 sm:py-2.5 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none text-xs sm:text-sm focus:outline-none focus:ring-0"
+          <div className="space-y-3 sm:space-y-4">
+            {/* Signatories list - Card view */}
+            {signatories.length > 0 && (
+              signatories.map((signatory, signatoryIndex) => (
+                editingIndex === signatoryIndex ? (
+                  // Edit mode - show form
+                  <div
+                    key={signatory.id || signatoryIndex}
+                    className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between mb-4 sm:mb-6">
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900">
+                        Edit Signatory {signatoryIndex + 1}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // If it's a new signatory, remove it when canceling
+                          if (signatory._isNew) {
+                            removeSignatory(signatoryIndex);
+                          }
+                          setEditingIndex(null);
                         }}
-                        numberInputProps={{
-                          className: "flex-1 pl-1 sm:pl-2 py-2 sm:py-2.5 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-sm"
-                        }}
-                      />
+                        className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        aria-label="Cancel editing"
+                      >
+                        <Icon icon="heroicons:x-mark" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                      </button>
                     </div>
-                    {phoneErrors[signatoryIndex] && (
-                      <p className="mt-1 text-xs text-red-600 flex items-center">
-                        <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
-                        <span>{phoneErrors[signatoryIndex]}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
 
-            {/* Add signatory button */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
+                          First Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={signatory.firstName || ''}
+                          onChange={(e) => updateSignatoryField(signatoryIndex, 'firstName', e.target.value)}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                          placeholder="First Name"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
+                          Last Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={signatory.lastName || ''}
+                          onChange={(e) => updateSignatoryField(signatoryIndex, 'lastName', e.target.value)}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                          placeholder="Last Name"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
+                          Email <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          value={signatory.email || ''}
+                          onChange={(e) => updateSignatoryField(signatoryIndex, 'email', e.target.value)}
+                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border rounded-lg focus:ring-2 text-sm ${
+                            emailErrors[signatoryIndex] 
+                              ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                              : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
+                          }`}
+                          placeholder="email@example.com"
+                        />
+                        {emailErrors[signatoryIndex] && (
+                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                            <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
+                            <span>{emailErrors[signatoryIndex]}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
+                          Phone Number <span className="text-red-500">*</span>
+                        </label>
+                        <div className={`flex items-center bg-white border ${
+                          phoneErrors[signatoryIndex] ? 'border-red-500' : 'border-gray-300'
+                        } rounded-lg overflow-hidden transition-all focus-within:ring-2 ${
+                          phoneErrors[signatoryIndex] ? 'focus-within:ring-red-500 focus-within:border-red-500' : 'focus-within:ring-indigo-500'
+                        } pl-2 sm:pl-3 pr-2 sm:pr-3`}>
+                          <PhoneInput
+                            international
+                            defaultCountry="US"
+                            value={signatory.phone || ''}
+                            onChange={(value) => updateSignatoryField(signatoryIndex, 'phone', value || '')}
+                            className="phone-input-integrated w-full flex text-sm"
+                            countrySelectProps={{
+                              className: "pr-1 sm:pr-2 py-2 sm:py-2.5 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none text-xs sm:text-sm focus:outline-none focus:ring-0"
+                            }}
+                            numberInputProps={{
+                              className: "flex-1 pl-1 sm:pl-2 py-2 sm:py-2.5 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-sm"
+                            }}
+                          />
+                        </div>
+                        {phoneErrors[signatoryIndex] && (
+                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                            <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
+                            <span>{phoneErrors[signatoryIndex]}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 sm:mt-6 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Check if signatory has at least some basic info
+                          const hasBasicInfo = signatory.firstName?.trim() || 
+                                             signatory.lastName?.trim() || 
+                                             signatory.email?.trim();
+                          
+                          if (hasBasicInfo) {
+                            // Remove the _isNew flag when saving
+                            const updated = [...signatories];
+                            if (updated[signatoryIndex]) {
+                              delete updated[signatoryIndex]._isNew;
+                              setSignatories(updated);
+                              updateFormData({ signatories: updated });
+                              
+                              // Track signatory added in analytics only when actually saved
+                              if (signatory._isNew) {
+                                trackAnalyticsSignatoryAdded(updated.length);
+                              }
+                            }
+                            setEditingIndex(null);
+                          } else {
+                            // If no basic info, remove the signatory
+                            if (signatory._isNew) {
+                              removeSignatory(signatoryIndex);
+                            }
+                            setEditingIndex(null);
+                          }
+                        }}
+                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-black text-white font-medium rounded-lg transition-colors hover:bg-gray-800 text-sm"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // View mode - show card
+                  <div
+                    key={signatory.id || signatoryIndex}
+                    className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
+                        {/* Avatar circle with initials */}
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-400 flex items-center justify-center flex-shrink-0">
+                          <span className="text-white font-semibold text-sm sm:text-base">
+                            {getInitials(signatory.firstName, signatory.lastName)}
+                          </span>
+                        </div>
+                        
+                        {/* Name and email */}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                            {signatory.firstName} {signatory.lastName}
+                            {isUserSignatory(signatory) && (
+                              <span className="ml-2 text-xs text-gray-500 font-normal">(you)</span>
+                            )}
+                            {signatoryIndex > 0 && (
+                              <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPrice(45)})</span>
+                            )}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-gray-600 truncate mt-0.5">
+                            {signatory.email || 'No email'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setEditingIndex(signatoryIndex)}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          aria-label="Edit signatory"
+                        >
+                          <Icon icon="heroicons:pencil" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeSignatory(signatoryIndex)}
+                          className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                          aria-label="Remove signatory"
+                        >
+                          <Icon icon="heroicons:trash" className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              ))
+            )}
+
+            {/* Add signatory card */}
             <button
               type="button"
               onClick={addSignatory}
-              className="w-full px-4 sm:px-6 py-2 sm:py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
             >
-              <Icon icon="heroicons:plus" className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-xs sm:text-sm">
-                {signatories.length === 0 
-                  ? "Add Signatory" 
-                  : `Add Additional Signatory (+${formatPrice(10)})`}
-              </span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900">
+                    Add a signatory
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">
+                    {signatories.length === 0 
+                      ? 'Add another person as signatory'
+                      : `Add another person as signatory (+${formatPrice(45)})`
+                    }
+                  </p>
+                </div>
+                <Icon icon="heroicons:plus" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 flex-shrink-0" />
+              </div>
             </button>
-          </div>
-        )}
-      </div>
 
-      {/* Fixed Navigation - Desktop only */}
-      <div className="hidden xl:block xl:border-t xl:border-gray-300 bg-[#F3F4F6]">
-        <div className="px-4 py-4 flex justify-between">
-          <button
-            type="button"
-            onClick={prevStep}
-            className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={handleNext}
-            className={`btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all ${
-              !isValid
-                ? 'opacity-50 hover:opacity-70 active:opacity-90'
-                : 'hover:scale-105 active:scale-95'
-            }`}
-            onMouseEnter={() => {
-              // Debug on hover
-              console.log('🔍 [DEBUG] Validation check:', isValid);
-              console.log('🔍 [DEBUG] signatories:', signatories);
-              console.log('🔍 [DEBUG] formData.signatories:', formData.signatories);
-            }}
-          >
-            Continue
-          </button>
+            {/* No signatories message - shown below the add button */}
+            {signatories.length === 0 && (
+              <div className="text-center py-4">
+                <p className="text-sm text-gray-600">No signatories added yet.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

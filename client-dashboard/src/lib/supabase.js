@@ -233,11 +233,16 @@ export const submitNotaryRequest = async (formData) => {
     console.log('4️⃣ Creating submission record...');
 
     // 2. Create the main submission linked to client
+    // Provide default appointment_date if not provided (since Book Appointment step was removed)
+    const defaultAppointmentDate = formData.appointmentDate || new Date().toISOString().split('T')[0];
+    const defaultAppointmentTime = formData.appointmentTime || '09:00';
+    const defaultTimezone = formData.timezone || 'UTC';
+    
     const submissionData = {
       client_id: clientId,
-      appointment_date: formData.appointmentDate,
-      appointment_time: formData.appointmentTime,
-      timezone: formData.timezone,
+      appointment_date: defaultAppointmentDate,
+      appointment_time: defaultAppointmentTime,
+      timezone: defaultTimezone,
       first_name: formData.firstName,
       last_name: formData.lastName,
       email: formData.email,

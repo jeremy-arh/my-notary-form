@@ -3,12 +3,14 @@ import { lazy, Suspense, useEffect } from 'react'
 import { ToastProvider } from './contexts/ToastContext'
 import { CurrencyProvider } from './contexts/CurrencyContext'
 import { LanguageProvider } from './contexts/LanguageContext'
+import { ServicesProvider } from './contexts/ServicesContext'
 import { initCrisp } from './utils/crisp'
 import Home from './components/Home'
 import Login from './pages/client/Login'
 import ResetPassword from './pages/client/ResetPassword'
 import PaymentSuccess from './pages/PaymentSuccess'
 import PaymentFailed from './pages/PaymentFailed'
+import IdentityVerificationDemo from './pages/IdentityVerificationDemo'
 import PrivateRoute from './components/PrivateRoute'
 import NotaryForm from './components/NotaryForm'
 
@@ -42,13 +44,17 @@ function App() {
     <ToastProvider>
       <CurrencyProvider>
         <LanguageProvider>
-          <BrowserRouter>
-          <Routes>
+          <ServicesProvider>
+            <BrowserRouter>
+            <Routes>
         {/* Smart redirect based on authentication */}
         <Route path="/" element={<Home />} />
 
         {/* Public form routes */}
         <Route path="/form/*" element={<NotaryForm />} />
+
+        {/* Public identity verification demo (données fictives) */}
+        <Route path="/verification-demo" element={<IdentityVerificationDemo />} />
 
         {/* Payment routes */}
         <Route path="/payment/success" element={<PaymentSuccess />} />
@@ -100,6 +106,7 @@ function App() {
         />
           </Routes>
         </BrowserRouter>
+        </ServicesProvider>
         </LanguageProvider>
       </CurrencyProvider>
     </ToastProvider>

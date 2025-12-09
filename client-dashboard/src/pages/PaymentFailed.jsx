@@ -61,6 +61,20 @@ const PaymentFailed = () => {
   };
 
   const handleBackToForm = () => {
+    // Ensure all steps up to Summary are marked as completed before navigating
+    try {
+      const completedSteps = JSON.parse(localStorage.getItem('notaryCompletedSteps') || '[]');
+      // Mark steps 1-4 as completed if not already (Summary is step 5)
+      const stepsToComplete = [1, 2, 3, 4];
+      stepsToComplete.forEach(stepId => {
+        if (!completedSteps.includes(stepId - 1)) {
+          completedSteps.push(stepId - 1);
+        }
+      });
+      localStorage.setItem('notaryCompletedSteps', JSON.stringify([...new Set(completedSteps)].sort()));
+    } catch (error) {
+      console.error('Error updating completed steps:', error);
+    }
     navigate('/form/summary');
   };
 

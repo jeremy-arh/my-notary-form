@@ -1,26 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { supabase } from '../../lib/supabase';
 import { trackBeginCheckout } from '../../utils/gtm';
 import { trackPaymentInitiated as trackAnalyticsPaymentInitiated } from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
-import PriceDetails from '../PriceDetails';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useServices } from '../../contexts/ServicesContext';
+import PriceDetails from '../PriceDetails';
 
-const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+const Summary = ({ formData, prevStep, handleSubmit }) => {
   const { t, language } = useTranslation();
+  const { servicesMap, optionsMap, loading } = useServices();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [services, setServices] = useState([]);
-  const [servicesMap, setServicesMap] = useState({});
-  const [options, setOptions] = useState([]);
-  const [optionsMap, setOptionsMap] = useState({});
-  const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    fetchServices();
-    fetchOptions();
-  }, []);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -31,56 +22,6 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  const fetchServices = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .eq('is_active', true);
-
-      if (error) throw error;
-
-      setServices(data);
-
-      // Create a map of service_id to service object
-      const map = {};
-      data.forEach(service => {
-        map[service.service_id] = service;
-      });
-      setServicesMap(map);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      setServices([]);
-      setServicesMap({});
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchOptions = async () => {
-    try {
-      const { data, error} = await supabase
-        .from('options')
-        .select('*')
-        .eq('is_active', true);
-
-      if (error) throw error;
-
-      setOptions(data || []);
-
-      // Create a map of option_id to option object
-      const map = {};
-      (data || []).forEach(option => {
-        map[option.option_id] = option;
-      });
-      setOptionsMap(map);
-    } catch (error) {
-      console.error('Error fetching options:', error);
-      setOptions([]);
-      setOptionsMap({});
-    }
-  };
 
   // Helper function to truncate file name on mobile
   const truncateFileName = (fileName) => {
@@ -153,6 +94,21 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
       });
     }
 
+    // Add cost for additional signatories (45€ per additional signatory, first one is free)
+    if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+      const additionalSignatories = formData.signatories.length - 1;
+      total += additionalSignatories * 45;
+      
+      // Add signatories as items for GTM
+      items.push({
+        item_id: 'additional_signatories',
+        item_name: `Additional Signatories (${additionalSignatories})`,
+        item_category: 'Additional Service',
+        price: 45,
+        quantity: additionalSignatories
+      });
+    }
+
     return {
       currency: formData.currency || 'EUR',
       value: total,
@@ -164,7 +120,7 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
     setIsSubmitting(true);
     try {
       // Track begin_checkout event before submitting
-      if (!loading && services.length > 0) {
+      if (!loading && Object.keys(servicesMap).length > 0) {
         const checkoutData = calculateCheckoutData();
         trackBeginCheckout(checkoutData);
         // Track analytics payment initiated
@@ -210,12 +166,12 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
     <>
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-[200px] sm:pb-[220px] md:pb-6 lg:pb-6 xl:pb-6" style={{ minHeight: 0 }}>
-        <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-full">
+        <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 lg:space-y-6">
           <div>
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
+            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
               {t('form.steps.summary.title')}
             </h2>
-            <p className="text-xs sm:text-sm md:text-lg text-gray-600">
+            <p className="text-xs sm:text-sm text-gray-600">
               {t('form.steps.summary.subtitle')}
             </p>
           </div>
@@ -223,11 +179,8 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
       {/* Selected Services with Documents */}
       {formData.selectedServices && formData.selectedServices.length > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-          <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4 flex items-center">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-              <Icon icon="heroicons:check-badge" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
-            </div>
-            <span className="truncate">{t('form.steps.summary.services')}</span>
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">
+            {t('form.steps.summary.services')}
           </h3>
           {loading ? (
             <div className="flex items-center justify-center py-4">
@@ -241,10 +194,7 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
 
                 return (
                   <div key={serviceId} className="border border-gray-200 rounded-lg sm:rounded-xl p-2.5 sm:p-3 lg:p-4 overflow-hidden">
-                    <div className="flex items-start space-x-2 sm:space-x-3 mb-2 sm:mb-3">
-                      <div className="w-5 h-5 sm:w-6 sm:h-6 bg-black rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Icon icon="heroicons:check" className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-                      </div>
+                    <div className="mb-2 sm:mb-3">
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
@@ -254,7 +204,7 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
                     </div>
 
                     {documents.length > 0 && (
-                      <div className="ml-7 sm:ml-9 space-y-1.5 sm:space-y-2">
+                      <div className="space-y-1.5 sm:space-y-2">
                         {documents.map((doc, index) => (
                           <div key={index} className="flex flex-col sm:flex-row sm:items-start sm:justify-between p-1.5 sm:p-2 bg-gray-50 rounded-lg gap-1.5 sm:gap-2">
                             <div className="flex items-center flex-1 min-w-0">
@@ -289,37 +239,11 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
         </div>
       )}
 
-      {/* Appointment Details */}
-      <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-        <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-            <Icon icon="heroicons:calendar-days" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
-          </div>
-          <span className="truncate">{t('form.steps.summary.appointment')}</span>
-        </h3>
-        <div className="space-y-2 sm:space-y-3">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
-            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">Date</span>
-            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words">{formatDate(formData.appointmentDate)}</span>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
-            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">{t('form.steps.bookAppointment.time')}</span>
-            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right">{formatTime(formData.appointmentTime)}</span>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl gap-1 sm:gap-2">
-            <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-600 flex-shrink-0">{t('form.steps.bookAppointment.timezone')}</span>
-            <span className="text-[10px] sm:text-xs lg:text-sm text-gray-900 sm:text-right break-words min-w-0">{formData.timezone || t('form.steps.summary.notSpecified')}</span>
-          </div>
-        </div>
-      </div>
 
       {/* Personal Information */}
       <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-        <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4 flex items-center">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-            <Icon icon="heroicons:user" className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
-          </div>
-          <span className="truncate">{t('form.steps.summary.personalInfo')}</span>
+        <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">
+          {t('form.steps.summary.personalInfo')}
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
@@ -347,6 +271,56 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
         </div>
       </div>
 
+      {/* Signatories */}
+      {formData.signatories && formData.signatories.length > 0 && (
+        <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">
+            {t('form.steps.summary.signatories') || 'Signatories'}
+          </h3>
+          <div className="space-y-2 sm:space-y-3">
+            {formData.signatories.map((signatory, index) => {
+              const getInitials = (firstName, lastName) => {
+                const first = firstName?.charAt(0)?.toUpperCase() || '';
+                const last = lastName?.charAt(0)?.toUpperCase() || '';
+                return first + last || '?';
+              };
+              
+              return (
+                <div key={signatory.id || index} className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl border border-gray-200">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-400 flex items-center justify-center flex-shrink-0">
+                    <span className="text-white font-semibold text-xs sm:text-sm">
+                      {getInitials(signatory.firstName, signatory.lastName)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-900 break-words">
+                      {signatory.firstName} {signatory.lastName}
+                      {index > 0 && (
+                        <span className="ml-2 text-xs text-gray-600 font-normal">
+                          (+{formatPrice(45)})
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-gray-600 break-all mt-0.5">
+                      {signatory.email}
+                    </p>
+                    {signatory.phone && (
+                      <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+                        {signatory.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Price Details */}
+      <PriceDetails 
+        formData={formData} 
+      />
 
       {/* Confirmation Notice */}
       <div className="bg-gray-50 border-2 border-gray-200 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 lg:p-4 lg:p-6 overflow-hidden">
@@ -369,39 +343,6 @@ const Summary = ({ formData, prevStep, handleSubmit, isPriceDetailsOpen, setIsPr
       </div>
       </div>
 
-      {/* Price Details + Fixed Navigation */}
-      <div className="hidden xl:block flex-shrink-0 bg-[#F3F4F6] xl:relative bottom-20 xl:bottom-auto left-0 right-0 z-50 xl:z-auto xl:border-t xl:border-gray-300">
-        <PriceDetails 
-          formData={formData} 
-          isOpen={isPriceDetailsOpen}
-          onToggle={setIsPriceDetailsOpen}
-        />
-        <div className="px-4 py-4 flex justify-between border-t border-gray-300">
-          <button
-            type="button"
-            onClick={prevStep}
-            disabled={isSubmitting}
-            className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {t('form.navigation.back')}
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={isSubmitting}
-            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-          >
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                {t('form.steps.summary.submitting') || 'Processing...'}
-              </>
-            ) : (
-              t('form.steps.summary.submit')
-            )}
-          </button>
-        </div>
-      </div>
     </>
   );
 };
