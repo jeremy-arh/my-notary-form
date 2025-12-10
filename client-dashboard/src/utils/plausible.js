@@ -109,7 +109,6 @@ const mapToSupabaseEvent = (plausibleEvent, props = {}) => {
     'services_selected': 'service_selected',
     'documents_uploaded': 'document_uploaded',
     'signatories_added': 'signatory_added',
-    'appointment_booked': 'appointment_booked',
     'personal_info_completed': 'personal_info_completed',
     'summary_viewed': 'summary_viewed',
     'payment_initiated': 'payment_initiated',
@@ -255,52 +254,36 @@ export const trackSignatoriesAdded = async (signatoriesCount) => {
 };
 
 /**
- * Step 5: Appointment Booked - User selects date and time
- * @param {string} appointmentDate - Appointment date
- * @param {string} appointmentTime - Appointment time
- * @param {string} timezone - Timezone
- */
-export const trackAppointmentBooked = async (appointmentDate, appointmentTime, timezone) => {
-  await trackEvent('appointment_booked', {
-    funnel_step: '5_appointment_booked',
-    appointment_date: appointmentDate,
-    appointment_time: appointmentTime,
-    timezone: timezone
-  });
-};
-
-/**
- * Step 6: Personal Info Completed - User fills in personal information
+ * Step 5: Personal Info Completed - User fills in personal information
  * @param {boolean} isAuthenticated - Whether user is authenticated
  */
 export const trackPersonalInfoCompleted = async (isAuthenticated = false) => {
   await trackEvent('personal_info_completed', {
-    funnel_step: '6_personal_info_completed',
+    funnel_step: '5_personal_info_completed',
     is_authenticated: isAuthenticated
   });
 };
 
 /**
- * Step 7: Summary Viewed - User reaches the summary page
+ * Step 6: Summary Viewed - User reaches the summary page
  * @param {object} summaryData - Summary data
  */
 export const trackSummaryViewed = async (summaryData = {}) => {
   await trackEvent('summary_viewed', {
-    funnel_step: '7_summary_viewed',
+    funnel_step: '6_summary_viewed',
     total_services: summaryData.servicesCount || 0,
     total_documents: summaryData.documentsCount || 0,
-    total_signatories: summaryData.signatoriesCount || 0,
-    has_appointment: summaryData.hasAppointment || false
+    total_signatories: summaryData.signatoriesCount || 0
   });
 };
 
 /**
- * Step 8: Payment Initiated - User clicks submit and payment process starts
+ * Step 7: Payment Initiated - User clicks submit and payment process starts
  * @param {object} paymentData - Payment data
  */
 export const trackPaymentInitiated = async (paymentData = {}) => {
   await trackEvent('payment_initiated', {
-    funnel_step: '8_payment_initiated',
+    funnel_step: '7_payment_initiated',
     total_amount: paymentData.totalAmount || 0,
     services_count: paymentData.servicesCount || 0,
     currency: paymentData.currency || 'EUR'
@@ -308,12 +291,12 @@ export const trackPaymentInitiated = async (paymentData = {}) => {
 };
 
 /**
- * Step 9: Payment Completed - Payment successful
+ * Step 8: Payment Completed - Payment successful
  * @param {object} paymentData - Payment data
  */
 export const trackPaymentCompleted = async (paymentData = {}) => {
   await trackEvent('payment_completed', {
-    funnel_step: '9_payment_completed',
+    funnel_step: '8_payment_completed',
     transaction_id: paymentData.transactionId || '',
     total_amount: paymentData.totalAmount || 0,
     submission_id: paymentData.submissionId || '',
