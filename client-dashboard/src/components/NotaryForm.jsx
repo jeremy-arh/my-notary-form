@@ -414,8 +414,17 @@ const NotaryForm = () => {
       return;
     }
     
-    if (servicesLoading) return;
-    if (!services || services.length === 0) return; // Attendre que les services soient disponibles
+    if (servicesLoading) {
+      console.log('⏳ [SERVICE-PARAM] En attente du chargement des services...');
+      return;
+    }
+    
+    if (!services || services.length === 0) {
+      console.warn('⚠️ [SERVICE-PARAM] Aucun service disponible. Services:', services);
+      return; // Attendre que les services soient disponibles
+    }
+    
+    console.log('✅ [SERVICE-PARAM] Services chargés:', services.length, 'services disponibles');
 
     // Vérifier si le service param a changé
     const serviceParamChanged = lastAppliedServiceParamRef.current !== serviceParam;
@@ -447,6 +456,7 @@ const NotaryForm = () => {
 
     console.log('🔍 [SERVICE-PARAM] Paramètre service brut:', serviceParam);
     console.log('🔍 [SERVICE-PARAM] Slugs demandés normalisés:', requestedSlugs);
+    console.log('🔍 [SERVICE-PARAM] Nombre total de services disponibles:', services.length);
 
     if (requestedSlugs.length === 0) {
       console.warn('⚠️ [SERVICE-PARAM] Aucun slug valide trouvé dans le paramètre');
@@ -459,17 +469,28 @@ const NotaryForm = () => {
     const exactMatches = [];
     const partialMatches = [];
 
+    // Parcourir TOUS les services disponibles (dynamique)
     services.forEach((service) => {
-      // Essayer plusieurs variantes de matching
+      // Créer une liste de tous les candidats possibles pour ce service
+      // Inclure tous les champs disponibles, même s'ils sont null/undefined
       const candidates = [
         service.slug,
         service.code,
         service.key,
         service.url_key,
         service.name,
+        // Essayer aussi avec l'ID du service comme fallback
+        service.service_id,
       ]
+        .filter(Boolean) // Retirer les valeurs null/undefined
         .map(normalize)
-        .filter(Boolean);
+        .filter(Boolean); // Retirer les chaînes vides après normalisation
+
+      // Si aucun candidat n'est disponible, passer au service suivant
+      if (candidates.length === 0) {
+        console.warn('⚠️ [SERVICE-PARAM] Service sans candidats valides:', service.name, 'ID:', service.service_id);
+        return;
+      }
 
       // Vérifier si un des slugs demandés correspond exactement à un candidat
       const exactMatch = requestedSlugs.some((requestedSlug) => {
@@ -478,16 +499,17 @@ const NotaryForm = () => {
 
       if (exactMatch) {
         console.log('✅ [SERVICE-PARAM] Correspondance EXACTE trouvée:', service.name, 'ID:', service.service_id);
-        console.log('   Slug original:', service.slug);
-        console.log('   Code:', service.code);
-        console.log('   Key:', service.key);
-        console.log('   URL Key:', service.url_key);
+        console.log('   Slug original:', service.slug || '(non défini)');
+        console.log('   Code:', service.code || '(non défini)');
+        console.log('   Key:', service.key || '(non défini)');
+        console.log('   URL Key:', service.url_key || '(non défini)');
+        console.log('   Name:', service.name);
         console.log('   Candidates normalisés:', candidates);
         exactMatches.push(service.service_id);
         return;
       }
 
-      // Si pas de correspondance exacte, essayer une correspondance partielle (mais seulement si aucune exacte n'a été trouvée)
+      // Si pas de correspondance exacte, essayer une correspondance partielle
       const partialMatch = requestedSlugs.some((requestedSlug) => {
         return candidates.some(candidate => {
           // Correspondance partielle stricte : le candidat doit commencer par le slug demandé ou être égal
@@ -497,13 +519,18 @@ const NotaryForm = () => {
 
       if (partialMatch) {
         console.log('⚠️ [SERVICE-PARAM] Correspondance PARTIELLE trouvée:', service.name, 'ID:', service.service_id);
-        console.log('   Slug original:', service.slug);
-        console.log('   Code:', service.code);
-        console.log('   Key:', service.key);
-        console.log('   URL Key:', service.url_key);
+        console.log('   Slug original:', service.slug || '(non défini)');
+        console.log('   Code:', service.code || '(non défini)');
+        console.log('   Key:', service.key || '(non défini)');
+        console.log('   URL Key:', service.url_key || '(non défini)');
+        console.log('   Name:', service.name);
         partialMatches.push(service.service_id);
       }
     });
+
+    console.log('📊 [SERVICE-PARAM] Résultats du matching:');
+    console.log('   Correspondances exactes:', exactMatches.length);
+    console.log('   Correspondances partielles:', partialMatches.length);
 
     // Utiliser les correspondances exactes en priorité, sinon utiliser les partielles
     // S'assurer qu'il n'y a pas de doublons
