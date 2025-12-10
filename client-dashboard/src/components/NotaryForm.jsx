@@ -96,6 +96,72 @@ const NotaryForm = () => {
   // Load completed steps from localStorage
   const [completedSteps, setCompletedSteps] = useLocalStorage('notaryCompletedSteps', []);
 
+  // Clean up obsolete localStorage data on mount - Remove ALL old form data
+  useEffect(() => {
+    try {
+      // Remove ALL obsolete localStorage keys related to old form versions
+      const obsoleteKeys = [
+        'notaryBookAppointment',
+        'notaryAppointmentData',
+        'bookAppointmentStep',
+        'appointmentStepCompleted',
+        'notaryFormStep',
+        'notaryCurrentStep',
+        'notaryOldFormData',
+        'notaryOldSteps',
+        'formOldData',
+        'oldFormSteps'
+      ];
+      
+      obsoleteKeys.forEach(key => {
+        if (localStorage.getItem(key)) {
+          console.log(`🧹 [CLEANUP] Suppression de la clé obsolète: ${key}`);
+          localStorage.removeItem(key);
+        }
+      });
+
+      // Clean up completedSteps - remove any step IDs that don't exist (steps are 1-5, indices 0-4)
+      if (Array.isArray(completedSteps)) {
+        const validStepIndices = [0, 1, 2, 3, 4]; // Steps 1-5 (indices 0-4)
+        const cleanedSteps = completedSteps.filter(stepIndex => 
+          validStepIndices.includes(stepIndex) && Number.isInteger(stepIndex)
+        );
+        
+        if (cleanedSteps.length !== completedSteps.length) {
+          console.log('🧹 [CLEANUP] Nettoyage des completedSteps:', completedSteps, '->', cleanedSteps);
+          setCompletedSteps(cleanedSteps);
+        }
+      }
+
+      // Clean up formData - remove any obsolete fields
+      if (formData) {
+        const obsoleteFormFields = [
+          'appointmentStep',
+          'bookAppointment',
+          'oldStepData',
+          'previousStep'
+        ];
+        
+        let hasObsoleteFields = false;
+        const cleanedFormData = { ...formData };
+        
+        obsoleteFormFields.forEach(field => {
+          if (cleanedFormData.hasOwnProperty(field)) {
+            console.log(`🧹 [CLEANUP] Suppression du champ obsolète du formData: ${field}`);
+            delete cleanedFormData[field];
+            hasObsoleteFields = true;
+          }
+        });
+        
+        if (hasObsoleteFields) {
+          setFormData(cleanedFormData);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [CLEANUP] Erreur lors du nettoyage:', error);
+    }
+  }, []); // Run only once on mount
+
   const steps = [
     { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
     { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
@@ -228,6 +294,34 @@ const NotaryForm = () => {
       return;
     }
 
+    // CRITICAL: Redirect ALL obsolete or unknown routes to valid routes
+    const validPaths = steps.map(s => s.path);
+    const isObsoleteRoute = location.pathname.startsWith('/form/') && !validPaths.includes(location.pathname);
+    
+    if (isObsoleteRoute) {
+      console.log('⚠️ [REDIRECT] Route obsolète ou inconnue détectée:', location.pathname);
+      // Determine the best route based on completed steps
+      let targetPath = '/form/choose-services';
+      
+      if (completedSteps.length >= 4) {
+        // User has completed all steps, redirect to summary (likely returning from payment)
+        targetPath = '/form/summary';
+      } else if (completedSteps.length >= 3) {
+        // User has completed steps 1-3, redirect to signatories
+        targetPath = '/form/signatories';
+      } else if (completedSteps.length >= 2) {
+        // User has completed steps 1-2, redirect to personal-info
+        targetPath = '/form/personal-info';
+      } else if (completedSteps.length >= 1) {
+        // User has completed step 1, redirect to documents
+        targetPath = '/form/documents';
+      }
+      
+      console.log('   -> Redirection vers:', targetPath);
+      navigate({ pathname: targetPath, search: location.search }, { replace: true });
+      return;
+    }
+
     // Track page view (GTM)
     const currentStepData = steps.find(s => s.path === location.pathname);
     if (currentStepData) {
@@ -266,15 +360,67 @@ const NotaryForm = () => {
     const isSummaryStep = requestedStep === 5;
     const hasCompletedAllPreviousSteps = completedSteps.length >= 4; // Steps 1-4 completed
     
-    // User can access current step or any previously completed step
-    // OR Summary if all previous steps are completed (for returning from payment)
+    // Allow access if:
+    // 1. First step (always accessible)
+    // 2. Previous step is completed (step index = requestedStep - 2, since steps are 1-indexed and completedSteps are 0-indexed)
+    // 3. User is going to next step from current step AND can proceed from current step (handles async state update)
+    // 4. Summary if all previous steps are completed (for returning from payment)
+    const previousStepIndex = requestedStep - 2; // Step 2 -> index 0, Step 3 -> index 1, etc.
+    const currentStepFromPath = getCurrentStepFromPath();
+    const isGoingToNextStep = requestedStep === currentStepFromPath + 1;
+    
+    // Check if we can proceed from current step (for when navigating forward)
+    let canProceedFromCurrent = false;
+    if (isGoingToNextStep && requestedStep > 1) {
+      // Check if previous step (current step) can be completed
+      const prevStepId = requestedStep - 1;
+      switch (prevStepId) {
+        case 1: // Choose Services
+          canProceedFromCurrent = formData.selectedServices && formData.selectedServices.length > 0;
+          break;
+        case 2: // Upload Documents
+          if (formData.selectedServices && formData.selectedServices.length > 0 && formData.serviceDocuments) {
+            canProceedFromCurrent = formData.selectedServices.every(serviceId => {
+              const docs = formData.serviceDocuments[serviceId];
+              return docs && docs.length > 0;
+            });
+          }
+          break;
+        case 3: // Personal Info
+          canProceedFromCurrent = formData.firstName?.trim() && formData.lastName?.trim() && 
+                                  (isAuthenticated || (formData.email?.trim() && formData.password?.trim())) &&
+                                  formData.address?.trim();
+          break;
+        case 4: // Signatories
+          if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0) {
+            canProceedFromCurrent = formData.signatories.every(sig => {
+              const firstName = sig.firstName?.trim();
+              const lastName = sig.lastName?.trim();
+              const email = sig.email?.trim();
+              const phone = sig.phone?.trim();
+              if (!firstName || !lastName || !email || !phone) return false;
+              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+              if (!emailRegex.test(email)) return false;
+              if (phone.length < 5) return false;
+              return true;
+            });
+          }
+          break;
+      }
+    }
+    
     const canAccess = requestedStep === 1 || 
-                     completedSteps.includes(requestedStep - 1) ||
+                     completedSteps.includes(previousStepIndex) ||
+                     canProceedFromCurrent ||
                      (isSummaryStep && hasCompletedAllPreviousSteps);
     
     console.log('🔍 [GUARD] Vérification accès étape:', {
       requestedStep,
+      currentStepFromPath,
+      previousStepIndex,
       completedSteps,
+      isGoingToNextStep,
+      canProceedFromCurrent,
       canAccess,
       allowServiceParamBypass,
       serviceParam,
@@ -299,7 +445,7 @@ const NotaryForm = () => {
         navigate(redirectStep.path, { replace: true });
       }
     }
-  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam]);
+  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam, formData, isAuthenticated]);
 
   // Load user data if authenticated
   useEffect(() => {
@@ -823,12 +969,25 @@ const NotaryForm = () => {
             // Convert serialized file back to Blob for upload
             const blob = await fetch(file.dataUrl).then(r => r.blob());
 
-            // Generate unique file name
+            // Sanitize file name to remove special characters and accents
+            const sanitizeFileName = (name) => {
+              // Remove accents and special characters
+              return name
+                .normalize('NFD') // Decompose characters (é -> e + ´)
+                .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+                .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace invalid chars with underscore
+                .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+                .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+            };
+
+            // Generate unique file name with sanitized original name
             const timestamp = Date.now();
             const randomId = Math.random().toString(36).substring(7);
-            const fileName = `temp/${serviceId}/${timestamp}_${randomId}_${file.name}`;
+            const sanitizedName = sanitizeFileName(file.name);
+            const fileName = `temp/${serviceId}/${timestamp}_${randomId}_${sanitizedName}`;
 
             console.log(`📤 Uploading for service ${serviceId}:`, fileName);
+            console.log(`   Original name: ${file.name} -> Sanitized: ${sanitizedName}`);
 
             // Upload file to Supabase Storage
             const { data: uploadData, error: uploadError } = await supabase.storage

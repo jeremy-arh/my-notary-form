@@ -386,19 +386,6 @@ export const trackSignatoriesCompleted = (signatoriesCount) => {
   });
 };
 
-// Track appointment screen opened
-export const trackAppointmentScreenOpened = () => {
-  return trackEvent('appointment_screen_opened', '/form/book-appointment', {});
-};
-
-// Track appointment booked (matches GTM event: appointment_booked)
-export const trackAppointmentBooked = (appointmentDate, appointmentTime, timezone) => {
-  return trackEvent('appointment_booked', '/form/book-appointment', {
-    appointment_date: appointmentDate,
-    appointment_time: appointmentTime,
-    timezone: timezone
-  });
-};
 
 // Track personal info screen opened
 export const trackPersonalInfoScreenOpened = () => {
