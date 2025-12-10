@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
@@ -43,6 +43,7 @@ const NotaryForm = () => {
   const { services, loading: servicesLoading } = useServices();
   const [allowServiceParamBypass, setAllowServiceParamBypass] = useState(false);
   const serviceParam = searchParams.get('service');
+  const lastAppliedServiceParamRef = useRef(null); // Pour tracker le dernier service param appliqué
 
   // Load currency from localStorage first, then use it as default
   const getInitialCurrency = () => {
@@ -247,10 +248,12 @@ const NotaryForm = () => {
 
     // Bypass guard when on-boarding via param service -> documents
     if (allowServiceParamBypass) {
+      console.log('✅ [GUARD] Bypass activé pour service param');
       return;
     }
     // If service param is present but not yet applied, let the other effect handle navigation
     if (serviceParam && !hasAppliedServiceParam) {
+      console.log('⏳ [GUARD] Service param présent mais pas encore appliqué, attente...');
       return;
     }
 
@@ -268,6 +271,15 @@ const NotaryForm = () => {
     const canAccess = requestedStep === 1 || 
                      completedSteps.includes(requestedStep - 1) ||
                      (isSummaryStep && hasCompletedAllPreviousSteps);
+    
+    console.log('🔍 [GUARD] Vérification accès étape:', {
+      requestedStep,
+      completedSteps,
+      canAccess,
+      allowServiceParamBypass,
+      serviceParam,
+      hasAppliedServiceParam
+    });
 
     if (!canAccess) {
       // If trying to access Summary, always allow it (user likely coming back from payment)
@@ -393,95 +405,239 @@ const NotaryForm = () => {
 
   // Pré-remplir le service depuis l'URL et passer directement à l'upload
   useEffect(() => {
-    if (hasAppliedServiceParam) return;
-    if (!serviceParam) return;
+    if (!serviceParam) {
+      // Si pas de service param, réinitialiser le flag
+      if (lastAppliedServiceParamRef.current !== null) {
+        lastAppliedServiceParamRef.current = null;
+        setHasAppliedServiceParam(false);
+      }
+      return;
+    }
+    
     if (servicesLoading) return;
     if (!services || services.length === 0) return; // Attendre que les services soient disponibles
 
-    const normalize = (value) => value
-      ?.toString()
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-+|-+$)/g, '');
+    // Vérifier si le service param a changé
+    const serviceParamChanged = lastAppliedServiceParamRef.current !== serviceParam;
+    
+    if (!serviceParamChanged && hasAppliedServiceParam) {
+      // Le même service param a déjà été appliqué, ne rien faire
+      return;
+    }
+
+    console.log('🔍 [SERVICE-PARAM] Traitement du paramètre service:', serviceParam);
+    console.log('🔍 [SERVICE-PARAM] Service param a changé:', serviceParamChanged);
+    console.log('🔍 [SERVICE-PARAM] Dernier service appliqué:', lastAppliedServiceParamRef.current);
+    console.log('🔍 [SERVICE-PARAM] Services disponibles:', services.length);
+
+    const normalize = (value) => {
+      if (!value) return '';
+      return value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-+|-+$)/g, '');
+    };
 
     const requestedSlugs = serviceParam
       .split(',')
       .map(normalize)
       .filter(Boolean);
 
+    console.log('🔍 [SERVICE-PARAM] Paramètre service brut:', serviceParam);
+    console.log('🔍 [SERVICE-PARAM] Slugs demandés normalisés:', requestedSlugs);
+
     if (requestedSlugs.length === 0) {
+      console.warn('⚠️ [SERVICE-PARAM] Aucun slug valide trouvé dans le paramètre');
+      lastAppliedServiceParamRef.current = serviceParam;
       setHasAppliedServiceParam(true);
       return;
     }
 
-    const matchedServiceIds = services.reduce((ids, service) => {
+    // D'abord, essayer de trouver des correspondances exactes
+    const exactMatches = [];
+    const partialMatches = [];
+
+    services.forEach((service) => {
+      // Essayer plusieurs variantes de matching
       const candidates = [
         service.slug,
         service.code,
         service.key,
         service.url_key,
-        service.name
-      ].map(normalize).filter(Boolean);
+        service.name,
+      ]
+        .map(normalize)
+        .filter(Boolean);
 
-      if (candidates.some((slug) => requestedSlugs.includes(slug))) {
-        ids.push(service.service_id);
+      // Vérifier si un des slugs demandés correspond exactement à un candidat
+      const exactMatch = requestedSlugs.some((requestedSlug) => {
+        return candidates.includes(requestedSlug);
+      });
+
+      if (exactMatch) {
+        console.log('✅ [SERVICE-PARAM] Correspondance EXACTE trouvée:', service.name, 'ID:', service.service_id);
+        console.log('   Slug original:', service.slug);
+        console.log('   Code:', service.code);
+        console.log('   Key:', service.key);
+        console.log('   URL Key:', service.url_key);
+        console.log('   Candidates normalisés:', candidates);
+        exactMatches.push(service.service_id);
+        return;
       }
-      return ids;
-    }, []);
+
+      // Si pas de correspondance exacte, essayer une correspondance partielle (mais seulement si aucune exacte n'a été trouvée)
+      const partialMatch = requestedSlugs.some((requestedSlug) => {
+        return candidates.some(candidate => {
+          // Correspondance partielle stricte : le candidat doit commencer par le slug demandé ou être égal
+          return candidate === requestedSlug || candidate.startsWith(requestedSlug + '-');
+        });
+      });
+
+      if (partialMatch) {
+        console.log('⚠️ [SERVICE-PARAM] Correspondance PARTIELLE trouvée:', service.name, 'ID:', service.service_id);
+        console.log('   Slug original:', service.slug);
+        console.log('   Code:', service.code);
+        console.log('   Key:', service.key);
+        console.log('   URL Key:', service.url_key);
+        partialMatches.push(service.service_id);
+      }
+    });
+
+    // Utiliser les correspondances exactes en priorité, sinon utiliser les partielles
+    // S'assurer qu'il n'y a pas de doublons
+    const matchedServiceIds = Array.from(new Set(
+      exactMatches.length > 0 ? exactMatches : partialMatches
+    ));
+
+    if (exactMatches.length > 0 && partialMatches.length > 0) {
+      console.warn('⚠️ [SERVICE-PARAM] Correspondances exactes ET partielles trouvées. Utilisation des exactes uniquement.');
+      console.log('   Correspondances exactes:', exactMatches);
+      console.log('   Correspondances partielles ignorées:', partialMatches);
+    }
+
+    if (matchedServiceIds.length > 1) {
+      console.warn('⚠️ [SERVICE-PARAM] ATTENTION: Plusieurs services matchés pour un seul paramètre!', matchedServiceIds);
+      console.warn('   Cela ne devrait pas arriver. Vérifiez les slugs des services dans la base de données.');
+    }
 
     if (matchedServiceIds.length === 0) {
+      console.warn('⚠️ [SERVICE-PARAM] Aucun service trouvé pour les slugs:', requestedSlugs);
+      console.log('   Services disponibles:', services.map(s => ({
+        name: s.name,
+        slug: s.slug,
+        code: s.code,
+        key: s.key,
+        url_key: s.url_key
+      })));
       // Aucun service trouvé alors que la liste est chargée : marquer l'essai pour éviter les re-boucles
+      lastAppliedServiceParamRef.current = serviceParam;
       setHasAppliedServiceParam(true);
       return;
     }
 
-    const currentSelections = formData.selectedServices || [];
-    const updatedSelections = Array.from(new Set([...currentSelections, ...matchedServiceIds]));
+    console.log('✅ [SERVICE-PARAM] Services correspondants:', matchedServiceIds);
+    console.log('   Nombre de services matchés:', matchedServiceIds.length);
 
-    if (updatedSelections.length !== currentSelections.length) {
-      setFormData((prev) => ({
+    // Si plusieurs services sont matchés, prendre seulement le premier (ou logger un avertissement)
+    let servicesToApply = matchedServiceIds;
+    if (matchedServiceIds.length > 1) {
+      console.error('❌ [SERVICE-PARAM] ERREUR: Plusieurs services matchés pour un seul paramètre!');
+      console.error('   Services matchés:', matchedServiceIds);
+      console.error('   Paramètre service:', serviceParam);
+      console.error('   Cela ne devrait pas arriver. Vérifiez les slugs des services dans la base de données.');
+      console.error('   Utilisation du PREMIER service uniquement:', matchedServiceIds[0]);
+      servicesToApply = [matchedServiceIds[0]]; // Prendre seulement le premier
+    }
+
+    // Si le service param a changé, réinitialiser complètement les services et documents
+    if (serviceParamChanged) {
+      console.log('🔄 [SERVICE-PARAM] Réinitialisation complète (nouveau service param détecté)');
+      console.log('   Ancien service:', lastAppliedServiceParamRef.current);
+      console.log('   Nouveau service:', serviceParam);
+      // Réinitialiser aussi les étapes complétées pour forcer le recommencement
+      setCompletedSteps([]);
+    }
+
+    // Appliquer uniquement les nouveaux services (remplacer complètement, pas d'ajout)
+    // Toujours réinitialiser les documents pour éviter les conflits
+    console.log('✅ [SERVICE-PARAM] Application des services:', servicesToApply);
+    console.log('   Nombre de services à appliquer:', servicesToApply.length);
+    setFormData((prev) => {
+      const newData = {
         ...prev,
-        selectedServices: updatedSelections
-      }));
-    }
+        selectedServices: servicesToApply, // Remplacer complètement (pas d'ajout)
+        serviceDocuments: {} // Toujours réinitialiser les documents pour éviter les conflits
+      };
+      console.log('   Données avant mise à jour:', {
+        selectedServices: prev.selectedServices,
+        serviceDocumentsKeys: Object.keys(prev.serviceDocuments || {})
+      });
+      console.log('   Données après mise à jour:', {
+        selectedServices: newData.selectedServices,
+        serviceDocumentsKeys: Object.keys(newData.serviceDocuments)
+      });
+      return newData;
+    });
 
-    setCompletedSteps((prev) => (prev.includes(1) ? prev : [...prev, 1]));
+    // Marquer l'étape 1 comme complétée (stockée avec index 0-based: stepId - 1)
+    const stepIndex = 0; // Étape 1 -> index 0
+    setCompletedSteps((prev) => {
+      if (prev.includes(stepIndex)) {
+        return prev;
+      }
+      console.log('✅ [SERVICE-PARAM] Marquage de l\'étape 1 comme complétée (index:', stepIndex, ')');
+      return [...prev, stepIndex];
+    });
+    
+    // Mettre à jour la référence du dernier service appliqué
+    lastAppliedServiceParamRef.current = serviceParam;
     setAllowServiceParamBypass(true);
-
-    const sanitizedPath = location.pathname.replace(/\/+$/, '');
-    const target = { pathname: '/form/documents', search: location.search };
-    if (sanitizedPath === '/form' || sanitizedPath === '/form/choose-services' || sanitizedPath === '') {
-      navigate(target, { replace: true });
-    } else {
-      navigate(target, { replace: true });
-    }
-
     setHasAppliedServiceParam(true);
+
+    // Naviguer immédiatement vers l'étape d'upload
+    console.log('🚀 [SERVICE-PARAM] Navigation immédiate vers /form/documents');
+    console.log('   Chemin actuel:', location.pathname);
+    console.log('   Services sélectionnés:', matchedServiceIds);
+    
+    // Utiliser requestAnimationFrame pour s'assurer que les états sont mis à jour
+    requestAnimationFrame(() => {
+      navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+    });
   }, [
     services,
     servicesLoading,
     serviceParam,
-    formData.selectedServices,
     setFormData,
     setCompletedSteps,
     navigate,
     location.pathname,
+    location.search,
     hasAppliedServiceParam
   ]);
 
-  // Forcer la navigation vers l'upload dès que le service param est appliqué et sélection présent
+  // Backup: Forcer la navigation vers l'upload si le service est appliqué mais qu'on n'est pas encore sur documents
   useEffect(() => {
     if (!serviceParam) return;
     if (servicesLoading) return;
+    if (!hasAppliedServiceParam) return;
     if (!formData.selectedServices || formData.selectedServices.length === 0) return;
     if (location.pathname === '/form/documents') return;
-
-    setAllowServiceParamBypass(true);
-    navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+    
+    // Vérifier qu'on n'est pas en train de naviguer depuis le premier useEffect
+    const isOnChooseServices = location.pathname === '/form/choose-services' || location.pathname === '/form';
+    
+    if (isOnChooseServices) {
+      console.log('🚀 [SERVICE-PARAM-BACKUP] Navigation de backup vers /form/documents');
+      console.log('   Services sélectionnés:', formData.selectedServices);
+      setAllowServiceParamBypass(true);
+      navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+    }
   }, [
     serviceParam,
     servicesLoading,
+    hasAppliedServiceParam,
     formData.selectedServices,
     location.pathname,
     location.search,
@@ -493,8 +649,10 @@ const NotaryForm = () => {
   };
 
   const markStepCompleted = (stepId) => {
-    if (!completedSteps.includes(stepId)) {
-      setCompletedSteps([...completedSteps, stepId]);
+    // Stocker avec index 0-based pour être cohérent avec les vérifications
+    const stepIndex = stepId - 1;
+    if (!completedSteps.includes(stepIndex)) {
+      setCompletedSteps([...completedSteps, stepIndex]);
       // Track step completion (GTM)
       const step = steps.find(s => s.id === stepId);
       if (step) {
