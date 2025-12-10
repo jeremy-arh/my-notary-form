@@ -245,7 +245,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
 
                   <div className="block mb-3 sm:mb-4">
                     <div 
-                      className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 sm:p-12 md:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200"
+                      className="group bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 sm:p-12 md:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200"
                       onClick={() => {
                         // Sauvegarder la position de scroll avant le clic
                         if (scrollContainerRef.current) {
@@ -259,10 +259,10 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       }}
                     >
                       <Icon
-                        icon="lineicons:upload-circle-1"
-                        className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-black mx-auto mb-4 sm:mb-5"
+                        icon="line-md:uploading-loop"
+                        className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-black group-hover:text-blue-600 transition-colors mx-auto mb-4 sm:mb-5"
                       />
-                      <p className="text-sm sm:text-base md:text-lg text-black font-medium mb-2 sm:mb-3">
+                      <p className="text-sm sm:text-base md:text-lg text-black group-hover:text-blue-700 transition-colors font-medium mb-2 sm:mb-3">
                         Upload a document
                       </p>
                       <p className="text-xs sm:text-sm text-gray-600">

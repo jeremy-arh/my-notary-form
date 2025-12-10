@@ -33,7 +33,17 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
       ? [...currentServices, serviceId]
       : currentServices.filter(id => id !== serviceId);
 
-    updateFormData({ selectedServices: updatedServices });
+    // Si on retire un service, on supprime aussi ses documents du stockage
+    let updatedServiceDocuments = formData.serviceDocuments || {};
+    if (!isAdding && updatedServiceDocuments[serviceId]) {
+      const { [serviceId]: removed, ...rest } = updatedServiceDocuments;
+      updatedServiceDocuments = rest;
+    }
+
+    updateFormData({
+      selectedServices: updatedServices,
+      serviceDocuments: updatedServiceDocuments,
+    });
 
     // Track service selection in analytics
     if (isAdding) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { submitNotaryRequest, supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
 import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
@@ -17,6 +17,7 @@ import {
   trackStepNavigation
 } from '../utils/plausible';
 import { openCrisp } from '../utils/crisp';
+import { useServices } from '../contexts/ServicesContext';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import PersonalInfo from './steps/PersonalInfo';
@@ -32,13 +33,16 @@ const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
+  const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const { t } = useTranslation();
+  const { services, loading: servicesLoading } = useServices();
+  const [allowServiceParamBypass, setAllowServiceParamBypass] = useState(false);
+  const serviceParam = searchParams.get('service');
 
   // Load currency from localStorage first, then use it as default
   const getInitialCurrency = () => {
@@ -213,9 +217,13 @@ const NotaryForm = () => {
 
   // Validate step access and track page views
   useEffect(() => {
-    // Redirect to /form/choose-services if at /form root
+    // Redirect to /form/choose-services if at /form root (en conservant la query)
     if (location.pathname === '/form' || location.pathname === '/form/') {
-      navigate('/form/choose-services', { replace: true });
+      // Si un param service existe, on laisse l'autre effet gérer la navigation directe
+      if (serviceParam && !hasAppliedServiceParam) {
+        return;
+      }
+      navigate({ pathname: '/form/choose-services', search: location.search }, { replace: true });
       return;
     }
 
@@ -235,6 +243,15 @@ const NotaryForm = () => {
         // Track Plausible form start
         trackPlausibleFormStart();
       }
+    }
+
+    // Bypass guard when on-boarding via param service -> documents
+    if (allowServiceParamBypass) {
+      return;
+    }
+    // If service param is present but not yet applied, let the other effect handle navigation
+    if (serviceParam && !hasAppliedServiceParam) {
+      return;
     }
 
     // Check if user is trying to access a step they haven't completed yet
@@ -270,7 +287,7 @@ const NotaryForm = () => {
         navigate(redirectStep.path, { replace: true });
       }
     }
-  }, [location.pathname, completedSteps, navigate]);
+  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam]);
 
   // Load user data if authenticated
   useEffect(() => {
@@ -279,7 +296,6 @@ const NotaryForm = () => {
         console.log('🔍 [PRE-FILL] Starting to load user data...');
         if (!supabase) {
           console.log('⚠️  [PRE-FILL] No supabase client available');
-          setIsLoadingUserData(false);
           return;
         }
 
@@ -320,8 +336,6 @@ const NotaryForm = () => {
         }
       } catch (error) {
         console.error('❌ [PRE-FILL] Error loading user data:', error);
-      } finally {
-        setIsLoadingUserData(false);
       }
     };
 
@@ -376,6 +390,103 @@ const NotaryForm = () => {
       }
     }
   }, [searchParams, setFormData]);
+
+  // Pré-remplir le service depuis l'URL et passer directement à l'upload
+  useEffect(() => {
+    if (hasAppliedServiceParam) return;
+    if (!serviceParam) return;
+    if (servicesLoading) return;
+    if (!services || services.length === 0) return; // Attendre que les services soient disponibles
+
+    const normalize = (value) => value
+      ?.toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-+|-+$)/g, '');
+
+    const requestedSlugs = serviceParam
+      .split(',')
+      .map(normalize)
+      .filter(Boolean);
+
+    if (requestedSlugs.length === 0) {
+      setHasAppliedServiceParam(true);
+      return;
+    }
+
+    const matchedServiceIds = services.reduce((ids, service) => {
+      const candidates = [
+        service.slug,
+        service.code,
+        service.key,
+        service.url_key,
+        service.name
+      ].map(normalize).filter(Boolean);
+
+      if (candidates.some((slug) => requestedSlugs.includes(slug))) {
+        ids.push(service.service_id);
+      }
+      return ids;
+    }, []);
+
+    if (matchedServiceIds.length === 0) {
+      // Aucun service trouvé alors que la liste est chargée : marquer l'essai pour éviter les re-boucles
+      setHasAppliedServiceParam(true);
+      return;
+    }
+
+    const currentSelections = formData.selectedServices || [];
+    const updatedSelections = Array.from(new Set([...currentSelections, ...matchedServiceIds]));
+
+    if (updatedSelections.length !== currentSelections.length) {
+      setFormData((prev) => ({
+        ...prev,
+        selectedServices: updatedSelections
+      }));
+    }
+
+    setCompletedSteps((prev) => (prev.includes(1) ? prev : [...prev, 1]));
+    setAllowServiceParamBypass(true);
+
+    const sanitizedPath = location.pathname.replace(/\/+$/, '');
+    const target = { pathname: '/form/documents', search: location.search };
+    if (sanitizedPath === '/form' || sanitizedPath === '/form/choose-services' || sanitizedPath === '') {
+      navigate(target, { replace: true });
+    } else {
+      navigate(target, { replace: true });
+    }
+
+    setHasAppliedServiceParam(true);
+  }, [
+    services,
+    servicesLoading,
+    serviceParam,
+    formData.selectedServices,
+    setFormData,
+    setCompletedSteps,
+    navigate,
+    location.pathname,
+    hasAppliedServiceParam
+  ]);
+
+  // Forcer la navigation vers l'upload dès que le service param est appliqué et sélection présent
+  useEffect(() => {
+    if (!serviceParam) return;
+    if (servicesLoading) return;
+    if (!formData.selectedServices || formData.selectedServices.length === 0) return;
+    if (location.pathname === '/form/documents') return;
+
+    setAllowServiceParamBypass(true);
+    navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+  }, [
+    serviceParam,
+    servicesLoading,
+    formData.selectedServices,
+    location.pathname,
+    location.search,
+    navigate
+  ]);
 
   const updateFormData = (data) => {
     setFormData(prev => ({ ...prev, ...data }));

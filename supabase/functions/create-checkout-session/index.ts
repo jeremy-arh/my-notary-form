@@ -345,13 +345,20 @@ serve(async (req) => {
         data: {
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments, // Already converted
-          signatoryCount: formData.signatoryCount || null, // Number of signatories
+          signatories: formData.signatories || [], // Array of signatories
+          signatoriesCount: formData.signatoriesCount || 0, // Total number of signatories
+          additionalSignatoriesCount: formData.additionalSignatoriesCount || 0, // Number of additional signatories
+          signatoryCount: formData.signatoryCount || formData.signatoriesCount || null, // Legacy field for backward compatibility
           currency: currency, // Stocker la devise dans les données de la submission
         },
       }
 
       console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
-      console.log('👥 [SIGNATORIES] Signatory count in submission.data:', submissionData.data.signatoryCount)
+      console.log('👥 [SIGNATORIES] Signatories in submission.data:', {
+        signatoriesCount: submissionData.data.signatoriesCount,
+        additionalSignatoriesCount: submissionData.data.additionalSignatoriesCount,
+        signatoriesArrayLength: submissionData.data.signatories?.length || 0
+      })
 
       const { data: newSubmission, error: submissionError } = await supabase
         .from('submission')
@@ -548,55 +555,52 @@ serve(async (req) => {
       console.log(`⚠️ [OPTIONS] No options selected`)
     }
 
-    // Calculate additional signatories cost (€10 per additional signatory, first one is included)
-    let additionalSignatoriesCount = 0
-    console.log('🔍 [SIGNATORIES DEBUG] formData.signatoryCount:', formData.signatoryCount, 'type:', typeof formData.signatoryCount)
+    // Process additional signatories cost (45€ per additional signatory, first one is free)
+    // Use the explicit fields sent from the client
+    const signatoriesCount = formData.signatoriesCount || 0
+    const additionalSignatoriesCount = formData.additionalSignatoriesCount || 0
+    const additionalSignatoriesCostEUR = formData.additionalSignatoriesCost || 0
     
-    // Convert to number if it's a string, handle null/undefined
-    const signatoryCount = formData.signatoryCount != null ? Number(formData.signatoryCount) : 0
-    console.log('🔍 [SIGNATORIES DEBUG] signatoryCount (converted):', signatoryCount, 'type:', typeof signatoryCount, 'isNaN:', isNaN(signatoryCount))
+    console.log('🔍 [SIGNATORIES DEBUG] formData.signatories:', formData.signatories)
+    console.log('🔍 [SIGNATORIES DEBUG] signatoriesCount:', signatoriesCount)
+    console.log('🔍 [SIGNATORIES DEBUG] additionalSignatoriesCount:', additionalSignatoriesCount)
+    console.log('🔍 [SIGNATORIES DEBUG] additionalSignatoriesCostEUR:', additionalSignatoriesCostEUR)
     
-    if (!isNaN(signatoryCount) && signatoryCount > 0) {
-      console.log('📋 [SIGNATORIES] Processing signatory count:', signatoryCount, 'signatories')
-      if (signatoryCount > 1) {
-        // First signatory is included, count additional ones
-        additionalSignatoriesCount = signatoryCount - 1
-        console.log(`   Total: ${signatoryCount} signatories (${additionalSignatoriesCount} additional)`)
-      } else if (signatoryCount === 1) {
-        console.log(`   Total: 1 signatory (included)`)
-        additionalSignatoriesCount = 0
-      }
+    if (additionalSignatoriesCount > 0 && additionalSignatoriesCostEUR > 0) {
+      console.log(`📋 [SIGNATORIES] Processing ${additionalSignatoriesCount} additional signatories at ${additionalSignatoriesCostEUR} EUR`)
       
-      console.log('🔍 [SIGNATORIES DEBUG] additionalSignatoriesCount:', additionalSignatoriesCount)
+      // Convert cost from EUR to target currency if needed
+      const additionalSignatoriesCost = await convertCurrency(additionalSignatoriesCostEUR, currency)
       
-      if (additionalSignatoriesCount > 0) {
-        const additionalSignatoriesPriceEUR = 10.00 // €10 per additional signatory (en EUR)
-        // Convertir le prix depuis EUR vers la devise demandée
-        const additionalSignatoriesPrice = await convertCurrency(additionalSignatoriesPriceEUR, currency)
-        // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
-        const unitAmount = currency === 'JPY' 
-          ? Math.round(additionalSignatoriesPrice) 
-          : Math.round(additionalSignatoriesPrice * 100)
-        
-        const signatoriesLineItem = {
-          price_data: {
-            currency: stripeCurrency,
-            product_data: {
-              name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? 'ies' : ''})`,
-            },
-            unit_amount: unitAmount,
+      // Calculate unit price (total cost divided by quantity)
+      const unitPrice = additionalSignatoriesCost / additionalSignatoriesCount
+      
+      // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
+      const unitAmount = currency === 'JPY' 
+        ? Math.round(unitPrice) 
+        : Math.round(unitPrice * 100)
+      
+      const signatoriesLineItem = {
+        price_data: {
+          currency: stripeCurrency,
+          product_data: {
+            name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? 'ies' : ''})`,
+            description: `Additional signatories: ${additionalSignatoriesCount} × 45€`,
           },
-          quantity: additionalSignatoriesCount, // Quantity should match the number of additional signatories
-        }
-        console.log('🔍 [SIGNATORIES DEBUG] Line item to add:', JSON.stringify(signatoriesLineItem, null, 2))
-        lineItems.push(signatoriesLineItem)
-        console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = ${currency}${(additionalSignatoriesPrice * additionalSignatoriesCount).toFixed(currency === 'JPY' ? 0 : 2)} (${additionalSignatoriesPriceEUR} EUR converted)`)
-        console.log(`🔍 [SIGNATORIES DEBUG] Total lineItems count after adding signatories:`, lineItems.length)
-      } else {
-        console.log(`ℹ️ [SIGNATORIES] No additional signatories (only first signatory per document)`)
+          unit_amount: unitAmount,
+        },
+        quantity: additionalSignatoriesCount,
       }
+      
+      console.log('🔍 [SIGNATORIES DEBUG] Line item to add:', JSON.stringify(signatoriesLineItem, null, 2))
+      lineItems.push(signatoriesLineItem)
+      console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = ${currency}${additionalSignatoriesCost.toFixed(currency === 'JPY' ? 0 : 2)} (${additionalSignatoriesCostEUR} EUR converted)`)
+      console.log(`🔍 [SIGNATORIES DEBUG] Total lineItems count after adding signatories:`, lineItems.length)
     } else {
-      console.log(`⚠️ [SIGNATORIES] No signatories data found`)
+      console.log(`ℹ️ [SIGNATORIES] No additional signatories (first signatory is free)`)
+      if (signatoriesCount === 0) {
+        console.log(`⚠️ [SIGNATORIES] No signatories found in formData`)
+      }
     }
 
     // Ensure we have at least one line item

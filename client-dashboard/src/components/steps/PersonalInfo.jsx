@@ -14,6 +14,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
   const [emailExists, setEmailExists] = useState(false);
   const [isGeocodingAddress, setIsGeocodingAddress] = useState(false);
   const [phoneError, setPhoneError] = useState('');
+  const [phoneDefaultCountry, setPhoneDefaultCountry] = useState(null);
   const geocodeTimeoutRef = useRef(null);
 
   const handleChange = (field, value) => {
@@ -312,6 +313,87 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.address, formData._addressAutoFilled, formData.city, formData.postalCode, formData.country, formData.timezone]);
 
+  // Déterminer automatiquement le pays pour le téléphone via l'IP de l'utilisateur
+  useEffect(() => {
+    const STORAGE_KEY = 'notaryPhoneCountry';
+
+    // Si un numéro est déjà renseigné, ne pas écraser
+    if (formData.phone && formData.phone.length > 3) {
+      return;
+    }
+
+    const fallbackFromLocale = () => {
+      try {
+        const lang = navigator.language || navigator.languages?.[0];
+        if (lang && lang.includes('-')) {
+          const code = lang.split('-')[1]?.toUpperCase();
+          if (code && code.length === 2) return code;
+        }
+      } catch (_) {}
+      return null;
+    };
+
+    // Essayer le cache local d'abord
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        setPhoneDefaultCountry(cached);
+        return;
+      }
+    } catch (err) {
+      console.warn('Could not read phone country from storage', err);
+    }
+
+    let isMounted = true;
+    const detectCountry = async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        const response = await fetch('https://ipapi.co/json/', { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!response.ok) return;
+        const data = await response.json();
+        const countryCode = data?.country_code?.toUpperCase();
+        if (countryCode && countryCode.length === 2) {
+          if (!isMounted) return;
+          setPhoneDefaultCountry(countryCode);
+          try {
+            localStorage.setItem(STORAGE_KEY, countryCode);
+          } catch (err) {
+            console.warn('Could not save phone country to storage', err);
+          }
+          return;
+        }
+      } catch (error) {
+        console.warn('IP country detection failed', error);
+      }
+
+      // Fallback: utiliser la locale du navigateur
+      const localeCountry = fallbackFromLocale();
+      if (localeCountry) {
+        if (!isMounted) return;
+        setPhoneDefaultCountry(localeCountry);
+        try {
+          localStorage.setItem(STORAGE_KEY, localeCountry);
+        } catch (err) {
+          console.warn('Could not save phone country to storage', err);
+        }
+        return;
+      }
+
+      // Fallback final
+      if (isMounted) {
+        setPhoneDefaultCountry('FR');
+      }
+    };
+
+    detectCountry();
+    return () => {
+      isMounted = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.phone]);
+
   const handleNext = () => {
     if (emailExists) {
       // Don't allow submission if email exists
@@ -474,7 +556,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           } pl-2 sm:pl-3 pr-2 sm:pr-3`}>
             <PhoneInput
               international
-              defaultCountry="US"
+              defaultCountry={phoneDefaultCountry || undefined}
               value={formData.phone || ''}
               onChange={(value) => {
                 handleChange('phone', value || '');
