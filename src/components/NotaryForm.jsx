@@ -8,6 +8,7 @@ import { trackPageView as trackPageViewPlausible, trackFormStep as trackFormStep
 import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
+import SignatoryCount from './steps/SignatoryCount';
 import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
 import Summary from './steps/Summary';
@@ -25,6 +26,9 @@ const NotaryForm = () => {
     // Options
     selectedOptions: [],
 
+    // Signataires
+    signatoryCount: null,
+
     // Appointment
     appointmentDate: '',
     appointmentTime: '',
@@ -34,7 +38,6 @@ const NotaryForm = () => {
     firstName: '',
     lastName: '',
     email: '',
-    phone: '',
     address: '',
     city: '',
     postalCode: '',
@@ -50,9 +53,10 @@ const NotaryForm = () => {
   const steps = [
     { id: 1, name: 'Documents', icon: 'heroicons:document-text', path: '/documents' },
     { id: 2, name: 'Choose option', icon: 'heroicons:check-badge', path: '/choose-option' },
-    { id: 3, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/book-appointment' },
-    { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/personal-info' },
-    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/summary' }
+    { id: 3, name: 'Signataires', icon: 'heroicons:user-group', path: '/signataires' },
+    { id: 4, name: 'Book an appointment', icon: 'heroicons:calendar-days', path: '/book-appointment' },
+    { id: 5, name: 'Your personal informations', icon: 'heroicons:user', path: '/personal-info' },
+    { id: 6, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/summary' }
   ];
 
   // Get current step from URL
@@ -147,7 +151,6 @@ const NotaryForm = () => {
               firstName: client.first_name || '',
               lastName: client.last_name || '',
               email: client.email || '',
-              phone: client.phone || '',
               address: client.address || '',
               city: client.city || '',
               postalCode: client.postal_code || '',
@@ -180,6 +183,7 @@ const NotaryForm = () => {
     const stepNameMap = {
       'Documents': 'document_upload',
       'Choose option': 'service_selection',
+      'Signataires': 'signatories_selection',
       'Book an appointment': 'appointment_booking',
       'Your personal informations': 'personal_info',
       'Summary': 'review_summary'
@@ -259,13 +263,13 @@ const NotaryForm = () => {
         setFormData({
           documents: [],
           selectedOptions: [],
+          signatoryCount: null,
           appointmentDate: '',
           appointmentTime: '',
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           firstName: '',
           lastName: '',
           email: '',
-          phone: '',
           address: '',
           city: '',
           postalCode: '',
@@ -415,6 +419,17 @@ const NotaryForm = () => {
               path="/choose-option"
               element={
                 <ChooseOption
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                />
+              }
+            />
+            <Route
+              path="/signataires"
+              element={
+                <SignatoryCount
                   formData={formData}
                   updateFormData={updateFormData}
                   nextStep={nextStep}

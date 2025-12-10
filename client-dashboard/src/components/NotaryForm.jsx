@@ -1,29 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { submitNotaryRequest, supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
-import { 
-  trackPageView, 
-  trackFormStep, 
-  trackFormSubmissionStart, 
-  trackFormSubmission, 
-  trackFormStart,
-  trackServiceSelected as trackGTMServiceSelected,
-  trackDocumentUploaded as trackGTMDocumentUploaded,
-  trackAppointmentBooked as trackGTMAppointmentBooked,
-  trackSignatoriesAdded as trackGTMSignatoriesAdded,
-  trackPersonalInfoCompleted as trackGTMPersonalInfoCompleted,
-  trackSummaryViewed as trackGTMSummaryViewed,
-  trackPaymentInitiated as trackGTMPaymentInitiated
-} from '../utils/gtm';
+import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
 import { 
   trackFormStart as trackPlausibleFormStart,
   trackServicesSelected,
   trackDocumentsUploaded,
-  trackSignatoriesAdded,
-  trackAppointmentBooked,
   trackPersonalInfoCompleted,
   trackSummaryViewed,
   trackPaymentInitiated,
@@ -31,54 +16,49 @@ import {
   trackFormAbandoned,
   trackStepNavigation
 } from '../utils/plausible';
-import {
-  trackFormOpened,
-  trackFormStart as trackAnalyticsFormStart,
-  trackPageView as trackAnalyticsPageView,
-  trackScreenOpened,
-  trackServiceSelected as trackAnalyticsServiceSelected,
-  trackServicesSelectionCompleted,
-  trackDocumentScreenOpened,
-  trackDocumentUploaded as trackAnalyticsDocumentUploaded,
-  trackDocumentsUploadCompleted,
-  trackSignatoryScreenOpened,
-  trackSignatoryAdded as trackAnalyticsSignatoryAdded,
-  trackSignatoriesCompleted,
-  trackAppointmentScreenOpened,
-  trackAppointmentBooked as trackAnalyticsAppointmentBooked,
-  trackPersonalInfoScreenOpened,
-  trackPersonalInfoCompleted as trackAnalyticsPersonalInfoCompleted,
-  trackSummaryScreenOpened,
-  trackSummaryViewed as trackAnalyticsSummaryViewed,
-  trackPaymentInitiated as trackAnalyticsPaymentInitiated,
-  trackPaymentCompleted as trackAnalyticsPaymentCompleted
-} from '../utils/analytics';
 import { openCrisp } from '../utils/crisp';
+import { useServices } from '../contexts/ServicesContext';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
-import SignatoryCount from './steps/SignatoryCount';
-import BookAppointment from './steps/BookAppointment';
 import PersonalInfo from './steps/PersonalInfo';
+import Signatories from './steps/Signatories';
 import Summary from './steps/Summary';
 import Notification from './Notification';
 import CurrencySelector from './CurrencySelector';
 import LanguageSelector from './LanguageSelector';
 import PriceDetails from './PriceDetails';
-import { useCurrency } from '../contexts/CurrencyContext';
 import { useTranslation } from '../hooks/useTranslation';
 
 const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
-  const { currency } = useCurrency();
+  const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const { t } = useTranslation();
+  const { services, loading: servicesLoading } = useServices();
+  const [allowServiceParamBypass, setAllowServiceParamBypass] = useState(false);
+  const serviceParam = searchParams.get('service');
+  const lastAppliedServiceParamRef = useRef(null); // Pour tracker le dernier service param appliqué
+
+  // Load currency from localStorage first, then use it as default
+  const getInitialCurrency = () => {
+    try {
+      const savedCurrency = localStorage.getItem('notaryCurrency');
+      const validCurrencies = ['EUR', 'USD', 'GBP', 'CAD', 'AUD', 'CHF', 'JPY', 'CNY'];
+      if (savedCurrency && validCurrencies.includes(savedCurrency)) {
+        console.log('💰 [CURRENCY] Devise initiale chargée depuis localStorage:', savedCurrency);
+        return savedCurrency;
+      }
+    } catch (error) {
+      console.error('❌ [CURRENCY] Erreur lors du chargement initial depuis localStorage:', error);
+    }
+    return 'EUR'; // Default to EUR
+  };
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -88,23 +68,26 @@ const NotaryForm = () => {
     // Documents (step 2) - organized by service
     serviceDocuments: {}, // { serviceId: [files] }
 
-    // Signatories (step 3) - number of signatories
-    signatoryCount: null, // Number of signatories
+    // Signatories (step 4) - global list for the entire order
+    signatories: [], // [signatories] - global list for all documents
+    isSignatory: false, // Whether the user is one of the signatories
 
-    // Appointment
-    appointmentDate: '',
-    appointmentTime: '',
     timezone: 'UTC-5',
 
     // Personal Info
     firstName: '',
     lastName: '',
     email: '',
+    phone: '',
     password: '',
+    confirmPassword: '',
     address: '',
     city: '',
     postalCode: '',
     country: '',
+
+    // Currency from URL parameter or localStorage
+    currency: getInitialCurrency(),
 
     // Additional notes
     notes: ''
@@ -114,13 +97,28 @@ const NotaryForm = () => {
   const [completedSteps, setCompletedSteps] = useLocalStorage('notaryCompletedSteps', []);
 
   const steps = [
-    { id: 1, name: t('form.steps.chooseOption.title'), icon: 'heroicons:check-badge', path: '/form/choose-services' },
-    { id: 2, name: t('form.steps.documents.title'), icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 3, name: t('form.steps.signatoryCount.title'), icon: 'heroicons:user-group', path: '/form/signatories' },
-    { id: 4, name: t('form.steps.bookAppointment.title'), icon: 'heroicons:calendar-days', path: '/form/book-appointment' },
-    { id: 5, name: t('form.steps.personalInfo.title'), icon: 'heroicons:user', path: '/form/personal-info' },
-    { id: 6, name: t('form.steps.summary.title'), icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
+    { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
+    { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
+    { id: 3, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
+    { id: 4, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' },
+    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
+
+  // Function to get validation error message for current step
+  const getValidationErrorMessage = () => {
+    switch (currentStep) {
+      case 1: // Choose Services
+        return 'Please select at least one service';
+      case 2: // Upload Documents
+        return 'Please upload at least one document for each selected service';
+      case 3: // Personal informations
+        return 'Please complete all required personal information fields';
+      case 4: // Add Signatories
+        return 'Please add at least one signatory';
+      default:
+        return 'Please complete all required fields';
+    }
+  };
 
   // Validation function to check if current step can proceed
   const canProceedFromCurrentStep = () => {
@@ -138,83 +136,53 @@ const NotaryForm = () => {
           return docs && docs.length > 0;
         });
 
-      case 3: // Add Signatories
-        // Check that signatory count is selected
-        return formData.signatoryCount && formData.signatoryCount > 0;
+      case 3: // Personal informations
+        if (!formData.firstName?.trim() || !formData.lastName?.trim()) return false;
+        if (!isAuthenticated && (!formData.email?.trim() || !formData.password?.trim())) return false;
+        if (!formData.address?.trim()) return false;
+        return true;
 
-      case 4: // Book an appointment
-        return formData.appointmentDate && formData.appointmentTime;
-
-      case 5: // Personal informations
-        const requiredFields = [
-          formData.firstName,
-          formData.lastName,
-          formData.address,
-          formData.city,
-          formData.postalCode,
-          formData.country
-        ];
-
-        // If not authenticated, also require email and password
-        if (!isAuthenticated) {
-          requiredFields.push(formData.email, formData.password);
+      case 4: // Add Signatories
+        // Check that there is at least one signatory
+        if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
+          return false;
         }
+        // Check that all signatories have required fields filled (only firstName, lastName, email, phone)
+        return formData.signatories.every(sig => {
+          const firstName = sig.firstName?.trim();
+          const lastName = sig.lastName?.trim();
+          const email = sig.email?.trim();
+          const phone = sig.phone?.trim();
+          
+          // Check all required fields are filled
+          if (!firstName || !lastName || !email || !phone) {
+            return false;
+          }
+          
+          // Basic email validation
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            return false;
+          }
+          
+          // Basic phone validation (at least 5 characters for a valid phone number)
+          if (phone.length < 5) {
+            return false;
+          }
+          
+          return true;
+        });
+
+      case 5: // Summary
 
         // Check all required fields are filled
         return requiredFields.every(field => field && field.trim() !== '');
 
-      case 6: // Summary
+      case 4: // Summary
         return true; // No validation needed for summary
 
       default:
         return true;
-    }
-  };
-
-  // Function to get validation error message for current step
-  const getValidationErrorMessage = () => {
-    switch (currentStep) {
-      case 1: // Choose Services
-        return t('form.validation.selectServices');
-
-      case 2: // Upload Documents
-        return t('form.validation.uploadDocuments');
-
-      case 3: // Add Signatories
-        return t('form.validation.selectSignatories');
-
-      case 4: // Book an appointment
-        return t('form.validation.selectAppointment');
-
-      case 5: // Personal informations
-        return t('form.validation.completePersonalInfo');
-
-      default:
-        return t('form.validation.completeStep');
-    }
-  };
-
-  // Handle click on Continue button when disabled
-  const handleContinueClick = () => {
-    console.log('🔍 [VALIDATION] Continue button clicked');
-    console.log('🔍 [VALIDATION] canProceed:', canProceedFromCurrentStep());
-    console.log('🔍 [VALIDATION] currentStep:', currentStep);
-    
-    if (!canProceedFromCurrentStep()) {
-      const errorMessage = getValidationErrorMessage();
-      console.log('🔍 [VALIDATION] Error message:', errorMessage);
-      
-      // Force notification update
-      setNotification(null);
-      setTimeout(() => {
-        setNotification({
-          type: 'error',
-          message: errorMessage
-        });
-        console.log('🔍 [VALIDATION] Notification set after timeout');
-      }, 10);
-    } else {
-      nextStep();
     }
   };
 
@@ -225,11 +193,6 @@ const NotaryForm = () => {
   };
 
   const currentStep = getCurrentStepFromPath();
-
-  // Open PriceDetails only on Summary step (step 6)
-  useEffect(() => {
-    setIsPriceDetailsOpen(currentStep === 6);
-  }, [currentStep]);
 
   // Update page title with current step name
   useEffect(() => {
@@ -246,144 +209,88 @@ const NotaryForm = () => {
     const stepNameMap = {
       'Choose Services': 'service_selection',
       'Upload Documents': 'document_upload',
-      'Add Signatories': 'signatories',
-      'Book an appointment': 'appointment_booking',
       'Your personal informations': 'personal_info',
+      'Add Signatories': 'signatories',
       'Summary': 'review_summary'
     };
     return stepNameMap[stepName] || stepName.toLowerCase().replace(/\s+/g, '_');
   };
 
-  // Track form opened (first time)
-  useEffect(() => {
-    const hasTrackedFormOpened = sessionStorage.getItem('form_opened_tracked');
-    if (!hasTrackedFormOpened) {
-      trackFormOpened();
-      sessionStorage.setItem('form_opened_tracked', 'true');
-    }
-  }, []);
-
   // Validate step access and track page views
   useEffect(() => {
-    // Check if there's a service parameter in URL
-    const serviceParam = searchParams.get('service');
-    
-    // Redirect to /form/choose-services if at /form root
+    // Redirect to /form/choose-services if at /form root (en conservant la query)
     if (location.pathname === '/form' || location.pathname === '/form/') {
-      // If service parameter exists, redirect directly to documents step
-      if (serviceParam) {
-        // Pre-select the service (using callback to access current state)
-        setFormData(prev => {
-          if (!prev.selectedServices?.includes(serviceParam)) {
-            return {
-              ...prev,
-              selectedServices: [serviceParam]
-            };
-          }
-          return prev;
-        });
-        
-        // Track funnel events for skipped steps when arriving directly from service page
-        // This ensures the funnel is complete even when user skips steps
-        // IMPORTANT: Track events BEFORE redirecting to ensure they are sent
-        if (completedSteps.length === 0) {
-          // Track all events asynchronously before redirecting
-          (async () => {
-            try {
-              // Track all analytics events in parallel for faster execution
-              await Promise.all([
-                trackFormOpened(), // form_opened
-                trackAnalyticsFormStart(), // form_start
-                trackAnalyticsServiceSelected(serviceParam, '', 1, [serviceParam]), // service_selected
-                trackServicesSelectionCompleted([serviceParam]) // services_selection_completed
-              ]);
-              
-              // Track GTM and Plausible events (non-blocking)
-              trackFormStart({
-                formName: 'notarization_form',
-                serviceType: 'Document Notarization',
-                ctaLocation: 'service_page',
-                ctaText: 'Notarize now'
-              });
-              trackPlausibleFormStart();
-              trackGTMServiceSelected(serviceParam);
-              
-              // Mark step 1 as completed AFTER tracking
-              setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
-              
-              // Small delay to ensure events are sent before redirect
-              setTimeout(() => {
-                navigate('/form/documents', { replace: true });
-              }, 500);
-            } catch (error) {
-              console.error('Error tracking funnel events:', error);
-              // Still redirect even if tracking fails
-              setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
-              navigate('/form/documents', { replace: true });
-            }
-          })();
-          return;
-        }
-        
-        // Mark step 1 as completed
-        setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
-        // Redirect directly to documents
-        navigate('/form/documents', { replace: true });
+      // Si un param service existe, on laisse l'autre effet gérer la navigation directe
+      if (serviceParam && !hasAppliedServiceParam) {
         return;
       }
-      // Otherwise, redirect to choose-services
-      navigate('/form/choose-services', { replace: true });
+      navigate({ pathname: '/form/choose-services', search: location.search }, { replace: true });
       return;
     }
 
-    // Track page view (GTM and Analytics)
+    // Track page view (GTM)
     const currentStepData = steps.find(s => s.path === location.pathname);
     if (currentStepData) {
-      // Track GTM pageview (for Google Ads)
       trackPageView(currentStepData.name, location.pathname);
       
-      // Track analytics pageview (only once per page visit)
-      trackAnalyticsPageView(currentStepData.name, location.pathname);
-      
-      // Track analytics screen opened and form start
-      if (currentStepData.id === 1) {
-        trackScreenOpened('Choose Services', '/form/choose-services', 1);
-        if (completedSteps.length === 0) {
-          trackAnalyticsFormStart();
-          trackFormStart({
-            formName: 'notarization_form',
-            serviceType: 'Document Notarization',
-            ctaLocation: 'homepage_hero',
-            ctaText: 'Commencer ma notarisation'
-          });
-          trackPlausibleFormStart();
-        }
-      } else if (currentStepData.id === 2) {
-        trackScreenOpened('Upload Documents', '/form/documents', 2);
-        trackDocumentScreenOpened(formData.selectedServices?.length || 0);
-      } else if (currentStepData.id === 3) {
-        trackScreenOpened('Add Signatories', '/form/signatories', 3);
-        trackSignatoryScreenOpened();
-      } else if (currentStepData.id === 4) {
-        trackScreenOpened('Book Appointment', '/form/book-appointment', 4);
-        trackAppointmentScreenOpened();
-      } else if (currentStepData.id === 5) {
-        trackScreenOpened('Personal Info', '/form/personal-info', 5);
-        trackPersonalInfoScreenOpened();
-      } else if (currentStepData.id === 6) {
-        trackScreenOpened('Summary', '/form/summary', 6);
-        trackSummaryScreenOpened();
+      // Track form_start when user arrives on first step (Choose Services)
+      if (currentStepData.id === 1 && completedSteps.length === 0) {
+        trackFormStart({
+          formName: 'notarization_form',
+          serviceType: 'Document Notarization',
+          ctaLocation: 'homepage_hero',
+          ctaText: 'Commencer ma notarisation'
+        });
+        // Track Plausible form start
+        trackPlausibleFormStart();
       }
+    }
+
+    // Bypass guard when on-boarding via param service -> documents
+    if (allowServiceParamBypass) {
+      console.log('✅ [GUARD] Bypass activé pour service param');
+      return;
+    }
+    // If service param is present but not yet applied, let the other effect handle navigation
+    if (serviceParam && !hasAppliedServiceParam) {
+      console.log('⏳ [GUARD] Service param présent mais pas encore appliqué, attente...');
+      return;
     }
 
     // Check if user is trying to access a step they haven't completed yet
     const requestedStep = getCurrentStepFromPath();
 
+    // Special case: If user is accessing Summary (step 5) and has completed all previous steps,
+    // allow access even if Summary itself isn't marked as completed
+    // This handles the case when returning from Stripe payment
+    const isSummaryStep = requestedStep === 5;
+    const hasCompletedAllPreviousSteps = completedSteps.length >= 4; // Steps 1-4 completed
+    
     // User can access current step or any previously completed step
-    const canAccess = requestedStep === 1 || completedSteps.includes(requestedStep - 1);
+    // OR Summary if all previous steps are completed (for returning from payment)
+    const canAccess = requestedStep === 1 || 
+                     completedSteps.includes(requestedStep - 1) ||
+                     (isSummaryStep && hasCompletedAllPreviousSteps);
+    
+    console.log('🔍 [GUARD] Vérification accès étape:', {
+      requestedStep,
+      completedSteps,
+      canAccess,
+      allowServiceParamBypass,
+      serviceParam,
+      hasAppliedServiceParam
+    });
 
     if (!canAccess) {
-      // Find the last completed step and redirect there
+      // If trying to access Summary, always allow it (user likely coming back from payment)
+      if (isSummaryStep) {
+        // Mark all previous steps as completed to allow access
+        const stepsToComplete = [1, 2, 3, 4];
+        const updatedCompletedSteps = [...new Set([...completedSteps, ...stepsToComplete.map(s => s - 1)])].sort();
+        setCompletedSteps(updatedCompletedSteps);
+        return; // Allow access to Summary
+      }
+      
       const lastCompletedStep = completedSteps.length > 0
         ? Math.max(...completedSteps) + 1
         : 1;
@@ -392,7 +299,7 @@ const NotaryForm = () => {
         navigate(redirectStep.path, { replace: true });
       }
     }
-  }, [location.pathname, completedSteps, navigate, searchParams, setFormData, setCompletedSteps]);
+  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam]);
 
   // Load user data if authenticated
   useEffect(() => {
@@ -401,7 +308,6 @@ const NotaryForm = () => {
         console.log('🔍 [PRE-FILL] Starting to load user data...');
         if (!supabase) {
           console.log('⚠️  [PRE-FILL] No supabase client available');
-          setIsLoadingUserData(false);
           return;
         }
 
@@ -442,8 +348,6 @@ const NotaryForm = () => {
         }
       } catch (error) {
         console.error('❌ [PRE-FILL] Error loading user data:', error);
-      } finally {
-        setIsLoadingUserData(false);
       }
     };
 
@@ -499,64 +403,266 @@ const NotaryForm = () => {
     }
   }, [searchParams, setFormData]);
 
-  // Gérer le paramètre service depuis l'URL pour pré-sélection et saut d'étapes
-  // (Note: Le cas /form et /form/ est géré par le useEffect précédent)
+  // Pré-remplir le service depuis l'URL et passer directement à l'upload
   useEffect(() => {
-    const serviceParam = searchParams.get('service');
-    const isOnChooseServicesStep = location.pathname === '/form/choose-services';
-    
-    if (serviceParam && isOnChooseServicesStep) {
-      console.log('🎯 [SERVICE] Service détecté depuis l\'URL sur choose-services:', serviceParam);
-      
-      // Pré-sélectionner le service s'il n'est pas déjà sélectionné
-      if (!formData.selectedServices?.includes(serviceParam)) {
-        setFormData(prev => ({
-          ...prev,
-          selectedServices: [serviceParam]
-        }));
-        console.log('✅ [SERVICE] Service pré-sélectionné:', serviceParam);
+    if (!serviceParam) {
+      // Si pas de service param, réinitialiser le flag
+      if (lastAppliedServiceParamRef.current !== null) {
+        lastAppliedServiceParamRef.current = null;
+        setHasAppliedServiceParam(false);
       }
-      
-      // Marquer l'étape 1 comme complétée pour permettre l'accès à l'étape 2
-      setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1]);
-      
-      // Rediriger vers l'étape "Upload Documents" (étape 2)
-      navigate('/form/documents', { replace: true });
-      
-      console.log('✅ [SERVICE] Redirection vers étape 2 (Documents)');
+      return;
     }
-  }, [searchParams, location.pathname, formData.selectedServices, setFormData, setCompletedSteps, navigate]);
+    
+    if (servicesLoading) return;
+    if (!services || services.length === 0) return; // Attendre que les services soient disponibles
+
+    // Vérifier si le service param a changé
+    const serviceParamChanged = lastAppliedServiceParamRef.current !== serviceParam;
+    
+    if (!serviceParamChanged && hasAppliedServiceParam) {
+      // Le même service param a déjà été appliqué, ne rien faire
+      return;
+    }
+
+    console.log('🔍 [SERVICE-PARAM] Traitement du paramètre service:', serviceParam);
+    console.log('🔍 [SERVICE-PARAM] Service param a changé:', serviceParamChanged);
+    console.log('🔍 [SERVICE-PARAM] Dernier service appliqué:', lastAppliedServiceParamRef.current);
+    console.log('🔍 [SERVICE-PARAM] Services disponibles:', services.length);
+
+    const normalize = (value) => {
+      if (!value) return '';
+      return value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-+|-+$)/g, '');
+    };
+
+    const requestedSlugs = serviceParam
+      .split(',')
+      .map(normalize)
+      .filter(Boolean);
+
+    console.log('🔍 [SERVICE-PARAM] Paramètre service brut:', serviceParam);
+    console.log('🔍 [SERVICE-PARAM] Slugs demandés normalisés:', requestedSlugs);
+
+    if (requestedSlugs.length === 0) {
+      console.warn('⚠️ [SERVICE-PARAM] Aucun slug valide trouvé dans le paramètre');
+      lastAppliedServiceParamRef.current = serviceParam;
+      setHasAppliedServiceParam(true);
+      return;
+    }
+
+    // D'abord, essayer de trouver des correspondances exactes
+    const exactMatches = [];
+    const partialMatches = [];
+
+    services.forEach((service) => {
+      // Essayer plusieurs variantes de matching
+      const candidates = [
+        service.slug,
+        service.code,
+        service.key,
+        service.url_key,
+        service.name,
+      ]
+        .map(normalize)
+        .filter(Boolean);
+
+      // Vérifier si un des slugs demandés correspond exactement à un candidat
+      const exactMatch = requestedSlugs.some((requestedSlug) => {
+        return candidates.includes(requestedSlug);
+      });
+
+      if (exactMatch) {
+        console.log('✅ [SERVICE-PARAM] Correspondance EXACTE trouvée:', service.name, 'ID:', service.service_id);
+        console.log('   Slug original:', service.slug);
+        console.log('   Code:', service.code);
+        console.log('   Key:', service.key);
+        console.log('   URL Key:', service.url_key);
+        console.log('   Candidates normalisés:', candidates);
+        exactMatches.push(service.service_id);
+        return;
+      }
+
+      // Si pas de correspondance exacte, essayer une correspondance partielle (mais seulement si aucune exacte n'a été trouvée)
+      const partialMatch = requestedSlugs.some((requestedSlug) => {
+        return candidates.some(candidate => {
+          // Correspondance partielle stricte : le candidat doit commencer par le slug demandé ou être égal
+          return candidate === requestedSlug || candidate.startsWith(requestedSlug + '-');
+        });
+      });
+
+      if (partialMatch) {
+        console.log('⚠️ [SERVICE-PARAM] Correspondance PARTIELLE trouvée:', service.name, 'ID:', service.service_id);
+        console.log('   Slug original:', service.slug);
+        console.log('   Code:', service.code);
+        console.log('   Key:', service.key);
+        console.log('   URL Key:', service.url_key);
+        partialMatches.push(service.service_id);
+      }
+    });
+
+    // Utiliser les correspondances exactes en priorité, sinon utiliser les partielles
+    // S'assurer qu'il n'y a pas de doublons
+    const matchedServiceIds = Array.from(new Set(
+      exactMatches.length > 0 ? exactMatches : partialMatches
+    ));
+
+    if (exactMatches.length > 0 && partialMatches.length > 0) {
+      console.warn('⚠️ [SERVICE-PARAM] Correspondances exactes ET partielles trouvées. Utilisation des exactes uniquement.');
+      console.log('   Correspondances exactes:', exactMatches);
+      console.log('   Correspondances partielles ignorées:', partialMatches);
+    }
+
+    if (matchedServiceIds.length > 1) {
+      console.warn('⚠️ [SERVICE-PARAM] ATTENTION: Plusieurs services matchés pour un seul paramètre!', matchedServiceIds);
+      console.warn('   Cela ne devrait pas arriver. Vérifiez les slugs des services dans la base de données.');
+    }
+
+    if (matchedServiceIds.length === 0) {
+      console.warn('⚠️ [SERVICE-PARAM] Aucun service trouvé pour les slugs:', requestedSlugs);
+      console.log('   Services disponibles:', services.map(s => ({
+        name: s.name,
+        slug: s.slug,
+        code: s.code,
+        key: s.key,
+        url_key: s.url_key
+      })));
+      // Aucun service trouvé alors que la liste est chargée : marquer l'essai pour éviter les re-boucles
+      lastAppliedServiceParamRef.current = serviceParam;
+      setHasAppliedServiceParam(true);
+      return;
+    }
+
+    console.log('✅ [SERVICE-PARAM] Services correspondants:', matchedServiceIds);
+    console.log('   Nombre de services matchés:', matchedServiceIds.length);
+
+    // Si plusieurs services sont matchés, prendre seulement le premier (ou logger un avertissement)
+    let servicesToApply = matchedServiceIds;
+    if (matchedServiceIds.length > 1) {
+      console.error('❌ [SERVICE-PARAM] ERREUR: Plusieurs services matchés pour un seul paramètre!');
+      console.error('   Services matchés:', matchedServiceIds);
+      console.error('   Paramètre service:', serviceParam);
+      console.error('   Cela ne devrait pas arriver. Vérifiez les slugs des services dans la base de données.');
+      console.error('   Utilisation du PREMIER service uniquement:', matchedServiceIds[0]);
+      servicesToApply = [matchedServiceIds[0]]; // Prendre seulement le premier
+    }
+
+    // Si le service param a changé, réinitialiser complètement les services et documents
+    if (serviceParamChanged) {
+      console.log('🔄 [SERVICE-PARAM] Réinitialisation complète (nouveau service param détecté)');
+      console.log('   Ancien service:', lastAppliedServiceParamRef.current);
+      console.log('   Nouveau service:', serviceParam);
+      // Réinitialiser aussi les étapes complétées pour forcer le recommencement
+      setCompletedSteps([]);
+    }
+
+    // Appliquer uniquement les nouveaux services (remplacer complètement, pas d'ajout)
+    // Toujours réinitialiser les documents pour éviter les conflits
+    console.log('✅ [SERVICE-PARAM] Application des services:', servicesToApply);
+    console.log('   Nombre de services à appliquer:', servicesToApply.length);
+    setFormData((prev) => {
+      const newData = {
+        ...prev,
+        selectedServices: servicesToApply, // Remplacer complètement (pas d'ajout)
+        serviceDocuments: {} // Toujours réinitialiser les documents pour éviter les conflits
+      };
+      console.log('   Données avant mise à jour:', {
+        selectedServices: prev.selectedServices,
+        serviceDocumentsKeys: Object.keys(prev.serviceDocuments || {})
+      });
+      console.log('   Données après mise à jour:', {
+        selectedServices: newData.selectedServices,
+        serviceDocumentsKeys: Object.keys(newData.serviceDocuments)
+      });
+      return newData;
+    });
+
+    // Marquer l'étape 1 comme complétée (stockée avec index 0-based: stepId - 1)
+    const stepIndex = 0; // Étape 1 -> index 0
+    setCompletedSteps((prev) => {
+      if (prev.includes(stepIndex)) {
+        return prev;
+      }
+      console.log('✅ [SERVICE-PARAM] Marquage de l\'étape 1 comme complétée (index:', stepIndex, ')');
+      return [...prev, stepIndex];
+    });
+    
+    // Mettre à jour la référence du dernier service appliqué
+    lastAppliedServiceParamRef.current = serviceParam;
+    setAllowServiceParamBypass(true);
+    setHasAppliedServiceParam(true);
+
+    // Naviguer immédiatement vers l'étape d'upload
+    console.log('🚀 [SERVICE-PARAM] Navigation immédiate vers /form/documents');
+    console.log('   Chemin actuel:', location.pathname);
+    console.log('   Services sélectionnés:', matchedServiceIds);
+    
+    // Utiliser requestAnimationFrame pour s'assurer que les états sont mis à jour
+    requestAnimationFrame(() => {
+      navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+    });
+  }, [
+    services,
+    servicesLoading,
+    serviceParam,
+    setFormData,
+    setCompletedSteps,
+    navigate,
+    location.pathname,
+    location.search,
+    hasAppliedServiceParam
+  ]);
+
+  // Backup: Forcer la navigation vers l'upload si le service est appliqué mais qu'on n'est pas encore sur documents
+  useEffect(() => {
+    if (!serviceParam) return;
+    if (servicesLoading) return;
+    if (!hasAppliedServiceParam) return;
+    if (!formData.selectedServices || formData.selectedServices.length === 0) return;
+    if (location.pathname === '/form/documents') return;
+    
+    // Vérifier qu'on n'est pas en train de naviguer depuis le premier useEffect
+    const isOnChooseServices = location.pathname === '/form/choose-services' || location.pathname === '/form';
+    
+    if (isOnChooseServices) {
+      console.log('🚀 [SERVICE-PARAM-BACKUP] Navigation de backup vers /form/documents');
+      console.log('   Services sélectionnés:', formData.selectedServices);
+      setAllowServiceParamBypass(true);
+      navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+    }
+  }, [
+    serviceParam,
+    servicesLoading,
+    hasAppliedServiceParam,
+    formData.selectedServices,
+    location.pathname,
+    location.search,
+    navigate
+  ]);
 
   const updateFormData = (data) => {
     setFormData(prev => ({ ...prev, ...data }));
   };
 
   const markStepCompleted = (stepId) => {
-    if (!completedSteps.includes(stepId)) {
-      setCompletedSteps([...completedSteps, stepId]);
+    // Stocker avec index 0-based pour être cohérent avec les vérifications
+    const stepIndex = stepId - 1;
+    if (!completedSteps.includes(stepIndex)) {
+      setCompletedSteps([...completedSteps, stepIndex]);
       // Track step completion (GTM)
       const step = steps.find(s => s.id === stepId);
       if (step) {
         trackFormStep(stepId, getStepNameForGTM(step.name));
       }
       
-      // Track funnel events (Plausible + GTM)
+      // Track Plausible funnel events
       switch (stepId) {
         case 1: // Services Selected
-          // Analytics
-          if (formData.selectedServices && formData.selectedServices.length > 0) {
-            formData.selectedServices.forEach(serviceId => {
-              trackAnalyticsServiceSelected(serviceId, serviceId, formData.selectedServices.length, formData.selectedServices);
-            });
-            trackServicesSelectionCompleted(formData.selectedServices);
-          }
-          // Plausible
           trackServicesSelected(
-            formData.selectedServices?.length || 0,
-            formData.selectedServices || []
-          );
-          // GTM
-          trackGTMServiceSelected(
             formData.selectedServices?.length || 0,
             formData.selectedServices || []
           );
@@ -566,62 +672,29 @@ const NotaryForm = () => {
             (sum, docs) => sum + (docs?.length || 0), 0
           );
           const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).length;
-          // Analytics
-          if (formData.serviceDocuments) {
-            Object.entries(formData.serviceDocuments).forEach(([serviceId, docs]) => {
-              if (docs && docs.length > 0) {
-                trackAnalyticsDocumentUploaded(serviceId, docs.length, totalDocs, servicesWithDocs);
-              }
-            });
-            trackDocumentsUploadCompleted(totalDocs, servicesWithDocs);
-          }
-          // Plausible
           trackDocumentsUploaded(totalDocs, servicesWithDocs);
-          // GTM
-          trackGTMDocumentUploaded(totalDocs, servicesWithDocs);
           break;
-        case 3: // Signatories Added
-          // Analytics
-          if (formData.signatoryCount && formData.signatoryCount > 0) {
-            trackAnalyticsSignatoryAdded(formData.signatoryCount);
-            trackSignatoriesCompleted(formData.signatoryCount);
-          }
-          // Plausible
-          trackSignatoriesAdded(formData.signatoryCount || 0);
-          // GTM
-          trackGTMSignatoriesAdded(formData.signatoryCount || 0);
-          break;
-        case 4: // Appointment Booked
-          // Analytics
-          if (formData.appointmentDate && formData.appointmentTime) {
-            trackAnalyticsAppointmentBooked(
-              formData.appointmentDate,
-              formData.appointmentTime,
-              formData.timezone || ''
-            );
-          }
-          // Plausible
-          trackAppointmentBooked(
-            formData.appointmentDate || '',
-            formData.appointmentTime || '',
-            formData.timezone || ''
-          );
-          // GTM
-          trackGTMAppointmentBooked({
-            date: formData.appointmentDate || '',
-            time: formData.appointmentTime || '',
-            timezone: formData.timezone || ''
-          });
-          break;
-        case 5: // Personal Info Completed
-          // Analytics
-          trackAnalyticsPersonalInfoCompleted(isAuthenticated);
-          // Plausible
+        case 3: // Personal Info Completed
           trackPersonalInfoCompleted(isAuthenticated);
-          // GTM
-          trackGTMPersonalInfoCompleted(isAuthenticated);
+          break;
+        case 4: // Signatories Added
+          // Track signatories added if available
+          if (formData.signatories && formData.signatories.length > 0) {
+            // trackSignatoriesAdded(formData.signatories.length);
+          }
           break;
       }
+    }
+  };
+
+  const handleContinueClick = () => {
+    if (canProceedFromCurrentStep()) {
+      nextStep();
+    } else {
+      setNotification({
+        type: 'error',
+        message: 'Please complete all required fields before continuing.'
+      });
     }
   };
 
@@ -638,31 +711,15 @@ const NotaryForm = () => {
       if (nextStepData) {
         navigate(nextStepData.path);
         
-        // Track summary viewed when reaching step 6
-        if (nextStepData.id === 6) {
+        // Track summary viewed when reaching step 5
+        if (nextStepData.id === 5) {
           const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
             (sum, docs) => sum + (docs?.length || 0), 0
           );
-          // Analytics
-          trackAnalyticsSummaryViewed({
-            servicesCount: formData.selectedServices?.length || 0,
-            documentsCount: totalDocs,
-            signatoriesCount: formData.signatoryCount || 0,
-            hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
-          });
-          // Plausible
           trackSummaryViewed({
             servicesCount: formData.selectedServices?.length || 0,
             documentsCount: totalDocs,
-            signatoriesCount: formData.signatoryCount || 0,
-            hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
-          });
-          // GTM
-          trackGTMSummaryViewed({
-            totalServices: formData.selectedServices?.length || 0,
-            totalDocuments: totalDocs,
-            totalSignatories: formData.signatoryCount || 0,
-            hasAppointment: !!(formData.appointmentDate && formData.appointmentTime)
+            signatoriesCount: formData.signatories?.length || 0
           });
         }
       }
@@ -715,90 +772,10 @@ const NotaryForm = () => {
     };
   }, [currentStep, completedSteps]);
 
-  // Helper function to deep clean objects for JSON serialization
-  // Avoids any reference to window or other non-serializable objects
-  const deepCleanForJSON = (obj, seen = new WeakSet()) => {
-    if (obj === null || obj === undefined) {
-      return null;
-    }
-    
-    // Handle primitives
-    const type = typeof obj;
-    if (type !== 'object' && type !== 'function') {
-      return obj;
-    }
-    
-    // Skip functions
-    if (type === 'function') {
-      return undefined;
-    }
-    
-    // Handle circular references
-    if (seen.has(obj)) {
-      return undefined;
-    }
-    
-    // Skip if it's window (check without direct reference)
-    try {
-      if (obj.constructor && obj.constructor.name === 'Window') {
-        return undefined;
-      }
-    } catch (e) {
-      // If we can't check, skip it
-      return undefined;
-    }
-    
-    if (obj instanceof Date) {
-      return obj.toISOString();
-    }
-    
-    if (Array.isArray(obj)) {
-      seen.add(obj);
-      const result = obj.map(item => {
-        const cleaned = deepCleanForJSON(item, seen);
-        return cleaned === undefined ? null : cleaned;
-      }).filter(item => item !== undefined);
-      seen.delete(obj);
-      return result;
-    }
-    
-    // Handle plain objects
-    seen.add(obj);
-    const cleaned = {};
-    try {
-      for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-          try {
-            const value = obj[key];
-            // Skip functions, symbols, and undefined
-            if (typeof value === 'function' || typeof value === 'symbol' || value === undefined) {
-              continue;
-            }
-            const cleanedValue = deepCleanForJSON(value, seen);
-            if (cleanedValue !== undefined) {
-              cleaned[key] = cleanedValue;
-            }
-          } catch (e) {
-            // Skip properties that cause errors
-            continue;
-          }
-        }
-      }
-    } catch (e) {
-      // If we can't iterate, return empty object
-      return {};
-    } finally {
-      seen.delete(obj);
-    }
-    
-    return cleaned;
-  };
-
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Avoid logging formData directly as it may contain non-serializable references
-      console.log('Creating payment session...');
+      console.log('Creating payment session for form data:', formData);
 
       // Track form submission start (GTM)
       trackFormSubmissionStart({
@@ -838,23 +815,18 @@ const NotaryForm = () => {
 
             console.log('✅ File uploaded:', fileName);
 
-            // Get public URL - ensure we only store the string value
+            // Get public URL
             const { data: urlData } = supabase.storage
               .from('submission-documents')
               .getPublicUrl(fileName);
 
-            // Extract only the string URL, avoid storing the entire urlData object
-            const publicUrl = urlData?.publicUrl ? String(urlData.publicUrl) : '';
-
             uploadedServiceDocuments[serviceId].push({
-              name: String(file.name || ''),
-              size: Number(file.size) || 0,
-              type: String(file.type || ''),
-              storage_path: String(fileName),
-              public_url: publicUrl,
-              selectedOptions: Array.isArray(file.selectedOptions) 
-                ? file.selectedOptions.map(opt => String(opt))
-                : []
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              storage_path: fileName,
+              public_url: urlData.publicUrl,
+              selectedOptions: file.selectedOptions || []  // Preserve selected options
             });
           }
         }
@@ -863,59 +835,50 @@ const NotaryForm = () => {
       }
 
       // Prepare form data without File objects
-      // Clean data to avoid serialization issues with circular references or window objects
-      const cleanFormData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        city: formData.city,
-        postalCode: formData.postalCode,
-        country: formData.country,
-        notes: formData.notes,
-        appointmentDate: formData.appointmentDate,
-        appointmentTime: formData.appointmentTime,
-        timezone: formData.timezone,
-        selectedServices: formData.selectedServices,
-        signatoryCount: formData.signatoryCount,
-        currency: currency,
-        password: formData.password, // Only if not authenticated
-      };
-
-      // Deep clean serviceDocuments to ensure all values are serializable
-      const cleanServiceDocuments = {};
-      if (uploadedServiceDocuments) {
-        Object.keys(uploadedServiceDocuments).forEach(serviceId => {
-          cleanServiceDocuments[serviceId] = uploadedServiceDocuments[serviceId].map(doc => ({
-            name: String(doc.name || ''),
-            size: Number(doc.size) || 0,
-            type: String(doc.type || ''),
-            storage_path: String(doc.storage_path || ''),
-            public_url: String(doc.public_url || ''),
-            selectedOptions: Array.isArray(doc.selectedOptions) 
-              ? doc.selectedOptions.map(opt => String(opt))
-              : []
-          }));
-        });
-      }
-
+      // Provide default appointment_date, appointment_time, and timezone if not provided
+      // (since Book Appointment step was removed)
+      const defaultAppointmentDate = formData.appointmentDate || new Date().toISOString().split('T')[0];
+      const defaultAppointmentTime = formData.appointmentTime || '09:00';
+      const defaultTimezone = formData.timezone || 'UTC';
+      
+      // Calculate additional signatories cost (45€ per additional signatory, first one is free)
+      const signatoriesCount = formData.signatories?.length || 0;
+      const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
+      const additionalSignatoriesCost = additionalSignatoriesCount * 45;
+      
       const submissionData = {
-        ...cleanFormData,
-        serviceDocuments: cleanServiceDocuments, // Add cleaned uploaded file paths organized by service
+        ...formData,
+        serviceDocuments: uploadedServiceDocuments, // Add uploaded file paths organized by service
+        appointmentDate: defaultAppointmentDate,
+        appointmentTime: defaultAppointmentTime,
+        timezone: defaultTimezone,
+        // Explicitly include signatories cost calculation for Edge Function
+        signatoriesCount: signatoriesCount,
+        additionalSignatoriesCount: additionalSignatoriesCount,
+        additionalSignatoriesCost: additionalSignatoriesCost, // In EUR
       };
 
       // Call Supabase Edge Function to create Stripe checkout session
       // The Edge Function will fetch services from database and calculate the amount
-      console.log('📤 Calling Edge Function with data...');
-      console.log('   selectedServices:', Array.isArray(submissionData.selectedServices) ? submissionData.selectedServices.length : 0, 'services');
-      console.log('   signatoryCount:', submissionData.signatoryCount);
+      console.log('📤 Calling Edge Function with full data:');
+      console.log('   selectedServices:', submissionData.selectedServices);
+      console.log('   serviceDocuments:', submissionData.serviceDocuments);
+      console.log('   signatories:', submissionData.signatories);
+      console.log('   signatories count:', submissionData.signatoriesCount);
+      console.log('   additional signatories:', submissionData.additionalSignatoriesCount);
+      console.log('   additional signatories cost:', submissionData.additionalSignatoriesCost, 'EUR');
       console.log('   currency:', submissionData.currency || 'EUR (default)');
+      console.log('   appointmentDate:', submissionData.appointmentDate);
+      console.log('   appointmentTime:', submissionData.appointmentTime);
+      console.log('   timezone:', submissionData.timezone);
 
-      // Log document count per service (avoid logging full objects)
-      if (cleanServiceDocuments) {
-        Object.entries(cleanServiceDocuments).forEach(([serviceId, docs]) => {
-          console.log(`   Service ${serviceId}: ${docs.length} document(s)`);
+      // Log document count per service with options info
+      if (submissionData.serviceDocuments) {
+        Object.entries(submissionData.serviceDocuments).forEach(([serviceId, docs]) => {
+          console.log(`   Service ${serviceId}: ${docs.length} documents`);
+          docs.forEach((doc, i) => {
+            console.log(`      - ${doc.name}: selectedOptions=${JSON.stringify(doc.selectedOptions)}`);
+          });
         });
       }
 
@@ -927,132 +890,21 @@ const NotaryForm = () => {
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token || supabaseAnonKey;
       
-      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
-      const currency = (submissionData.currency || 'EUR').toUpperCase();
-      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
-
       console.log('📤 Calling Edge Function directly with fetch...');
       
-      // Build the request payload directly from primitives to avoid any reference issues
-      const requestPayload = {
-        formData: {
-          firstName: String(cleanFormData.firstName || ''),
-          lastName: String(cleanFormData.lastName || ''),
-          email: String(cleanFormData.email || ''),
-          phone: String(cleanFormData.phone || ''),
-          address: String(cleanFormData.address || ''),
-          city: String(cleanFormData.city || ''),
-          postalCode: String(cleanFormData.postalCode || ''),
-          country: String(cleanFormData.country || ''),
-          notes: cleanFormData.notes ? String(cleanFormData.notes) : null,
-          appointmentDate: String(cleanFormData.appointmentDate || ''),
-          appointmentTime: String(cleanFormData.appointmentTime || ''),
-          timezone: String(cleanFormData.timezone || ''),
-          selectedServices: Array.isArray(cleanFormData.selectedServices) 
-            ? cleanFormData.selectedServices.map(s => String(s))
-            : [],
-          signatoryCount: cleanFormData.signatoryCount ? Number(cleanFormData.signatoryCount) : null,
-          currency: String(cleanFormData.currency || 'EUR'),
-          serviceDocuments: {},
-        },
-        currency: String(currency)
-      };
-
-      // Add password only if present
-      if (cleanFormData.password) {
-        requestPayload.formData.password = String(cleanFormData.password);
-      }
-
-      // Build serviceDocuments directly from cleanServiceDocuments
-      if (cleanServiceDocuments) {
-        Object.keys(cleanServiceDocuments).forEach(serviceId => {
-          requestPayload.formData.serviceDocuments[serviceId] = cleanServiceDocuments[serviceId].map(doc => ({
-            name: String(doc.name || ''),
-            size: Number(doc.size) || 0,
-            type: String(doc.type || ''),
-            storage_path: String(doc.storage_path || ''),
-            public_url: String(doc.public_url || ''),
-            selectedOptions: Array.isArray(doc.selectedOptions) 
-              ? doc.selectedOptions.map(opt => String(opt))
-              : []
-          }));
-        });
-      }
-      
-      // Serialize using a safe approach with a replacer function
-      const safeReplacer = (key, value) => {
-        // Skip functions, symbols, and undefined
-        if (typeof value === 'function' || typeof value === 'symbol' || value === undefined) {
-          return undefined;
-        }
-        // Skip any object that might be window or contain window
-        if (value && typeof value === 'object') {
-          try {
-            // Check if it's window-like without direct reference
-            if (value.constructor && value.constructor.name === 'Window') {
-              return undefined;
-            }
-            // Check for common problematic properties
-            if ('window' in value || 'document' in value || 'parent' in value || 'top' in value) {
-              return undefined;
-            }
-          } catch (e) {
-            // If we can't check, skip it
-            return undefined;
-          }
-        }
-        return value;
-      };
-
-      let requestBody;
-      try {
-        // Use replacer to filter out problematic values
-        requestBody = JSON.stringify(requestPayload, safeReplacer);
-      } catch (serializationError) {
-        console.error('❌ [ERROR] Erreur lors de la sérialisation:', serializationError);
-        // Try to serialize each property individually to identify the problematic one
-        const problematicKeys = [];
-        try {
-          Object.keys(requestPayload.formData).forEach(key => {
-            try {
-              JSON.stringify(requestPayload.formData[key], safeReplacer);
-            } catch (e) {
-              problematicKeys.push(key);
-              console.error(`❌ [ERROR] Property causing issue: formData.${key}`, e);
-            }
-          });
-          if (problematicKeys.length > 0) {
-            // Remove problematic keys and try again
-            problematicKeys.forEach(key => {
-              delete requestPayload.formData[key];
-            });
-            requestBody = JSON.stringify(requestPayload, safeReplacer);
-            console.warn('⚠️ [WARNING] Removed problematic properties:', problematicKeys);
-          } else {
-            throw serializationError;
-          }
-        } catch (e) {
-          console.error('❌ [ERROR] Could not fix serialization issue');
-          throw new Error('Failed to serialize request data: ' + serializationError.message);
-        }
-      }
-
-      // Track payment initiated AFTER successful serialization to avoid any interference
+      // Track payment initiated
       const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
         (sum, docs) => sum + (docs?.length || 0), 0
       );
-      // Plausible
       trackPaymentInitiated({
         servicesCount: formData.selectedServices?.length || 0,
         totalAmount: 0, // Will be calculated by backend
-        currency: currency || 'EUR'
+        currency: formData.currency || 'EUR'
       });
-      // GTM
-      trackGTMPaymentInitiated({
-        amount: 0, // Will be calculated by backend
-        currency: currency || 'EUR',
-        servicesCount: formData.selectedServices?.length || 0
-      });
+      
+      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
+      const currency = (submissionData.currency || 'EUR').toUpperCase();
+      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
 
       const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
         method: 'POST',
@@ -1061,7 +913,24 @@ const NotaryForm = () => {
           'Authorization': `Bearer ${authToken}`,
           'apikey': supabaseAnonKey,
         },
-        body: requestBody
+        body: JSON.stringify({
+          formData: submissionData,
+          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
+          // IMPORTANT: Edge Function MUST use these fields for signatories:
+          // - formData.signatories: array of signatories
+          // - formData.signatoriesCount: total number of signatories
+          // - formData.additionalSignatoriesCount: number of additional signatories (total - 1, first is free)
+          // - formData.additionalSignatoriesCost: cost in EUR (additionalSignatoriesCount * 45)
+          // 
+          // The Edge Function MUST:
+          // 1. Convert formData.additionalSignatoriesCost from EUR to the target currency if needed
+          // 2. Add this converted cost to the total amount
+          // 3. Create a Stripe line item: {
+          //      name: "Additional Signatories",
+          //      amount: convertedCostInCents, // Convert to cents and to target currency
+          //      quantity: formData.additionalSignatoriesCount
+          //    }
+        })
       });
 
       const responseText = await response.text();
@@ -1143,37 +1012,30 @@ const NotaryForm = () => {
 
 
   return (
-    <div className="flex min-h-screen bg-white">
-      {/* Mobile Header - Fixed at top - Visible until xl */}
-      <header className="xl:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 h-14 sm:h-16 overflow-visible">
-        <div className="flex items-center justify-between h-full px-2 sm:px-3 md:px-4">
+    <div className="flex h-screen bg-white overflow-hidden">
+      {/* Header - Fixed at top - Visible on all screen sizes */}
+      <header className="fixed top-0 left-0 right-0 bg-[#F3F4F6] z-50 h-14 sm:h-16 overflow-visible">
+        <div className="flex items-center justify-between h-full px-2 sm:px-3 md:px-4 xl:px-6">
           <Logo width={70} height={70} className="sm:w-[80px] sm:h-[80px]" />
-          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 overflow-visible">
+          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 xl:gap-3 overflow-visible">
             <LanguageSelector openDirection="bottom" />
             <CurrencySelector openDirection="bottom" />
             <button
               onClick={openCrisp}
-              className="flex items-center justify-center px-2 sm:px-3 py-1 sm:py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm flex-shrink-0"
+              className="flex items-center justify-center px-1 sm:px-1.5 py-1 sm:py-1.5 bg-transparent text-black hover:underline underline-offset-4 decoration-2 hover:text-gray-900 transition-colors font-medium text-xs sm:text-sm flex-shrink-0"
               aria-label="Contact Us"
             >
               <Icon icon="heroicons:chat-bubble-left-right" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
               <span className="truncate">{t('form.sidebar.contactUs')}</span>
             </button>
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-            >
-              <Icon icon={isMobileMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-5 h-5 sm:w-6 sm:h-6 text-gray-900" />
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Mobile Menu Overlay - Visible until xl */}
+      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="xl:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-14 sm:top-16"
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-16"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
@@ -1181,22 +1043,23 @@ const NotaryForm = () => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Contact Us Button - Mobile */}
-            <div className="p-3 sm:p-4 border-b border-gray-300">
+            <div className="p-4 border-b border-gray-300">
               <button
                 onClick={() => {
                   openCrisp();
                   setIsMobileMenuOpen(false);
                 }}
-                className="flex items-center justify-center w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm sm:text-base"
+                className="flex items-center justify-center w-full px-4 py-2 bg-transparent text-black hover:underline underline-offset-4 decoration-2 hover:text-gray-900 transition-colors font-medium"
+                aria-label="Contact Us"
               >
-                <Icon icon="heroicons:chat-bubble-left-right" className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
-                <span className="truncate">{t('form.sidebar.contactUs')}</span>
+                <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
+                {t('form.sidebar.contactUs')}
               </button>
             </div>
 
             {/* Steps Navigation - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-0">
-              <div className="space-y-1 sm:space-y-1.5 pb-6 sm:pb-8">
+            <div className="flex-1 overflow-y-auto p-8 pb-0">
+              <div className="space-y-1.5 pb-8">
               {steps.map((step) => {
                 const isCompleted = completedSteps.includes(step.id);
                 const isCurrent = currentStep === step.id;
@@ -1211,7 +1074,7 @@ const NotaryForm = () => {
                         setIsMobileMenuOpen(false);
                       }
                     }}
-                    className={`flex items-center justify-between px-2.5 sm:px-3 h-[44px] sm:h-[50px] rounded-lg transition-all duration-300 ${
+                    className={`flex items-center justify-between px-3 h-[50px] rounded-lg transition-all duration-300 ${
                       canAccess ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                     } ${
                       isCurrent
@@ -1221,14 +1084,14 @@ const NotaryForm = () => {
                         : 'bg-white text-gray-400'
                     }`}
                   >
-                    <div className="flex items-center min-w-0 flex-1">
+                    <div className="flex items-center">
                       <Icon 
                         icon={isCompleted ? 'heroicons:check' : step.icon} 
-                        className={`w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0 ${
+                        className={`w-5 h-5 mr-2 ${
                           isCurrent ? 'text-white' : isCompleted ? 'text-gray-600' : 'text-gray-400'
                         }`} 
                       />
-                      <span className="text-xs sm:text-sm font-medium truncate">{step.name}</span>
+                      <span className="text-sm font-medium">{step.name}</span>
                     </div>
                   </div>
                 );
@@ -1237,24 +1100,24 @@ const NotaryForm = () => {
             </div>
 
             {/* Navigation Link - Fixed at bottom */}
-            <div className="p-4 sm:p-6 border-t border-gray-200">
+            <div className="p-6 border-t border-gray-200">
               {isAuthenticated ? (
                 <Link
                   to="/dashboard"
-                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:squares-2x2" className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
-                  <span className="truncate font-medium">{t('form.sidebar.dashboard')}</span>
+                  <Icon icon="heroicons:squares-2x2" className="w-5 h-5 mr-2" />
+                  <span className="text-sm font-medium">Dashboard</span>
                 </Link>
               ) : (
                 <Link
                   to="/login"
-                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
-                  <span className="truncate font-medium">{t('form.sidebar.connexion')}</span>
+                  <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
+                  <span className="text-sm font-medium">Connexion</span>
                 </Link>
               )}
             </div>
@@ -1262,139 +1125,10 @@ const NotaryForm = () => {
         </div>
       )}
 
-      {/* Left Sidebar - Fixed and 100vh - HIDDEN until xl (1280px) */}
-      <aside className="hidden xl:block w-56 md:w-64 lg:w-72 xl:w-80 bg-[#F3F4F6] border-r border-gray-200 fixed left-0 top-0 h-screen flex flex-col">
-        {/* Header section - Fixed at top (no scroll) - Reduced spacing */}
-        <div className="flex-shrink-0 p-3 md:p-4 xl:p-5 pb-0">
-          {/* Logo - Reduced size */}
-          <div className="mb-3 md:mb-4 xl:mb-4 animate-fade-in flex items-center justify-center">
-            <Logo width={90} height={90} className="md:w-[100px] md:h-[100px] xl:w-[110px] xl:h-[110px] md:max-w-[100px] md:max-h-[100px] xl:max-w-[110px] xl:max-h-[110px]" />
-          </div>
-        </div>
-
-        {/* Scrollable Steps section - Reduced padding with bottom space for footer */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-4 xl:p-5 pt-2 pb-[200px]">
-
-          {/* Steps Navigation - Very compact */}
-          <div className="space-y-1 md:space-y-1">
-            {steps.map((step, index) => {
-              const isCompleted = completedSteps.includes(step.id);
-              const isCurrent = currentStep === step.id;
-              const canAccess = step.id === 1 || completedSteps.includes(step.id - 1);
-
-              return (
-                <div
-                  key={step.id}
-                  onClick={() => canAccess && goToStep(step.id)}
-                  className={`flex items-center p-1.5 md:p-1.5 xl:p-2 rounded-lg transition-all duration-300 ${
-                    canAccess ? 'cursor-pointer transform hover:scale-105' : 'cursor-not-allowed opacity-50'
-                  } ${
-                    isCurrent
-                      ? 'bg-black text-white shadow-lg animate-slide-in'
-                      : isCompleted
-                      ? 'bg-white text-gray-900 hover:bg-gray-50 hover:shadow-md'
-                      : 'bg-white text-gray-400'
-                  }`}
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <div className={`flex items-center justify-center w-6 h-6 md:w-7 md:h-7 xl:w-8 xl:h-8 rounded-lg transition-all duration-300 flex-shrink-0 ${
-                    isCurrent
-                      ? 'bg-white/20'
-                      : isCompleted
-                      ? 'bg-gray-200'
-                      : 'bg-gray-100'
-                  }`}>
-                    {isCompleted ? (
-                      <Icon icon="heroicons:check" className="w-3 h-3 md:w-3.5 md:h-3.5 xl:w-4 xl:h-4 text-gray-600 animate-bounce-in" />
-                    ) : (
-                      <Icon icon={step.icon} className={`w-3 h-3 md:w-3.5 md:h-3.5 xl:w-4 xl:h-4 transition-transform duration-300 ${
-                        isCurrent ? 'text-white scale-110' : 'text-gray-400'
-                      }`} />
-                    )}
-                  </div>
-                  <div className="ml-1.5 md:ml-1.5 xl:ml-2 flex-1 min-w-0">
-                    <div className={`text-[8px] md:text-[8px] xl:text-[9px] font-semibold uppercase tracking-wide truncate ${
-                      isCurrent ? 'text-white/80' : 'text-gray-500'
-                    }`}>
-                      Step {step.id}
-                    </div>
-                    <div className={`text-[10px] md:text-[10px] xl:text-[11px] font-medium mt-0.5 truncate ${
-                      isCurrent ? 'text-white' : 'text-gray-900'
-                    }`}>
-                      {step.name}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Progress Bar & Navigation Button - Fixed at bottom - Reduced spacing */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 md:p-3 xl:p-4 bg-[#F3F4F6] border-t border-gray-200 overflow-visible">
-          {/* Language and Currency Selectors - Side by side */}
-          <div className="flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-2 xl:mb-2.5 relative">
-            <LanguageSelector />
-            {/* Vertical separator */}
-            <div className="h-4 md:h-5 xl:h-6 w-px bg-gray-300"></div>
-            <CurrencySelector />
-          </div>
-
-          {/* Contact Us and Login/Dashboard Buttons - Side by side */}
-          <div className="flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-2 xl:mb-2.5">
-            {/* Contact Us Button */}
-            <button
-              onClick={openCrisp}
-              className="flex items-center justify-center px-2.5 md:px-3 xl:px-4 py-1.5 md:py-1.5 xl:py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium text-xs md:text-sm xl:text-base"
-            >
-              <Icon icon="heroicons:chat-bubble-left-right" className="w-3.5 h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 mr-1.5 md:mr-2 flex-shrink-0" />
-              <span className="truncate">{t('form.sidebar.contactUs')}</span>
-            </button>
-
-            {/* Vertical separator */}
-            <div className="h-4 md:h-5 xl:h-6 w-px bg-gray-300"></div>
-
-            {/* Dashboard or Login Button */}
-            {isAuthenticated ? (
-              <Link
-                to="/dashboard"
-                className="flex items-center justify-center px-2.5 md:px-3 xl:px-4 py-1.5 md:py-1.5 xl:py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium text-xs md:text-sm xl:text-base"
-              >
-                <Icon icon="heroicons:squares-2x2" className="w-3.5 h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 mr-1.5 md:mr-2 flex-shrink-0" />
-                <span className="truncate">{t('form.sidebar.dashboard')}</span>
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                className="flex items-center justify-center px-2.5 md:px-3 xl:px-4 py-1.5 md:py-1.5 xl:py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium text-xs md:text-sm xl:text-base"
-              >
-                <Icon icon="heroicons:arrow-right-on-rectangle" className="w-3.5 h-3.5 md:w-4 md:h-4 xl:w-5 xl:h-5 mr-1.5 md:mr-2 flex-shrink-0" />
-                <span className="truncate">{t('form.sidebar.connexion')}</span>
-              </Link>
-            )}
-          </div>
-
-          {/* Progress Bar */}
-          <div className="flex justify-between text-[10px] md:text-xs xl:text-sm text-gray-600 mb-1 md:mb-1 xl:mb-1.5">
-            <span className="font-medium truncate">{t('form.sidebar.progress')}</span>
-            <span className="font-bold ml-2 flex-shrink-0">{Math.round((currentStep / steps.length) * 100)}%</span>
-          </div>
-          <div className="h-2 md:h-2 xl:h-2.5 bg-gray-300 rounded-full overflow-hidden">
-            <div
-              className="h-full transition-all duration-700 ease-out"
-              style={{
-                width: `${(currentStep / steps.length) * 100}%`,
-                background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
-              }}
-            />
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content - Full width with left margin for sidebar ONLY on xl+ */}
-      <main className="flex-1 xl:ml-80 min-h-screen flex items-center justify-center xl:p-4 pt-16 pb-28 sm:pb-28">
-        {/* Form Content - Same height until xl */}
-        <div className="w-full max-w-full h-[calc(100vh-7rem)] xl:h-[95vh] bg-[#F3F4F6] xl:rounded-3xl shadow-sm animate-fade-in-up flex flex-col overflow-hidden relative mx-0 xl:mx-auto">
+      {/* Main Content - Full width without margins */}
+      <main className="flex-1 flex items-center justify-center pt-14 sm:pt-16 pb-28 sm:pb-28 xl:pb-32 overflow-hidden bg-[#F3F4F6]">
+        {/* Form Content */}
+        <div className="w-full max-w-full h-full animate-fade-in-up flex flex-col overflow-hidden relative">
           <Routes>
             <Route
               path="choose-services"
@@ -1405,7 +1139,6 @@ const NotaryForm = () => {
                   nextStep={nextStep}
                   handleContinueClick={handleContinueClick}
                   getValidationErrorMessage={getValidationErrorMessage}
-                  currentStep={1}
                   isPriceDetailsOpen={isPriceDetailsOpen}
                   setIsPriceDetailsOpen={setIsPriceDetailsOpen}
                 />
@@ -1421,39 +1154,6 @@ const NotaryForm = () => {
                   prevStep={prevStep}
                   handleContinueClick={handleContinueClick}
                   getValidationErrorMessage={getValidationErrorMessage}
-                  currentStep={2}
-                  isPriceDetailsOpen={isPriceDetailsOpen}
-                  setIsPriceDetailsOpen={setIsPriceDetailsOpen}
-                />
-              }
-            />
-            <Route
-              path="signatories"
-              element={
-                <SignatoryCount
-                  formData={formData}
-                  updateFormData={updateFormData}
-                  nextStep={nextStep}
-                  prevStep={prevStep}
-                  handleContinueClick={handleContinueClick}
-                  getValidationErrorMessage={getValidationErrorMessage}
-                  currentStep={3}
-                  isPriceDetailsOpen={isPriceDetailsOpen}
-                  setIsPriceDetailsOpen={setIsPriceDetailsOpen}
-                />
-              }
-            />
-            <Route
-              path="book-appointment"
-              element={
-                <BookAppointment
-                  formData={formData}
-                  updateFormData={updateFormData}
-                  nextStep={nextStep}
-                  prevStep={prevStep}
-                  handleContinueClick={handleContinueClick}
-                  getValidationErrorMessage={getValidationErrorMessage}
-                  currentStep={4}
                   isPriceDetailsOpen={isPriceDetailsOpen}
                   setIsPriceDetailsOpen={setIsPriceDetailsOpen}
                 />
@@ -1470,9 +1170,21 @@ const NotaryForm = () => {
                   isAuthenticated={isAuthenticated}
                   handleContinueClick={handleContinueClick}
                   getValidationErrorMessage={getValidationErrorMessage}
-                  currentStep={5}
                   isPriceDetailsOpen={isPriceDetailsOpen}
                   setIsPriceDetailsOpen={setIsPriceDetailsOpen}
+                />
+              }
+            />
+            <Route
+              path="signatories"
+              element={
+                <Signatories
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
                 />
               }
             />
@@ -1483,8 +1195,6 @@ const NotaryForm = () => {
                   formData={formData}
                   prevStep={prevStep}
                   handleSubmit={handleSubmit}
-                  isPriceDetailsOpen={isPriceDetailsOpen}
-                  setIsPriceDetailsOpen={setIsPriceDetailsOpen}
                 />
               }
             />
@@ -1492,84 +1202,72 @@ const NotaryForm = () => {
         </div>
       </main>
 
-      {/* Mobile Footer - Navigation Buttons + Progress Bar in ONE fixed container - Visible until xl */}
-      {!isMobileMenuOpen && (
-        <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-[#F3F4F6] border-t border-gray-200 z-50 safe-area-inset-bottom">
-          {/* Price Details - Show on all steps */}
-          <PriceDetails 
-            formData={formData} 
-            isOpen={isPriceDetailsOpen}
-            onToggle={setIsPriceDetailsOpen}
-          />
-          
-          {/* Navigation Buttons */}
-          <div className="px-2 sm:px-3 pt-2.5 sm:pt-3 pb-1.5 sm:pb-2 flex justify-between items-center gap-1.5 sm:gap-2">
-            {currentStep > 1 ? (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="btn-glassy-secondary px-3 sm:px-4 py-2 sm:py-2.5 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95 text-xs sm:text-sm flex-shrink-0"
-              >
-                Back
-              </button>
-            ) : <div className="w-12 sm:w-16"></div>}
-            {currentStep < steps.length ? (
-              <button
-                type="button"
-                onClick={handleContinueClick}
-                className={`btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all text-xs sm:text-sm flex-shrink-0 ${
-                  canProceedFromCurrentStep() 
-                    ? 'hover:scale-105 active:scale-95' 
-                    : 'opacity-50 hover:opacity-70 active:opacity-90'
-                }`}
-              >
-                {t('form.navigation.continue')}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="btn-glassy px-3 sm:px-4 py-2 sm:py-2.5 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center text-xs sm:text-sm flex-shrink-0"
-              >
-                {isSubmitting ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="truncate">Processing...</span>
-                  </>
-                ) : (
-                  <span className="truncate">Confirm & Pay</span>
-                )}
-              </button>
-            )}
-          </div>
-
-          {/* Progress Bar */}
-          <div className="px-2 sm:px-3 pb-2.5 sm:pb-3 pt-1.5 sm:pt-2">
-            <div className="flex justify-between text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">
-              <span className="font-medium truncate">Step {currentStep} of {steps.length}</span>
-              <span className="font-bold ml-2 flex-shrink-0">{Math.round((currentStep / steps.length) * 100)}%</span>
-            </div>
-            <div className="h-1 sm:h-1.5 bg-gray-300 rounded-full overflow-hidden">
-              <div
-                className="h-full transition-all duration-500"
-                style={{
-                  width: `${(currentStep / steps.length) * 100}%`,
-                  background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
-                }}
-              />
-            </div>
+      {/* Footer - Progress Bar as top border + Navigation Buttons + Price Details - Fixed at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom">
+        {/* Progress Bar as top border */}
+        <div className="relative">
+          <div className="h-1 bg-gray-300">
+            <div
+              className="h-full transition-all duration-500"
+              style={{
+                width: `${(currentStep / steps.length) * 100}%`,
+                background: 'linear-gradient(90deg, #491ae9 0%, #b300c7 33%, #f20075 66%, #ff8400 100%)'
+              }}
+            />
           </div>
         </div>
-      )}
+
+        {/* Navigation Buttons */}
+        <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-t border-gray-200">
+          {currentStep > 1 ? (
+            <button
+              type="button"
+              onClick={prevStep}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+              aria-label="Back"
+            >
+              <Icon icon="heroicons:arrow-left" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+            </button>
+          ) : <div></div>}
+          {currentStep < steps.length ? (
+            <button
+              type="button"
+              onClick={handleContinueClick}
+              className={`px-8 sm:px-12 md:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg ${
+                canProceedFromCurrentStep()
+                  ? 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
+                  : 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
+              }`}
+            >
+              {t('form.navigation.continue')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="px-4 sm:px-6 py-2 sm:py-2.5 font-medium rounded-lg transition-all border backdrop-blur-md shadow-lg bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm flex-shrink-0"
+            >
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="truncate">Processing...</span>
+                </>
+              ) : (
+                <span className="truncate">Confirm & Pay</span>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Notification */}
-      {notification && notification.message && (
+      {notification && (
         <Notification
-          type={notification.type || 'error'}
+          type={notification.type}
           message={notification.message}
           onClose={() => setNotification(null)}
         />

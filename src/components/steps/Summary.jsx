@@ -190,6 +190,23 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </div>
       )}
 
+      {/* Signataires */}
+      {formData.signatoryCount && (
+        <div className="bg-white rounded-2xl p-6 border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+              <Icon icon="heroicons:user-group" className="w-5 h-5 text-gray-600" />
+            </div>
+            Signataires
+          </h3>
+          <div className="p-3 bg-gray-50 rounded-xl">
+            <p className="text-sm font-medium text-gray-900">
+              {formData.signatoryCount} {formData.signatoryCount === 1 ? 'signataire' : 'signataires'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Appointment Details */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -232,10 +249,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           <div className="p-3 bg-gray-50 rounded-xl">
             <p className="text-xs text-gray-600 mb-1">Email</p>
             <p className="text-sm font-medium text-gray-900">{formData.email}</p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-xl">
-            <p className="text-xs text-gray-600 mb-1">Phone</p>
-            <p className="text-sm font-medium text-gray-900">{formData.phone}</p>
           </div>
           <div className="p-3 bg-gray-50 rounded-xl">
             <p className="text-xs text-gray-600 mb-1">Country</p>

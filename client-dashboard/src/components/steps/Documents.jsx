@@ -6,13 +6,22 @@ import {
   trackDocumentsUploadCompleted 
 } from '../../utils/analytics';
 import { formatPrice, convertPrice } from '../../utils/currency';
-import PriceDetails from '../PriceDetails';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useServices } from '../../contexts/ServicesContext';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
 const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
+  const { getServicesByIds, options, loading: servicesLoading } = useServices();
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showOptionInfo, setShowOptionInfo] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const scrollContainerRef = useRef(null);
+  const savedScrollPositionRef = useRef(null);
+  const fileInputRefs = useRef({});
+
   const handleContinue = () => {
     // Track documents upload completed before continuing
     const totalFiles = Object.values(formData.serviceDocuments || {}).reduce(
@@ -31,18 +40,32 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       nextStep();
     }
   };
-  const [services, setServices] = useState([]);
-  const [options, setOptions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showOptionInfo, setShowOptionInfo] = useState(null);
-  const scrollContainerRef = useRef(null);
-  const savedScrollPositionRef = useRef(null);
-  const fileInputRefs = useRef({});
 
   useEffect(() => {
-    fetchSelectedServices();
-    fetchOptions();
-  }, [formData.selectedServices]);
+    if (servicesLoading) {
+      setLoading(true);
+      return;
+    }
+    
+    if (formData.selectedServices && formData.selectedServices.length > 0) {
+      const selectedServices = getServicesByIds(formData.selectedServices);
+      setServices(selectedServices);
+      setLoading(false);
+    } else {
+      setServices([]);
+      setLoading(false);
+    }
+  }, [formData.selectedServices, getServicesByIds, servicesLoading]);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640); // sm breakpoint
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Restaurer la position de scroll après les mises à jour du DOM
   useEffect(() => {
@@ -55,46 +78,6 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       });
     }
   }, [formData.serviceDocuments]);
-
-  const fetchSelectedServices = async () => {
-    if (!formData.selectedServices || formData.selectedServices.length === 0) {
-      setServices([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .in('service_id', formData.selectedServices);
-
-      if (error) throw error;
-
-      setServices(data || []);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      setServices([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchOptions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('options')
-        .select('*')
-        .eq('is_active', true);
-
-      if (error) throw error;
-
-      setOptions(data || []);
-    } catch (error) {
-      console.error('Error fetching options:', error);
-      setOptions([]);
-    }
-  };
 
   const handleFileUpload = async (event, serviceId) => {
     const files = Array.from(event.target.files);
@@ -156,6 +139,17 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     updateFormData({ serviceDocuments });
   };
 
+  // Helper function to truncate file name on mobile
+  const truncateFileName = (fileName) => {
+    if (isMobile && fileName.length > 30) {
+      const extension = fileName.substring(fileName.lastIndexOf('.'));
+      const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+      const truncatedName = nameWithoutExt.substring(0, 30 - extension.length - 3) + '...';
+      return truncatedName + extension;
+    }
+    return fileName;
+  };
+
   const toggleOption = (serviceId, fileIndex, optionId) => {
     const serviceDocuments = { ...formData.serviceDocuments };
     const file = serviceDocuments[serviceId][fileIndex];
@@ -200,12 +194,14 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     <div className="h-full w-full flex flex-col relative">
       {/* Header */}
       <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4">
-        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
-          {t('form.steps.documents.title')}
-        </h2>
-        <p className="text-sm sm:text-base md:text-lg text-gray-600">
-          {t('form.steps.documents.subtitle')}
-        </p>
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
+            {t('form.steps.documents.title')}
+          </h2>
+          <p className="text-xs sm:text-sm text-gray-600">
+            {t('form.steps.documents.subtitle')}
+          </p>
+        </div>
       </div>
 
       {/* Content Area - Scrollable */}
@@ -214,6 +210,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
         className="flex-1 px-3 sm:px-4 md:px-6 pb-32 sm:pb-36 md:pb-6 lg:pb-24 overflow-y-auto overflow-x-hidden" 
         style={{ minHeight: 0 }}
       >
+        <div className="max-w-4xl mx-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
@@ -234,29 +231,21 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                   key={service.service_id}
                   className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200"
                 >
-                  <div className="flex items-start space-x-3 sm:space-x-4 mb-3 sm:mb-4">
-                    <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0 ${service.color || 'bg-gray-100'}`}>
-                      <Icon
-                        icon={service.icon || 'heroicons:document-text'}
-                        className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
-                      <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
-                        {t('form.steps.documents.from')} {formatPrice(service.base_price)} {t('form.steps.documents.perDocument')}
+                  <div className="mb-3 sm:mb-4">
+                    <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
+                      {formatPrice(service.base_price)} {t('form.steps.documents.perDocument')}
+                    </p>
+                    {fileCount > 0 && (
+                      <p className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
+                        {t('form.steps.documents.total')}: {getTotalPrice(service)} ({fileCount} {fileCount > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                       </p>
-                      {fileCount > 0 && (
-                        <p className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
-                          {t('form.steps.documents.total')}: {getTotalPrice(service)} ({fileCount} {fileCount > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
-                        </p>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   <div className="block mb-3 sm:mb-4">
                     <div 
-                      className="border-2 border-dashed border-gray-300 rounded-xl p-4 sm:p-6 text-center cursor-pointer hover:border-black hover:bg-gray-50 transition-all"
+                      className="group bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 sm:p-12 md:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200"
                       onClick={() => {
                         // Sauvegarder la position de scroll avant le clic
                         if (scrollContainerRef.current) {
@@ -270,13 +259,15 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       }}
                     >
                       <Icon
-                        icon="heroicons:cloud-arrow-up"
-                        className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3"
+                        icon="line-md:uploading-loop"
+                        className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-black group-hover:text-blue-600 transition-colors mx-auto mb-4 sm:mb-5"
                       />
-                      <p className="text-xs sm:text-sm text-gray-700 font-medium mb-0.5 sm:mb-1">
-                        {t('form.steps.documents.clickToUpload')}
+                      <p className="text-sm sm:text-base md:text-lg text-black group-hover:text-blue-700 transition-colors font-medium mb-2 sm:mb-3">
+                        Upload a document
                       </p>
-                      <p className="text-[10px] sm:text-xs text-gray-500">{t('form.steps.documents.fileTypes')}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">
+                        Upload the relevant document securely in PDF or Word format. Drag and drop is possible.
+                      </p>
                       <input
                         ref={(el) => {
                           if (el) {
@@ -316,7 +307,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                             <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
                               <Icon icon="heroicons:document" className="w-6 h-6 sm:w-8 sm:h-8 text-gray-600 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                <p className="text-xs sm:text-sm font-medium text-gray-900 truncate" title={file.name}>{truncateFileName(file.name)}</p>
                                 <p className="text-[10px] sm:text-xs text-gray-500">
                                   {(file.size / 1024).toFixed(2)} KB
                                 </p>
@@ -335,39 +326,39 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                           {!isApostilleService && options.length > 0 && (
                             <div className="space-y-1.5 sm:space-y-2 pt-2 sm:pt-3 border-t border-gray-100">
                               {options.map((option) => (
-                                <div key={option.option_id} className="flex items-center justify-between gap-2">
-                                  <label className="flex items-center space-x-1.5 sm:space-x-2 cursor-pointer group flex-1 min-w-0">
-                                    <div className="relative flex-shrink-0">
-                                      <input
-                                        type="checkbox"
-                                        checked={file.selectedOptions?.includes(option.option_id) || false}
-                                        onChange={() => toggleOption(service.service_id, index, option.option_id)}
-                                        className="sr-only peer"
-                                      />
-                                      <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-gray-300 rounded peer-checked:bg-black peer-checked:border-black transition-all flex items-center justify-center">
-                                        {file.selectedOptions?.includes(option.option_id) && (
-                                          <Icon icon="heroicons:check" className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
+                                <div key={option.option_id} className="space-y-1">
+                                  <div className="flex items-start gap-2">
+                                    <label className="flex items-start space-x-1.5 sm:space-x-2 cursor-pointer group flex-1 min-w-0">
+                                      <div className="relative flex-shrink-0 mt-0.5">
+                                        <input
+                                          type="checkbox"
+                                          checked={file.selectedOptions?.includes(option.option_id) || false}
+                                          onChange={() => toggleOption(service.service_id, index, option.option_id)}
+                                          className="sr-only peer"
+                                        />
+                                        <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-blue-300 rounded transition-all flex items-center justify-center peer-checked:bg-blue-600 peer-checked:border-blue-600 group-hover:border-blue-400">
+                                          {file.selectedOptions?.includes(option.option_id) && (
+                                            <Icon icon="heroicons:check" className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex-1 min-w-0 space-y-0.5">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                          <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-black transition-colors break-words">
+                                            {option.name}
+                                          </span>
+                                          <span className="text-gray-500 font-normal text-[10px] sm:text-xs whitespace-nowrap">
+                                            (+{formatPrice(option.additional_price || 0)})
+                                          </span>
+                                        </div>
+                                        {option.description && (
+                                          <p className="text-[10px] sm:text-xs text-gray-600 break-words">
+                                            {option.description}
+                                          </p>
                                         )}
                                       </div>
-                                    </div>
-                                    <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-black transition-colors break-words flex-1 min-w-0">
-                                      <span className="truncate block">{option.name}</span>
-                                      <span className="text-gray-500 font-normal ml-0.5 sm:ml-1 whitespace-nowrap">
-                                        (+{formatPrice(option.additional_price || 0)})
-                                      </span>
-                                    </span>
-                                  </label>
-
-                                  {option.description && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowOptionInfo(option)}
-                                      className="p-1 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
-                                      aria-label="Show option information"
-                                    >
-                                      <Icon icon="heroicons:information-circle" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 hover:text-gray-600" />
-                                    </button>
-                                  )}
+                                    </label>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -377,59 +368,14 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                     </div>
                   )}
 
-                  {files.length === 0 && (
-                    <div className="text-center py-4 sm:py-6 bg-gray-50 rounded-lg sm:rounded-xl">
-                      <Icon
-                        icon="heroicons:document-arrow-up"
-                        className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 mx-auto mb-1.5 sm:mb-2"
-                      />
-                      <p className="text-xs sm:text-sm text-gray-600">{t('form.steps.documents.noDocuments')}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">
-                        {t('form.steps.documents.useUploadArea')}
-                      </p>
-                    </div>
-                  )}
                 </div>
               );
             })}
           </div>
         )}
-      </div>
-
-      {/* Price Details + Fixed Navigation - Desktop only */}
-      <div className="hidden xl:block xl:border-t xl:border-gray-300 bg-[#F3F4F6] flex-shrink-0">
-        <PriceDetails 
-          formData={formData} 
-          isOpen={isPriceDetailsOpen}
-          onToggle={setIsPriceDetailsOpen}
-        />
-        <div className="px-4 py-4 flex justify-between border-t border-gray-300">
-          <button
-            type="button"
-            onClick={prevStep}
-            className="btn-glassy-secondary px-6 md:px-8 py-3 text-gray-700 font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
-          >
-            {t('form.navigation.back')}
-          </button>
-          <button
-            type="button"
-            onClick={handleContinue}
-            className={`btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all text-sm md:text-base ${
-              !formData.selectedServices ||
-              formData.selectedServices.length === 0 ||
-              !formData.serviceDocuments ||
-              !formData.selectedServices.every(serviceId => {
-                const docs = formData.serviceDocuments[serviceId];
-                return docs && docs.length > 0;
-              })
-                ? 'opacity-50 hover:opacity-70 active:opacity-90'
-                : 'hover:scale-105 active:scale-95'
-            }`}
-          >
-            {t('form.navigation.continue')}
-          </button>
         </div>
       </div>
+
 
       {/* Option Info Popup */}
       {showOptionInfo && (
