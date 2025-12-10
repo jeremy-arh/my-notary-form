@@ -1273,7 +1273,11 @@ const NotaryForm = () => {
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="px-4 sm:px-6 py-2 sm:py-2.5 font-medium rounded-lg transition-all border backdrop-blur-md shadow-lg bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm flex-shrink-0"
+              className={`px-8 sm:px-12 md:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg ${
+                isSubmitting
+                  ? 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
+                  : 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
+              } flex items-center justify-center`}
             >
               {isSubmitting ? (
                 <>
@@ -1284,7 +1288,10 @@ const NotaryForm = () => {
                   <span className="truncate">Processing...</span>
                 </>
               ) : (
-                <span className="truncate">Confirm & Pay</span>
+                <>
+                  <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 flex-shrink-0" />
+                  <span className="truncate">Secure Payment</span>
+                </>
               )}
             </button>
           )}
