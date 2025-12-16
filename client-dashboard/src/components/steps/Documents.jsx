@@ -1,10 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
-import { 
-  trackDocumentUploaded as trackAnalyticsDocumentUploaded,
-  trackDocumentsUploadCompleted 
-} from '../../utils/analytics';
 import { formatPrice, convertPrice } from '../../utils/currency';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
@@ -23,16 +19,6 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   const fileInputRefs = useRef({});
 
   const handleContinue = () => {
-    // Track documents upload completed before continuing
-    const totalFiles = Object.values(formData.serviceDocuments || {}).reduce(
-      (sum, docs) => sum + (docs?.length || 0), 0
-    );
-    const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).filter(
-      sId => formData.serviceDocuments[sId]?.length > 0
-    ).length;
-    
-    trackDocumentsUploadCompleted(totalFiles, servicesWithDocs);
-    
     // Call original handleContinueClick or nextStep
     if (handleContinueClick) {
       handleContinueClick();
@@ -122,10 +108,6 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
 
     updateFormData({ serviceDocuments });
 
-    // Track document upload in analytics
-    const totalFiles = Object.values(serviceDocuments).reduce((sum, docs) => sum + (docs?.length || 0), 0);
-    const servicesWithDocs = Object.keys(serviceDocuments).filter(sId => serviceDocuments[sId]?.length > 0).length;
-    trackAnalyticsDocumentUploaded(serviceId, convertedFiles.length, totalFiles, servicesWithDocs);
   };
 
   const removeFile = (serviceId, fileIndex) => {

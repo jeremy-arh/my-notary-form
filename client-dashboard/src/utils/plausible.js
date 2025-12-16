@@ -1,11 +1,8 @@
 /**
- * Plausible Analytics - Funnel Tracking with Ad Blocker Detection & Fallback
+ * Plausible Analytics - Funnel Tracking with Ad Blocker Detection
  * Tracks form conversion funnel for Plausible Analytics
- * Falls back to Supabase analytics if Plausible is blocked by ad blockers
  * Documentation: https://plausible.io/docs/custom-event-goals
  */
-
-import { trackEvent as trackEventSupabase } from './analytics';
 
 // Cache for Plausible availability check
 let plausibleAvailable = null;
@@ -97,40 +94,6 @@ const checkPlausibleAvailability = async () => {
 };
 
 /**
- * Map Plausible event names to Supabase event types
- * @param {string} plausibleEvent - Plausible event name
- * @param {object} props - Event properties
- * @returns {object} Supabase event data
- */
-const mapToSupabaseEvent = (plausibleEvent, props = {}) => {
-  // Map Plausible funnel events to Supabase event types
-  const eventMap = {
-    'form_started': 'form_start',
-    'services_selected': 'service_selected',
-    'documents_uploaded': 'document_uploaded',
-    'signatories_added': 'signatory_added',
-    'personal_info_completed': 'personal_info_completed',
-    'summary_viewed': 'summary_viewed',
-    'payment_initiated': 'payment_initiated',
-    'payment_completed': 'payment_completed',
-    'form_abandoned': 'form_abandoned',
-    'step_navigation': 'step_navigation'
-  };
-
-  const eventType = eventMap[plausibleEvent] || plausibleEvent;
-  const pagePath = window.location.pathname;
-
-  // Convert props to metadata format
-  const metadata = { ...props, plausible_event: plausibleEvent };
-
-  return {
-    eventType,
-    pagePath,
-    metadata
-  };
-};
-
-/**
  * Track custom event using Plausible with automatic fallback to Supabase
  * @param {string} eventName - Event name
  * @param {object} props - Event properties (optional)
@@ -174,11 +137,6 @@ export const trackEvent = async (eventName, props = {}) => {
       // Wait a bit to ensure event is processed
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Also send to Supabase as backup (dual tracking)
-      const supabaseEvent = mapToSupabaseEvent(eventName, props);
-      trackEventSupabase(supabaseEvent.eventType, supabaseEvent.pagePath, supabaseEvent.metadata)
-        .catch(err => console.warn('⚠️ [Plausible] Supabase fallback failed:', err));
-      
       console.log(`✅ [Plausible] Event tracking completed: ${eventName}`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       return;
@@ -193,11 +151,7 @@ export const trackEvent = async (eventName, props = {}) => {
     console.error(`❌ [Plausible] This means Plausible script is not loaded`);
   }
 
-  // Fallback to Supabase if Plausible is blocked or unavailable
-  console.log(`📊 [Plausible] Using Supabase fallback for event: ${eventName}`);
-  const supabaseEvent = mapToSupabaseEvent(eventName, props);
-  trackEventSupabase(supabaseEvent.eventType, supabaseEvent.pagePath, supabaseEvent.metadata)
-    .catch(err => console.error('❌ [Plausible] Supabase fallback error:', err));
+  console.log(`⚠️ [Plausible] Event not sent because Plausible is unavailable: ${eventName}`);
   
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 };

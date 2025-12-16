@@ -20,6 +20,7 @@ import { openCrisp } from '../utils/crisp';
 import { useServices } from '../contexts/ServicesContext';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
+import DeliveryMethod from './steps/DeliveryMethod';
 import PersonalInfo from './steps/PersonalInfo';
 import Signatories from './steps/Signatories';
 import Summary from './steps/Summary';
@@ -74,6 +75,9 @@ const NotaryForm = () => {
 
     timezone: 'UTC-5',
 
+    // Delivery method
+    deliveryMethod: null,
+
     // Personal Info
     firstName: '',
     lastName: '',
@@ -120,9 +124,9 @@ const NotaryForm = () => {
         }
       });
 
-      // Clean up completedSteps - remove any step IDs that don't exist (steps are 1-5, indices 0-4)
+      // Clean up completedSteps - remove any step IDs that don't exist (steps are 1-6, indices 0-5)
       if (Array.isArray(completedSteps)) {
-        const validStepIndices = [0, 1, 2, 3, 4]; // Steps 1-5 (indices 0-4)
+        const validStepIndices = [0, 1, 2, 3, 4, 5]; // Steps 1-6 (indices 0-5)
         const cleanedSteps = completedSteps.filter(stepIndex => 
           validStepIndices.includes(stepIndex) && Number.isInteger(stepIndex)
         );
@@ -165,9 +169,10 @@ const NotaryForm = () => {
   const steps = [
     { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
     { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 3, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
-    { id: 4, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' },
-    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
+    { id: 3, name: 'Delivery method', icon: 'heroicons:envelope', path: '/form/delivery' },
+    { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
+    { id: 5, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' },
+    { id: 6, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
 
   // Function to get validation error message for current step
@@ -177,9 +182,11 @@ const NotaryForm = () => {
         return 'Please select at least one service';
       case 2: // Upload Documents
         return 'Please upload at least one document for each selected service';
-      case 3: // Personal informations
+      case 3: // Delivery method
+        return 'Please select a delivery method';
+      case 4: // Personal informations
         return 'Please complete all required personal information fields';
-      case 4: // Add Signatories
+      case 5: // Add Signatories
         return 'Please add at least one signatory';
       default:
         return 'Please complete all required fields';
@@ -202,13 +209,17 @@ const NotaryForm = () => {
           return docs && docs.length > 0;
         });
 
-      case 3: // Personal informations
+      case 3: // Delivery method
+        // Always valid as long as a method is selected
+        return !!formData.deliveryMethod;
+
+      case 4: // Personal informations
         if (!formData.firstName?.trim() || !formData.lastName?.trim()) return false;
         if (!isAuthenticated && (!formData.email?.trim() || !formData.password?.trim())) return false;
         if (!formData.address?.trim()) return false;
         return true;
 
-      case 4: // Add Signatories
+      case 5: // Add Signatories
         // Check that there is at least one signatory
         if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
           return false;
@@ -239,13 +250,10 @@ const NotaryForm = () => {
           return true;
         });
 
-      case 5: // Summary
+      case 6: // Summary
 
         // Check all required fields are filled
         return requiredFields.every(field => field && field.trim() !== '');
-
-      case 4: // Summary
-        return true; // No validation needed for summary
 
       default:
         return true;
@@ -275,6 +283,7 @@ const NotaryForm = () => {
     const stepNameMap = {
       'Choose Services': 'service_selection',
       'Upload Documents': 'document_upload',
+      'Delivery method': 'delivery_method',
       'Your personal informations': 'personal_info',
       'Add Signatories': 'signatories',
       'Summary': 'review_summary'
@@ -303,15 +312,18 @@ const NotaryForm = () => {
       // Determine the best route based on completed steps
       let targetPath = '/form/choose-services';
       
-      if (completedSteps.length >= 4) {
+      if (completedSteps.length >= steps.length - 1) {
         // User has completed all steps, redirect to summary (likely returning from payment)
         targetPath = '/form/summary';
-      } else if (completedSteps.length >= 3) {
-        // User has completed steps 1-3, redirect to signatories
+      } else if (completedSteps.length >= 4) {
+        // User has completed steps 1-4, redirect to signatories (step 5)
         targetPath = '/form/signatories';
-      } else if (completedSteps.length >= 2) {
-        // User has completed steps 1-2, redirect to personal-info
+      } else if (completedSteps.length >= 3) {
+        // User has completed steps 1-3, redirect to personal-info (step 4)
         targetPath = '/form/personal-info';
+      } else if (completedSteps.length >= 2) {
+        // User has completed steps 1-2, redirect to delivery (step 3)
+        targetPath = '/form/delivery';
       } else if (completedSteps.length >= 1) {
         // User has completed step 1, redirect to documents
         targetPath = '/form/documents';
@@ -354,11 +366,11 @@ const NotaryForm = () => {
     // Check if user is trying to access a step they haven't completed yet
     const requestedStep = getCurrentStepFromPath();
 
-    // Special case: If user is accessing Summary (step 5) and has completed all previous steps,
+    // Special case: If user is accessing Summary (last step) and has completed all previous steps,
     // allow access even if Summary itself isn't marked as completed
     // This handles the case when returning from Stripe payment
-    const isSummaryStep = requestedStep === 5;
-    const hasCompletedAllPreviousSteps = completedSteps.length >= 4; // Steps 1-4 completed
+    const isSummaryStep = requestedStep === steps.length;
+    const hasCompletedAllPreviousSteps = completedSteps.length >= steps.length - 1; // All previous steps completed
     
     // Allow access if:
     // 1. First step (always accessible)
@@ -431,7 +443,7 @@ const NotaryForm = () => {
       // If trying to access Summary, always allow it (user likely coming back from payment)
       if (isSummaryStep) {
         // Mark all previous steps as completed to allow access
-        const stepsToComplete = [1, 2, 3, 4];
+        const stepsToComplete = steps.filter(s => s.id !== steps.length).map(s => s.id);
         const updatedCompletedSteps = [...new Set([...completedSteps, ...stepsToComplete.map(s => s - 1)])].sort();
         setCompletedSteps(updatedCompletedSteps);
         return; // Allow access to Summary
@@ -884,8 +896,8 @@ const NotaryForm = () => {
       if (nextStepData) {
         navigate(nextStepData.path);
         
-        // Track summary viewed when reaching step 5
-        if (nextStepData.id === 5) {
+        // Track summary viewed when reaching last step
+        if (nextStepData.id === steps.length) {
           const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
             (sum, docs) => sum + (docs?.length || 0), 0
           );
@@ -1031,6 +1043,9 @@ const NotaryForm = () => {
       const signatoriesCount = formData.signatories?.length || 0;
       const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
       const additionalSignatoriesCost = additionalSignatoriesCount * 45;
+
+      // Delivery postal cost (49.95€) if selected
+      const deliveryPostalCostEUR = formData.deliveryMethod === 'postal' ? 49.95 : 0;
       
       const submissionData = {
         ...formData,
@@ -1042,6 +1057,9 @@ const NotaryForm = () => {
         signatoriesCount: signatoriesCount,
         additionalSignatoriesCount: additionalSignatoriesCount,
         additionalSignatoriesCost: additionalSignatoriesCost, // In EUR
+        // Delivery method & cost (EUR)
+        deliveryMethod: formData.deliveryMethod,
+        deliveryPostalCostEUR,
       };
 
       // Call Supabase Edge Function to create Stripe checkout session
@@ -1342,6 +1360,19 @@ const NotaryForm = () => {
                   getValidationErrorMessage={getValidationErrorMessage}
                   isPriceDetailsOpen={isPriceDetailsOpen}
                   setIsPriceDetailsOpen={setIsPriceDetailsOpen}
+                />
+              }
+            />
+            <Route
+              path="delivery"
+              element={
+                <DeliveryMethod
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
                 />
               }
             />
