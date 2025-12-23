@@ -95,6 +95,9 @@ const NotaryForm = () => {
     // Currency from URL parameter or localStorage
     currency: getInitialCurrency(),
 
+    // GCLID from URL parameter for Google Ads tracking
+    gclid: null,
+
     // Additional notes
     notes: ''
   });
@@ -559,6 +562,110 @@ const NotaryForm = () => {
         }
       } catch (error) {
         console.error('❌ [CURRENCY] Erreur lors du chargement depuis localStorage:', error);
+      }
+    }
+  }, [searchParams, setFormData]);
+
+  // Récupérer le GCLID depuis l'URL ou le cookie _gcl_aw créé par Google Ads
+  // Le cookie _gcl_aw est créé automatiquement par Google Ads et partagé entre domaines
+  useEffect(() => {
+    // Fonction pour récupérer un cookie par son nom
+    const getCookie = (name) => {
+      try {
+        const nameEQ = name + '=';
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          let cookie = cookies[i];
+          while (cookie.charAt(0) === ' ') cookie = cookie.substring(1, cookie.length);
+          if (cookie.indexOf(nameEQ) === 0) {
+            return cookie.substring(nameEQ.length, cookie.length);
+          }
+        }
+      } catch (error) {
+        console.error('❌ [GCLID] Erreur lors de la lecture du cookie:', error);
+      }
+      return null;
+    };
+    
+    // Fonction pour extraire le GCLID du cookie _gcl_aw
+    // Le cookie _gcl_aw est créé par Google Ads et contient le GCLID
+    // Format possible: "GCLID.xxxxx.yyyyy" où xxxxx est généralement le GCLID
+    // Ou directement le GCLID selon la version de Google Ads
+    const extractGclidFromCookie = (cookieValue) => {
+      if (!cookieValue) return null;
+      
+      // Si le cookie commence par "GCLID.", extraire la partie qui suit
+      // Format: GCLID.xxxxx.yyyyy
+      if (cookieValue.startsWith('GCLID.')) {
+        const parts = cookieValue.split('.');
+        // Le GCLID est généralement la deuxième partie (index 1)
+        // Mais peut aussi être dans une autre partie si le format change
+        if (parts.length > 1) {
+          // Chercher la partie la plus longue qui ressemble à un GCLID
+          // Un GCLID Google Ads fait généralement 20+ caractères alphanumériques
+          for (let i = 1; i < parts.length; i++) {
+            if (parts[i].length >= 20 && /^[A-Za-z0-9_-]+$/.test(parts[i])) {
+              return parts[i];
+            }
+          }
+          // Si aucune partie ne correspond, retourner la deuxième partie par défaut
+          return parts[1];
+        }
+      }
+      
+      // Si c'est directement un GCLID (longue chaîne alphanumérique)
+      if (cookieValue.length >= 20 && /^[A-Za-z0-9_-]+$/.test(cookieValue)) {
+        return cookieValue;
+      }
+      
+      // Sinon retourner la valeur telle quelle (Google Ads gère le format)
+      return cookieValue;
+    };
+    
+    // Priorité 1: GCLID depuis l'URL (?gclid=xxx)
+    const gclidParam = searchParams.get('gclid');
+    
+    // Priorité 2: GCLID depuis le cookie _gcl_aw créé par Google Ads
+    const gclAwCookie = getCookie('_gcl_aw');
+    const gclidFromCookie = gclAwCookie ? extractGclidFromCookie(gclAwCookie) : null;
+    
+    // Utiliser le GCLID de l'URL en priorité, sinon celui du cookie
+    const gclid = gclidParam || gclidFromCookie;
+    
+    if (gclid) {
+      const source = gclidParam ? 'URL' : 'cookie _gcl_aw';
+      console.log(`🔗 [GCLID] GCLID détecté depuis ${source}:`, gclid);
+      
+      // Sauvegarder dans localStorage pour persistance (au cas où)
+      try {
+        localStorage.setItem('notaryGclid', gclid);
+        console.log('🔗 [GCLID] GCLID sauvegardé dans localStorage:', gclid);
+      } catch (error) {
+        console.error('❌ [GCLID] Erreur lors de la sauvegarde dans localStorage:', error);
+      }
+      
+      setFormData(prev => {
+        // Ne mettre à jour que si le GCLID a changé
+        if (prev.gclid !== gclid) {
+          return { ...prev, gclid: gclid };
+        }
+        return prev;
+      });
+    } else {
+      // Si pas de GCLID dans l'URL ni dans le cookie, vérifier localStorage (fallback)
+      try {
+        const savedGclid = localStorage.getItem('notaryGclid');
+        if (savedGclid) {
+          console.log('🔗 [GCLID] GCLID chargé depuis localStorage (fallback):', savedGclid);
+          setFormData(prev => {
+            if (prev.gclid !== savedGclid) {
+              return { ...prev, gclid: savedGclid };
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error('❌ [GCLID] Erreur lors du chargement depuis localStorage:', error);
       }
     }
   }, [searchParams, setFormData]);
