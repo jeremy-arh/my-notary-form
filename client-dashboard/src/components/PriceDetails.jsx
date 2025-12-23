@@ -76,7 +76,7 @@ const PriceDetails = ({ formData }) => {
       if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
         pricesToConvert.add(45);
       }
-
+      
       // Add delivery postal cost if selected
       if (formData.deliveryMethod === 'postal') {
         pricesToConvert.add(49.95);

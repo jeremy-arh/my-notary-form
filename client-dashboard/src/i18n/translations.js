@@ -17,7 +17,8 @@ export const translations = {
           upload: 'Upload',
           remove: 'Remove',
           selectFiles: 'Select Files',
-          clickToUpload: 'Click to upload or drag and drop',
+          clickToUpload: 'Click here or drag & drop your document',
+          uploadDescription: 'Upload your document securely in PDF, Word, or image format',
           fileTypes: 'PDF, PNG, JPG, or other documents',
           filesSecure: 'Your files are secure and encrypted',
           securityTitle: 'File Security & Encryption',
@@ -66,6 +67,8 @@ export const translations = {
           validationPasswordMin: 'Password must be at least 6 characters',
           validationAddress: 'Address is required',
           validationCountry: 'Country is required',
+          validationPhone: 'Phone number is required',
+          validationPhoneInvalid: 'Please enter a valid phone number',
           hidePassword: 'Hide password',
           showPassword: 'Show password',
         },
@@ -126,6 +129,9 @@ export const translations = {
         additionalSignatories: 'Additional Signatories',
         delivery: 'Physical delivery (DHL Express)',
       },
+      payment: {
+        processing: 'Please wait, processing your payment',
+      },
     },
   },
   fr: {
@@ -144,7 +150,8 @@ export const translations = {
           upload: 'Télécharger',
           remove: 'Supprimer',
           selectFiles: 'Sélectionner les Fichiers',
-          clickToUpload: 'Cliquez pour télécharger ou glissez-déposez',
+          clickToUpload: 'Cliquez ici ou glissez-déposez votre document',
+          uploadDescription: 'Téléchargez votre document en toute sécurité au format PDF, Word ou image',
           fileTypes: 'PDF, PNG, JPG ou autres documents',
           filesSecure: 'Vos fichiers sont sécurisés et cryptés',
           securityTitle: 'Sécurité et Chiffrement des Fichiers',
@@ -193,6 +200,8 @@ export const translations = {
           validationPasswordMin: 'Le mot de passe doit contenir au moins 6 caractères',
           validationAddress: 'L\'adresse est requise',
           validationCountry: 'Le pays est obligatoire',
+          validationPhone: 'Le numéro de téléphone est requis',
+          validationPhoneInvalid: 'Veuillez entrer un numéro de téléphone valide',
           hidePassword: 'Masquer le mot de passe',
           showPassword: 'Afficher le mot de passe',
         },
@@ -251,6 +260,9 @@ export const translations = {
         documentPlural: 'documents',
         additionalSignatories: 'Signataires supplémentaires',
         delivery: 'Livraison physique (DHL Express)',
+      },
+      payment: {
+        processing: 'Veuillez patienter, traitement de votre paiement en cours',
       },
     },
   },
@@ -374,6 +386,9 @@ export const translations = {
         documentPlural: 'documentos',
         additionalSignatories: 'Firmantes Adicionales',
       },
+      payment: {
+        processing: 'Por favor espere, procesando su pago',
+      },
     },
   },
   de: {
@@ -483,6 +498,9 @@ export const translations = {
         document: 'Dokument',
         documentPlural: 'Dokumente',
         additionalSignatories: 'Zusätzliche Unterzeichner',
+      },
+      payment: {
+        processing: 'Bitte warten Sie, Ihre Zahlung wird verarbeitet',
       },
     },
   },
@@ -595,6 +613,9 @@ export const translations = {
         documentPlural: 'documenti',
         additionalSignatories: 'Firmatari Aggiuntivi',
       },
+      payment: {
+        processing: 'Attendere prego, elaborazione del pagamento in corso',
+      },
     },
   },
   pt: {
@@ -705,6 +726,9 @@ export const translations = {
         document: 'documento',
         documentPlural: 'documentos',
         additionalSignatories: 'Signatários Adicionais',
+      },
+      payment: {
+        processing: 'Por favor aguarde, processando seu pagamento',
       },
     },
   },

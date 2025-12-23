@@ -38,6 +38,8 @@ const NotaryForm = () => {
   const [notification, setNotification] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [countdown, setCountdown] = useState(5);
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const { t } = useTranslation();
@@ -872,8 +874,115 @@ const NotaryForm = () => {
     }
   };
 
-  const handleContinueClick = () => {
+  const handleContinueClick = async () => {
     if (canProceedFromCurrentStep()) {
+      // Update user information at Personal Info step if authenticated
+      if (currentStep === 4 && isAuthenticated) {
+        setIsCreatingUser(true);
+        try {
+          console.log('👤 [NOTARY-FORM] Updating authenticated user information');
+          
+          // Get current user
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          
+          if (userError || !user) {
+            console.error('❌ [NOTARY-FORM] Error getting user:', userError);
+            setIsCreatingUser(false);
+            return;
+          }
+          
+          // Update email if it has changed
+          if (formData.email && formData.email !== user.email) {
+            console.log('📧 [NOTARY-FORM] Updating email from', user.email, 'to', formData.email);
+            
+            const { error: updateEmailError } = await supabase.auth.updateUser({
+              email: formData.email
+            });
+            
+            if (updateEmailError) {
+              console.error('❌ [NOTARY-FORM] Error updating email:', updateEmailError);
+              setNotification({
+                type: 'error',
+                message: updateEmailError.message || 'Error updating email. Please try again.'
+              });
+              setIsCreatingUser(false);
+              return;
+            } else {
+              console.log('✅ [NOTARY-FORM] Email updated successfully');
+            }
+          }
+          
+          // Update client record
+          try {
+            const { data: existingClient, error: fetchError } = await supabase
+              .from('client')
+              .select('id')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            
+            if (existingClient) {
+              // Update existing client record
+              const { data: updatedClient, error: updateClientError } = await supabase
+                .from('client')
+                .update({
+                  first_name: formData.firstName,
+                  last_name: formData.lastName,
+                  email: formData.email,
+                  phone: formData.phone || '',
+                  address: formData.address || '',
+                  city: formData.city || '',
+                  postal_code: formData.postalCode || '',
+                  country: formData.country || '',
+                })
+                .eq('user_id', user.id)
+                .select('id')
+                .single();
+              
+              if (updateClientError) {
+                console.error('❌ [NOTARY-FORM] Error updating client record:', updateClientError);
+              } else {
+                console.log('✅ [NOTARY-FORM] Client record updated:', updatedClient.id);
+              }
+            } else {
+              // Create client record if it doesn't exist
+              const { data: newClient, error: createClientError } = await supabase
+                .from('client')
+                .insert({
+                  user_id: user.id,
+                  first_name: formData.firstName,
+                  last_name: formData.lastName,
+                  email: formData.email,
+                  phone: formData.phone || '',
+                  address: formData.address || '',
+                  city: formData.city || '',
+                  postal_code: formData.postalCode || '',
+                  country: formData.country || '',
+                })
+                .select('id')
+                .single();
+              
+              if (createClientError) {
+                console.error('❌ [NOTARY-FORM] Error creating client record:', createClientError);
+              } else {
+                console.log('✅ [NOTARY-FORM] Client record created:', newClient.id);
+              }
+            }
+          } catch (clientErr) {
+            console.error('❌ [NOTARY-FORM] Error with client record:', clientErr);
+          }
+        } catch (error) {
+          console.error('❌ [NOTARY-FORM] Unexpected error updating user:', error);
+          setNotification({
+            type: 'error',
+            message: 'An error occurred while updating your information. Please try again.'
+          });
+          setIsCreatingUser(false);
+          return;
+        } finally {
+          setIsCreatingUser(false);
+        }
+      }
+      
       nextStep();
     } else {
       setNotification({
@@ -956,6 +1065,26 @@ const NotaryForm = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [currentStep, completedSteps]);
+
+  // Gérer le compteur de 5 secondes quand isSubmitting est true
+  useEffect(() => {
+    if (isSubmitting) {
+      setCountdown(5);
+      const interval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      setCountdown(5);
+    }
+  }, [isSubmitting]);
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -1450,13 +1579,24 @@ const NotaryForm = () => {
             <button
               type="button"
               onClick={handleContinueClick}
+              disabled={isCreatingUser}
               className={`px-8 sm:px-12 md:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg ${
-                canProceedFromCurrentStep()
+                canProceedFromCurrentStep() && !isCreatingUser
                   ? 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
                   : 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
               }`}
             >
-              {t('form.navigation.continue')}
+              {isCreatingUser ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating account...
+                </>
+              ) : (
+                t('form.navigation.continue')
+              )}
             </button>
           ) : (
             <button
@@ -1475,7 +1615,9 @@ const NotaryForm = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="truncate">Processing...</span>
+                  <span className="truncate">
+                    {t('form.payment.processing') || 'Please wait, processing your payment...'} ({countdown}s)
+                  </span>
                 </>
               ) : (
                 <>

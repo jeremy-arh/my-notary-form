@@ -202,16 +202,17 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             <p className="text-gray-600">{t('form.steps.documents.noServicesSelected')}</p>
           </div>
         ) : (
-          <div className="space-y-3 sm:space-y-4">
+          <div className={`space-y-3 sm:space-y-4 ${services.length === 1 && isMobile ? 'flex flex-col h-full' : ''}`}>
             {services.map((service) => {
               const fileCount = getFileCount(service.service_id);
               const files = formData.serviceDocuments?.[service.service_id] || [];
               const isApostilleService = service.service_id === APOSTILLE_SERVICE_ID;
+              const shouldTakeFullHeight = services.length === 1 && isMobile && files.length === 0;
 
               return (
                 <div
                   key={service.service_id}
-                  className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200"
+                  className={`bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}
                 >
                   <div className="mb-3 sm:mb-4">
                     <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
@@ -225,9 +226,9 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                     )}
                   </div>
 
-                  <div className="block mb-3 sm:mb-4">
+                  <div className={`block mb-3 sm:mb-4 ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}>
                     <div 
-                      className="group bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 sm:p-12 md:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200"
+                      className={`group bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 sm:p-12 md:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200 ${shouldTakeFullHeight ? 'flex-1 flex flex-col justify-center min-h-[60vh]' : ''}`}
                       onClick={() => {
                         // Sauvegarder la position de scroll avant le clic
                         if (scrollContainerRef.current) {
@@ -242,13 +243,13 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                     >
                       <Icon
                         icon="line-md:uploading-loop"
-                        className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-black group-hover:text-blue-600 transition-colors mx-auto mb-4 sm:mb-5"
+                        className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-black group-hover:text-blue-600 transition-colors mx-auto mb-4 sm:mb-5 ${shouldTakeFullHeight ? 'mb-6' : ''}`}
                       />
-                      <p className="text-sm sm:text-base md:text-lg text-black group-hover:text-blue-700 transition-colors font-medium mb-2 sm:mb-3">
-                        Upload a document
+                      <p className={`text-sm sm:text-base md:text-lg text-black group-hover:text-blue-700 transition-colors font-medium mb-2 sm:mb-3 ${shouldTakeFullHeight ? 'text-base mb-3' : ''}`}>
+                        {t('form.steps.documents.clickToUpload') || 'Click here or drag & drop your document'}
                       </p>
-                      <p className="text-xs sm:text-sm text-gray-600">
-                        Upload the relevant document securely in PDF or Word format. Drag and drop is possible.
+                      <p className={`text-xs sm:text-sm text-gray-600 ${shouldTakeFullHeight ? 'text-sm' : ''}`}>
+                        {t('form.steps.documents.uploadDescription') || 'Upload your document securely in PDF, Word, or image format'}
                       </p>
                       <input
                         ref={(el) => {

@@ -70,13 +70,27 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       return;
     }
 
+    // If user is authenticated, check if email is their own
+    if (isAuthenticated) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && user.email === email) {
+          // User is editing their own email, that's fine
+          setEmailExists(false);
+          return;
+        }
+      } catch (error) {
+        console.error('Error getting user:', error);
+      }
+    }
+
     try {
       // Check if email exists in client table
       const { data, error } = await supabase
         .from('client')
         .select('id')
         .eq('email', email)
-        .single();
+        .maybeSingle();
 
       if (data && !error) {
         setEmailExists(true);
@@ -99,14 +113,15 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       newErrors.lastName = t('form.steps.personalInfo.validationLastName');
     }
 
-    // Only validate email and password if user is not authenticated
-    if (!isAuthenticated) {
-      if (!formData.email?.trim()) {
-        newErrors.email = t('form.steps.personalInfo.validationEmail');
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        newErrors.email = t('form.steps.personalInfo.validationEmailInvalid');
-      }
+    // Always validate email (even if authenticated, user can change it)
+    if (!formData.email?.trim()) {
+      newErrors.email = t('form.steps.personalInfo.validationEmail');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = t('form.steps.personalInfo.validationEmailInvalid');
+    }
 
+    // Only validate password if user is not authenticated
+    if (!isAuthenticated) {
       // Password validation
       if (!formData.password?.trim()) {
         newErrors.password = t('form.steps.personalInfo.validationPassword');
@@ -394,12 +409,17 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
   }, [formData.phone]);
 
   const handleNext = () => {
-    if (emailExists) {
-      // Don't allow submission if email exists
+    if (emailExists && !isAuthenticated) {
+      // Don't allow submission if email exists and user is not authenticated
       return;
     }
     if (validate()) {
-      nextStep();
+      // Call original handleContinueClick or nextStep
+      if (handleContinueClick) {
+        handleContinueClick();
+      } else {
+        nextStep();
+      }
     } else if (handleContinueClick) {
       handleContinueClick();
     }
@@ -469,11 +489,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           </div>
         </div>
 
-        {/* Email & Password - Only show for non-authenticated users */}
-        {!isAuthenticated && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
-            {/* Email */}
-            <div>
+        {/* Email - Always show, editable even if authenticated */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
+          {/* Email */}
+          <div>
               <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
                 <Icon icon="heroicons:envelope" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
                 <span>{t('form.steps.personalInfo.email')} <span className="text-red-500 ml-1">*</span></span>
@@ -501,9 +520,10 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                   <span className="break-words">{t('form.steps.personalInfo.emailExists')}</span>
                 </p>
               )}
-            </div>
+          </div>
 
-            {/* Password */}
+          {/* Password - Only show for non-authenticated users */}
+          {!isAuthenticated && (
             <div>
               <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
                 <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
@@ -539,8 +559,8 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 </p>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Phone */}
         <div>
