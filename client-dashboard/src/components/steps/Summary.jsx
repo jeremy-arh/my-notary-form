@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { trackBeginCheckout } from '../../utils/gtm';
-import { trackPaymentInitiated as trackAnalyticsPaymentInitiated } from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import PriceDetails from '../PriceDetails';
+
+const DELIVERY_POSTAL_PRICE_EUR = 49.95;
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const { t, language } = useTranslation();
@@ -94,6 +95,18 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       });
     }
 
+    // Add delivery method cost if postal delivery selected
+    if (formData.deliveryMethod === 'postal') {
+      total += DELIVERY_POSTAL_PRICE_EUR;
+      items.push({
+        item_id: 'delivery_postal',
+        item_name: 'Physical Delivery (DHL Express)',
+        item_category: 'Additional Service',
+        price: DELIVERY_POSTAL_PRICE_EUR,
+        quantity: 1
+      });
+    }
+
     // Add cost for additional signatories (45€ per additional signatory, first one is free)
     if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
       const additionalSignatories = formData.signatories.length - 1;
@@ -123,8 +136,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       if (!loading && Object.keys(servicesMap).length > 0) {
         const checkoutData = calculateCheckoutData();
         trackBeginCheckout(checkoutData);
-        // Track analytics payment initiated
-        trackAnalyticsPaymentInitiated(checkoutData.value, checkoutData.currency);
       }
       
       await handleSubmit();
@@ -268,6 +279,40 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               <p className="text-[10px] sm:text-xs lg:text-sm text-gray-900 break-words">{formData.notes}</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Delivery Method Summary */}
+      <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
+        <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">
+          {t('form.steps.summary.delivery') || 'Delivery'}
+        </h3>
+        <div className="flex items-start space-x-3 sm:space-x-4">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
+              <Icon
+                icon={formData.deliveryMethod === 'postal' ? 'heroicons-envelope' : 'heroicons-envelope-open'}
+                className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700"
+              />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 space-y-0.5">
+            <p className="text-xs sm:text-sm font-medium text-gray-900">
+              {formData.deliveryMethod === 'postal'
+                ? t('form.steps.delivery.postTitle')
+                : t('form.steps.delivery.emailTitle')}
+            </p>
+            <p className="text-[10px] sm:text-xs text-gray-600">
+              {formData.deliveryMethod === 'postal'
+                ? t('form.steps.delivery.postDescription')
+                : t('form.steps.delivery.emailDescription')}
+            </p>
+            {formData.deliveryMethod === 'postal' && (
+              <p className="text-[10px] sm:text-xs font-semibold text-gray-900 mt-1">
+                {t('form.steps.summary.deliveryPrice') || 'Delivery cost'}: {formatPrice(DELIVERY_POSTAL_PRICE_EUR)}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

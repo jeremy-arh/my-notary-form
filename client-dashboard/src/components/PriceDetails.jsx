@@ -77,6 +77,11 @@ const PriceDetails = ({ formData }) => {
         pricesToConvert.add(45);
       }
       
+      // Add delivery postal cost if selected
+      if (formData.deliveryMethod === 'postal') {
+        pricesToConvert.add(49.95);
+      }
+      
       // Convert all prices
       const conversions = await Promise.all(
         Array.from(pricesToConvert).map(async (price) => {
@@ -135,6 +140,11 @@ const PriceDetails = ({ formData }) => {
     if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
       const additionalSignatories = formData.signatories.length - 1;
       total += additionalSignatories * 45;
+    }
+
+    // Add delivery postal cost if selected
+    if (formData.deliveryMethod === 'postal') {
+      total += 49.95;
     }
     
     return total;
@@ -230,6 +240,18 @@ const PriceDetails = ({ formData }) => {
                 </span>
                 <span className="text-xs sm:text-sm font-semibold text-gray-900">
                   {formatPrice((formData.signatories.length - 1) * 45)}
+                </span>
+              </div>
+            )}
+
+            {/* Delivery postal cost */}
+            {formData.deliveryMethod === 'postal' && (
+              <div className="flex justify-between items-center pt-2 sm:pt-3 border-t border-gray-200">
+                <span className="text-xs sm:text-sm text-gray-600">
+                  {t('form.priceDetails.delivery') || 'Physical delivery (DHL Express)'}
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-gray-900">
+                  {formatPrice(49.95)}
                 </span>
               </div>
             )}

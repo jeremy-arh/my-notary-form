@@ -93,18 +93,6 @@ export const trackDocumentUploaded = (documentsCount, servicesWithDocs) => {
 };
 
 /**
- * Track appointment booking
- * @param {object} appointmentData - Appointment data
- */
-export const trackAppointmentBooked = (appointmentData) => {
-  pushGTMEvent('appointment_booked', {
-    appointment_date: appointmentData.date,
-    appointment_time: appointmentData.time,
-    timezone: appointmentData.timezone
-  });
-};
-
-/**
  * Track signatories added
  * @param {number} signatoriesCount - Number of signatories
  */

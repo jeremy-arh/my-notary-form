@@ -1,9 +1,5 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
-import { 
-  trackServiceSelected as trackAnalyticsServiceSelected,
-  trackServicesSelectionCompleted 
-} from '../../utils/analytics';
 import { formatPrice } from '../../utils/currency';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
@@ -13,11 +9,6 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
   const { services, loading } = useServices();
 
   const handleContinue = () => {
-    // Track services selection completed before continuing
-    if (formData.selectedServices && formData.selectedServices.length > 0) {
-      trackServicesSelectionCompleted(formData.selectedServices);
-    }
-    
     // Call original handleContinueClick or nextStep
     if (handleContinueClick) {
       handleContinueClick();
@@ -45,16 +36,6 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
       serviceDocuments: updatedServiceDocuments,
     });
 
-    // Track service selection in analytics
-    if (isAdding) {
-      const service = services.find(s => s.service_id === serviceId);
-      trackAnalyticsServiceSelected(
-        serviceId,
-        service?.name || serviceId,
-        updatedServices.length,
-        updatedServices
-      );
-    }
   };
 
   return (

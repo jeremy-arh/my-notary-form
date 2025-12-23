@@ -336,7 +336,8 @@ serve(async (req) => {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
-        phone: formData.phone,
+        // Ensure phone is never null to satisfy NOT NULL constraint in database
+        phone: formData.phone || '',
         address: formData.address,
         city: formData.city,
         postal_code: formData.postalCode,
@@ -553,6 +554,39 @@ serve(async (req) => {
       }
     } else {
       console.log(`⚠️ [OPTIONS] No options selected`)
+    }
+
+    // Process delivery method cost (physical postal delivery)
+    const deliveryMethod = formData.deliveryMethod || 'email'
+    const deliveryPostalCostEUR = formData.deliveryPostalCostEUR || 0
+
+    console.log('🔍 [DELIVERY] deliveryMethod:', deliveryMethod)
+    console.log('🔍 [DELIVERY] deliveryPostalCostEUR:', deliveryPostalCostEUR)
+
+    if (deliveryMethod === 'postal' && deliveryPostalCostEUR > 0) {
+      console.log(`📦 [DELIVERY] Processing postal delivery at ${deliveryPostalCostEUR} EUR`)
+
+      const deliveryCostInCurrency = await convertCurrency(deliveryPostalCostEUR, currency)
+      const unitAmountDelivery = currency === 'JPY'
+        ? Math.round(deliveryCostInCurrency)
+        : Math.round(deliveryCostInCurrency * 100)
+
+      const deliveryLineItem = {
+        price_data: {
+          currency: stripeCurrency,
+          product_data: {
+            name: 'Physical Delivery (DHL Express)',
+            description: `Postal delivery via DHL Express (${deliveryPostalCostEUR} EUR)`,
+          },
+          unit_amount: unitAmountDelivery,
+        },
+        quantity: 1,
+      }
+
+      lineItems.push(deliveryLineItem)
+      console.log(`✅ [DELIVERY] Added postal delivery = ${currency}${deliveryCostInCurrency.toFixed(currency === 'JPY' ? 0 : 2)} (${deliveryPostalCostEUR} EUR converted)`)
+    } else {
+      console.log('ℹ️ [DELIVERY] No paid postal delivery selected')
     }
 
     // Process additional signatories cost (45€ per additional signatory, first one is free)

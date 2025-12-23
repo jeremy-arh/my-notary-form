@@ -1,11 +1,8 @@
 /**
- * Plausible Analytics - Funnel Tracking with Ad Blocker Detection & Fallback
+ * Plausible Analytics - Funnel Tracking with Ad Blocker Detection
  * Tracks form conversion funnel for Plausible Analytics
- * Falls back to Supabase analytics if Plausible is blocked by ad blockers
  * Documentation: https://plausible.io/docs/custom-event-goals
  */
-
-import { trackEvent as trackEventSupabase } from './analytics';
 
 // Cache for Plausible availability check
 let plausibleAvailable = null;
@@ -97,41 +94,6 @@ const checkPlausibleAvailability = async () => {
 };
 
 /**
- * Map Plausible event names to Supabase event types
- * @param {string} plausibleEvent - Plausible event name
- * @param {object} props - Event properties
- * @returns {object} Supabase event data
- */
-const mapToSupabaseEvent = (plausibleEvent, props = {}) => {
-  // Map Plausible funnel events to Supabase event types
-  const eventMap = {
-    'form_started': 'form_start',
-    'services_selected': 'service_selected',
-    'documents_uploaded': 'document_uploaded',
-    'signatories_added': 'signatory_added',
-    'appointment_booked': 'appointment_booked',
-    'personal_info_completed': 'personal_info_completed',
-    'summary_viewed': 'summary_viewed',
-    'payment_initiated': 'payment_initiated',
-    'payment_completed': 'payment_completed',
-    'form_abandoned': 'form_abandoned',
-    'step_navigation': 'step_navigation'
-  };
-
-  const eventType = eventMap[plausibleEvent] || plausibleEvent;
-  const pagePath = window.location.pathname;
-
-  // Convert props to metadata format
-  const metadata = { ...props, plausible_event: plausibleEvent };
-
-  return {
-    eventType,
-    pagePath,
-    metadata
-  };
-};
-
-/**
  * Track custom event using Plausible with automatic fallback to Supabase
  * @param {string} eventName - Event name
  * @param {object} props - Event properties (optional)
@@ -175,11 +137,6 @@ export const trackEvent = async (eventName, props = {}) => {
       // Wait a bit to ensure event is processed
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Also send to Supabase as backup (dual tracking)
-      const supabaseEvent = mapToSupabaseEvent(eventName, props);
-      trackEventSupabase(supabaseEvent.eventType, supabaseEvent.pagePath, supabaseEvent.metadata)
-        .catch(err => console.warn('⚠️ [Plausible] Supabase fallback failed:', err));
-      
       console.log(`✅ [Plausible] Event tracking completed: ${eventName}`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       return;
@@ -194,11 +151,7 @@ export const trackEvent = async (eventName, props = {}) => {
     console.error(`❌ [Plausible] This means Plausible script is not loaded`);
   }
 
-  // Fallback to Supabase if Plausible is blocked or unavailable
-  console.log(`📊 [Plausible] Using Supabase fallback for event: ${eventName}`);
-  const supabaseEvent = mapToSupabaseEvent(eventName, props);
-  trackEventSupabase(supabaseEvent.eventType, supabaseEvent.pagePath, supabaseEvent.metadata)
-    .catch(err => console.error('❌ [Plausible] Supabase fallback error:', err));
+  console.log(`⚠️ [Plausible] Event not sent because Plausible is unavailable: ${eventName}`);
   
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 };
@@ -255,52 +208,36 @@ export const trackSignatoriesAdded = async (signatoriesCount) => {
 };
 
 /**
- * Step 5: Appointment Booked - User selects date and time
- * @param {string} appointmentDate - Appointment date
- * @param {string} appointmentTime - Appointment time
- * @param {string} timezone - Timezone
- */
-export const trackAppointmentBooked = async (appointmentDate, appointmentTime, timezone) => {
-  await trackEvent('appointment_booked', {
-    funnel_step: '5_appointment_booked',
-    appointment_date: appointmentDate,
-    appointment_time: appointmentTime,
-    timezone: timezone
-  });
-};
-
-/**
- * Step 6: Personal Info Completed - User fills in personal information
+ * Step 5: Personal Info Completed - User fills in personal information
  * @param {boolean} isAuthenticated - Whether user is authenticated
  */
 export const trackPersonalInfoCompleted = async (isAuthenticated = false) => {
   await trackEvent('personal_info_completed', {
-    funnel_step: '6_personal_info_completed',
+    funnel_step: '5_personal_info_completed',
     is_authenticated: isAuthenticated
   });
 };
 
 /**
- * Step 7: Summary Viewed - User reaches the summary page
+ * Step 6: Summary Viewed - User reaches the summary page
  * @param {object} summaryData - Summary data
  */
 export const trackSummaryViewed = async (summaryData = {}) => {
   await trackEvent('summary_viewed', {
-    funnel_step: '7_summary_viewed',
+    funnel_step: '6_summary_viewed',
     total_services: summaryData.servicesCount || 0,
     total_documents: summaryData.documentsCount || 0,
-    total_signatories: summaryData.signatoriesCount || 0,
-    has_appointment: summaryData.hasAppointment || false
+    total_signatories: summaryData.signatoriesCount || 0
   });
 };
 
 /**
- * Step 8: Payment Initiated - User clicks submit and payment process starts
+ * Step 7: Payment Initiated - User clicks submit and payment process starts
  * @param {object} paymentData - Payment data
  */
 export const trackPaymentInitiated = async (paymentData = {}) => {
   await trackEvent('payment_initiated', {
-    funnel_step: '8_payment_initiated',
+    funnel_step: '7_payment_initiated',
     total_amount: paymentData.totalAmount || 0,
     services_count: paymentData.servicesCount || 0,
     currency: paymentData.currency || 'EUR'
@@ -308,12 +245,12 @@ export const trackPaymentInitiated = async (paymentData = {}) => {
 };
 
 /**
- * Step 9: Payment Completed - Payment successful
+ * Step 8: Payment Completed - Payment successful
  * @param {object} paymentData - Payment data
  */
 export const trackPaymentCompleted = async (paymentData = {}) => {
   await trackEvent('payment_completed', {
-    funnel_step: '9_payment_completed',
+    funnel_step: '8_payment_completed',
     transaction_id: paymentData.transactionId || '',
     total_amount: paymentData.totalAmount || 0,
     submission_id: paymentData.submissionId || '',
