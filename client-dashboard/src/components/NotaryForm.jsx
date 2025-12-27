@@ -15,7 +15,7 @@ import {
   trackPaymentCompleted,
   trackFormAbandoned,
   trackStepNavigation
-} from '../utils/plausible';
+} from '../utils/analytics';
 import { openCrisp } from '../utils/crisp';
 import { useServices } from '../contexts/ServicesContext';
 import Documents from './steps/Documents';
@@ -627,13 +627,19 @@ const NotaryForm = () => {
     
     // Priorité 2: GCLID depuis le cookie _gcl_aw créé par Google Ads
     const gclAwCookie = getCookie('_gcl_aw');
-    const gclidFromCookie = gclAwCookie ? extractGclidFromCookie(gclAwCookie) : null;
+    const gclidFromGclAw = gclAwCookie ? extractGclidFromCookie(gclAwCookie) : null;
     
-    // Utiliser le GCLID de l'URL en priorité, sinon celui du cookie
-    const gclid = gclidParam || gclidFromCookie;
+    // Priorité 3: GCLID depuis le cookie "gclid" (fallback)
+    const gclidCookie = getCookie('gclid');
+    
+    // Utiliser le GCLID de l'URL en priorité, sinon celui du cookie _gcl_aw, sinon celui du cookie gclid
+    const gclid = gclidParam || gclidFromGclAw || gclidCookie;
     
     if (gclid) {
-      const source = gclidParam ? 'URL' : 'cookie _gcl_aw';
+      let source = 'URL';
+      if (!gclidParam) {
+        source = gclidFromGclAw ? 'cookie _gcl_aw' : 'cookie gclid';
+      }
       console.log(`🔗 [GCLID] GCLID détecté depuis ${source}:`, gclid);
       
       // Sauvegarder dans localStorage pour persistance (au cas où)

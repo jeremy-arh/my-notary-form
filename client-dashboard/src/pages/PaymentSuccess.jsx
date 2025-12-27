@@ -4,7 +4,7 @@ import { Icon } from '@iconify/react';
 import Logo from '../assets/Logo';
 import { supabase } from '../lib/supabase';
 import { trackPaymentSuccess } from '../utils/gtm';
-import { trackPaymentCompleted } from '../utils/plausible';
+import { trackPaymentCompleted } from '../utils/analytics';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();

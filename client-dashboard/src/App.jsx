@@ -13,6 +13,7 @@ import PaymentFailed from './pages/PaymentFailed'
 import IdentityVerificationDemo from './pages/IdentityVerificationDemo'
 import PrivateRoute from './components/PrivateRoute'
 import NotaryForm from './components/NotaryForm'
+import SegmentPageTracker from './components/SegmentPageTracker'
 
 // Lazy load heavy components for better performance
 const Dashboard = lazy(() => import('./pages/client/Dashboard'))
@@ -46,6 +47,7 @@ function App() {
         <LanguageProvider>
           <ServicesProvider>
             <BrowserRouter>
+            <SegmentPageTracker />
             <Routes>
         {/* Smart redirect based on authentication */}
         <Route path="/" element={<Home />} />
