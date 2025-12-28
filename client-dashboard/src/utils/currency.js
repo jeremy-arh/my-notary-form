@@ -264,13 +264,23 @@ export const convertPrice = async (eurPrice, targetCurrency = null) => {
     
     const symbol = CURRENCY_SYMBOLS[targetCurrency] || targetCurrency;
     
+    // Currencies that need a space between symbol and amount
+    // Note: EUR uses € after the amount, so no space needed
+    const currenciesWithSpace = ['CHF', 'GBP', 'CAD', 'AUD', 'CNY', 'INR', 'BRL', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'RUB', 'TRY', 'ZAR', 'KRW', 'SGD', 'HKD', 'NZD', 'THB', 'MYR', 'PHP', 'IDR', 'VND'];
+    
     // Format based on currency
     let formatted;
-    if (targetCurrency === 'JPY' || targetCurrency === 'KRW' || targetCurrency === 'VND') {
+    const needsSpace = currenciesWithSpace.includes(targetCurrency);
+    const space = needsSpace ? ' ' : '';
+    
+    if (targetCurrency === 'EUR') {
+      // EUR: amount followed by € symbol
+      formatted = `${convertedAmount.toFixed(2)}€`;
+    } else if (targetCurrency === 'JPY' || targetCurrency === 'KRW' || targetCurrency === 'VND') {
       // No decimals for these currencies
-      formatted = `${symbol}${Math.round(convertedAmount)}`;
+      formatted = `${symbol}${space}${Math.round(convertedAmount)}`;
     } else {
-      formatted = `${symbol}${convertedAmount.toFixed(2)}`;
+      formatted = `${symbol}${space}${convertedAmount.toFixed(2)}`;
     }
 
     return {

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
-import { formatPrice } from '../../utils/currency';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
   const { services, loading } = useServices();
+  const { formatPriceSync, currency, cacheVersion } = useCurrency();
 
   const handleContinue = () => {
     // Call original handleContinueClick or nextStep
@@ -88,8 +89,8 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
                     <h3 className="text-sm sm:text-base text-gray-900 break-words">
                       {service.name}
                     </h3>
-                    <p className="text-xs sm:text-sm font-semibold text-gray-900 mt-0.5">
-                      {formatPrice(service.base_price || 0)} {t('form.steps.documents.perDocument')}
+                    <p key={`price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm font-semibold text-gray-900 mt-0.5">
+                      {formatPriceSync(service.base_price || 0)} {t('form.steps.documents.perDocument')}
                     </p>
                   </div>
                   {isSelected && (

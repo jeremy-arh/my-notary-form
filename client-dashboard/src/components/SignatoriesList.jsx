@@ -1,7 +1,8 @@
 import { Icon } from '@iconify/react';
-import { formatPrice } from '../utils/currency';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 const SignatoriesList = ({ signatories, documentKey, documentName }) => {
+  const { formatPriceSync } = useCurrency();
   if (!signatories || signatories.length === 0) {
     return null;
   }
@@ -19,7 +20,7 @@ const SignatoriesList = ({ signatories, documentKey, documentName }) => {
               <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
                 Signatory {sigIndex + 1}
                 {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPrice(10)})</span>}
+                {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPriceSync(10)})</span>}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">

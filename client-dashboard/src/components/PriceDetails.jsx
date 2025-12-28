@@ -5,45 +5,21 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useServices } from '../contexts/ServicesContext';
 
 const PriceDetails = ({ formData }) => {
-  const { formatPriceSync, formatPrice: formatPriceAsync, currency } = useCurrency();
+  const { formatPriceSync, formatPrice: formatPriceAsync, currency, cacheVersion } = useCurrency();
   const { t } = useTranslation();
   const { servicesMap, optionsMap, loading } = useServices();
   const [forceUpdate, setForceUpdate] = useState(0);
-  const [priceCache, setPriceCache] = useState({});
 
   // Format price helper that uses the currency context
+  // Use formatPriceSync directly - it uses the context cache
   const formatPrice = (eurAmount) => {
-    // Check local cache first
-    const cacheKey = `${eurAmount}_${currency}`;
-    if (priceCache[cacheKey]) {
-      return priceCache[cacheKey];
-    }
-    
-    // Try sync from context cache
-    const syncResult = formatPriceSync(eurAmount);
-    
-    // If sync result is not in EUR format, use it (already converted)
-    if (!syncResult.endsWith('€') || currency === 'EUR') {
-      return syncResult;
-    }
-    
-    // If still in EUR format and currency is not EUR, trigger async conversion
-    formatPriceAsync(eurAmount).then(formatted => {
-      if (formatted && formatted !== syncResult) {
-        setPriceCache(prev => ({ ...prev, [cacheKey]: formatted }));
-        setForceUpdate(prev => prev + 1);
-      }
-    });
-    
-    return syncResult; // Return EUR format temporarily while converting
+    return formatPriceSync(eurAmount);
   };
 
 
-  // Preload conversions when currency changes
+  // Preload conversions when currency changes or form data changes
   useEffect(() => {
     console.log('💰 [PriceDetails] Currency changed to:', currency);
-    // Clear local cache when currency changes
-    setPriceCache({});
     
     // Preload all prices that will be displayed
     const preloadPrices = async () => {
@@ -75,6 +51,9 @@ const PriceDetails = ({ formData }) => {
       // Add signatory cost
       if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
         pricesToConvert.add(45);
+        // Also add total for additional signatories
+        const additionalCount = formData.signatories.length - 1;
+        pricesToConvert.add(additionalCount * 45);
       }
       
       // Add delivery postal cost if selected
@@ -82,27 +61,57 @@ const PriceDetails = ({ formData }) => {
         pricesToConvert.add(49.95);
       }
       
-      // Convert all prices
-      const conversions = await Promise.all(
+      // Calculate and add total
+      let total = 0;
+      if (formData.selectedServices) {
+        formData.selectedServices.forEach(serviceId => {
+          const service = servicesMap[serviceId];
+          const documents = formData.serviceDocuments?.[serviceId] || [];
+          if (service) {
+            total += documents.length * (service.base_price || 0);
+            documents.forEach(doc => {
+              if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+                doc.selectedOptions.forEach(optionId => {
+                  const option = optionsMap[optionId];
+                  if (option) {
+                    total += option.additional_price || 0;
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+      if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+        total += (formData.signatories.length - 1) * 45;
+      }
+      if (formData.deliveryMethod === 'postal') {
+        total += 49.95;
+      }
+      if (total > 0) {
+        pricesToConvert.add(total);
+      }
+      
+      // Convert all prices - this will update the context cache
+      // Convert prices one by one and trigger re-render after each
+      let completedCount = 0;
+      const totalPrices = pricesToConvert.size;
+      
+      await Promise.all(
         Array.from(pricesToConvert).map(async (price) => {
           try {
-            const formatted = await formatPriceAsync(price);
-            return { price, formatted };
+            await formatPriceAsync(price);
+            completedCount++;
+            // Trigger re-render after each conversion to show updated prices immediately
+            setForceUpdate(prev => prev + 1);
           } catch (error) {
             console.warn('Error converting price:', price, error);
-            return { price, formatted: `${price}€` };
+            completedCount++;
           }
         })
       );
       
-      // Update cache
-      const newCache = {};
-      conversions.forEach(({ price, formatted }) => {
-        const cacheKey = `${price}_${currency}`;
-        newCache[cacheKey] = formatted;
-      });
-      
-      setPriceCache(newCache);
+      // Final re-render after all conversions are done
       setForceUpdate(prev => prev + 1);
     };
     
@@ -111,7 +120,7 @@ const PriceDetails = ({ formData }) => {
       preloadPrices();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currency, loading, formData.selectedServices, formData.serviceDocuments, servicesMap, optionsMap]);
+  }, [currency, loading, formData.selectedServices, formData.serviceDocuments, formData.signatories, formData.deliveryMethod, servicesMap, optionsMap, formatPriceAsync]);
 
   // Calculate total amount
   const calculateTotal = () => {
@@ -164,7 +173,7 @@ const PriceDetails = ({ formData }) => {
             <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-black"></div>
           </div>
         ) : (
-          <div key={`prices-${currency}-${forceUpdate}`} className="space-y-3 sm:space-y-4">
+          <div key={`prices-${currency}-${cacheVersion}-${forceUpdate}`} className="space-y-3 sm:space-y-4">
             {/* Documents à Certifier Section */}
             {formData.selectedServices && formData.selectedServices.length > 0 ? (
               <div className="space-y-2 sm:space-y-3">

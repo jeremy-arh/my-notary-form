@@ -10,3 +10,5 @@ COMMENT ON COLUMN submission.gclid IS 'Google Click ID (GCLID) from URL paramete
 -- Create index for faster lookups (optional, but useful for analytics)
 CREATE INDEX IF NOT EXISTS idx_submission_gclid ON submission(gclid) WHERE gclid IS NOT NULL;
 
+
+

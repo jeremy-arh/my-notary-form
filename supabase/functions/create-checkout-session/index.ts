@@ -172,46 +172,46 @@ serve(async (req) => {
       console.log('✅ [RETRY] Using existing submission and client_id:', clientId)
 
     } else {
-      // NEW SUBMISSION: Create user account if guest
+      // NEW SUBMISSION: Create user account if not authenticated
       let userId = user?.id || null
 
       if (!userId && formData.email) {
-      // Create account with password if provided, otherwise generate random password
-      const password = formData.password || crypto.randomUUID()
+        console.log('👤 [AUTH] Creating user account for:', formData.email)
+        
+        // Check if user already exists
+        const { data: { users }, error: listError } = await supabase.auth.admin.listUsers()
 
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: password,
-        email_confirm: true,
-      })
-
-      if (authError) {
-        console.error('❌ [AUTH] Failed to create account:', authError)
-
-        // If account already exists, try to get the user by email
-        if (authError.message?.includes('already been registered') || authError.code === 'email_exists') {
-          console.log('🔍 [AUTH] Account exists, fetching user by email:', formData.email)
-
-          const { data: { users }, error: listError } = await supabase.auth.admin.listUsers()
-
-          if (!listError && users) {
-            const existingUser = users.find(u => u.email === formData.email)
-            if (existingUser) {
-              userId = existingUser.id
-              accountCreated = false
-              console.log('✅ [AUTH] Found existing user:', userId)
-            } else {
-              console.error('❌ [AUTH] Could not find user with email:', formData.email)
-            }
-          } else {
-            console.error('❌ [AUTH] Error listing users:', listError)
+        if (!listError && users) {
+          const existingUser = users.find(u => u.email === formData.email)
+          if (existingUser) {
+            userId = existingUser.id
+            accountCreated = false
+            console.log('✅ [AUTH] User already exists:', userId)
           }
         }
-      } else if (authData.user) {
-        userId = authData.user.id
-        accountCreated = true
-        console.log('✅ [AUTH] Created new account for:', formData.email, 'with auto-generated password:', !formData.password)
-      }
+
+        // Create user if doesn't exist
+        if (!userId) {
+          const password = formData.password || crypto.randomUUID()
+          const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email: formData.email,
+            password: password,
+            email_confirm: true,
+            user_metadata: {
+              first_name: formData.firstName,
+              last_name: formData.lastName,
+            },
+          })
+          
+          if (authError) {
+            console.error('❌ [AUTH] Failed to create account:', authError)
+            throw new Error('Failed to create account: ' + authError.message)
+          } else if (authData.user) {
+            userId = authData.user.id
+            accountCreated = true
+            console.log('✅ [AUTH] Created user account:', userId)
+          }
+        }
       }
 
       // Get or create client record and Stripe customer
@@ -343,6 +343,7 @@ serve(async (req) => {
         postal_code: formData.postalCode,
         country: formData.country,
         notes: formData.notes || null,
+        gclid: formData.gclid || null, // Google Click ID for conversion tracking
         data: {
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments, // Already converted

@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import { formatPrice } from '../../utils/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
+  const { formatPriceSync } = useCurrency();
   const handleContinue = () => {
     // Call original handleContinueClick or nextStep
     if (handleContinueClick) {
@@ -303,7 +304,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
               Verify and complete the persons appearing as signatories on the document.
               {signatories.length > 1 && (
                 <span className="block mt-1">
-                  The first signatory is included. Each additional signatory costs {formatPrice(45)}.
+                  The first signatory is included. Each additional signatory costs {formatPriceSync(45)}.
                 </span>
               )}
             </p>
@@ -481,7 +482,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
                               <span className="ml-2 text-xs text-gray-500 font-normal">(you)</span>
                             )}
                             {signatoryIndex > 0 && (
-                              <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPrice(45)})</span>
+                              <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPriceSync(45)})</span>
                             )}
                           </h3>
                           <p className="text-xs sm:text-sm text-gray-600 truncate mt-0.5">
@@ -529,7 +530,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     {signatories.length === 0 
                       ? 'Add another person as signatory'
-                      : `Add another person as signatory (+${formatPrice(45)})`
+                      : `Add another person as signatory (+${formatPriceSync(45)})`
                     }
                   </p>
                 </div>

@@ -1,10 +1,55 @@
+import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useCurrency } from '../../contexts/CurrencyContext';
+
+const DELIVERY_POSTAL_PRICE_EUR = 49.95;
 
 const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const { t } = useTranslation();
+  const { formatPriceSync, formatPrice: formatPriceAsync, currency, cacheVersion } = useCurrency();
+  const [convertedDeliveryPrice, setConvertedDeliveryPrice] = useState('');
 
   const deliveryMethod = formData.deliveryMethod || null;
+
+  // Convert delivery price when currency changes
+  useEffect(() => {
+    console.log('💰 [DeliveryMethod] Converting delivery price, currency:', currency, 'cacheVersion:', cacheVersion);
+    const convertDeliveryPrice = async () => {
+      // Set initial price synchronously from cache if available
+      const syncPrice = formatPriceSync(DELIVERY_POSTAL_PRICE_EUR);
+      console.log('💰 [DeliveryMethod] Sync price:', syncPrice);
+      setConvertedDeliveryPrice(syncPrice);
+      
+      // Then convert asynchronously for accurate rate
+      try {
+        const formatted = await formatPriceAsync(DELIVERY_POSTAL_PRICE_EUR);
+        console.log('💰 [DeliveryMethod] Async converted price:', formatted);
+        setConvertedDeliveryPrice(formatted);
+      } catch (error) {
+        console.warn('Error converting delivery price:', error);
+        // Keep the synchronous fallback
+      }
+    };
+    convertDeliveryPrice();
+  }, [currency, cacheVersion, formatPriceAsync, formatPriceSync]);
+
+  // Helper function to replace price in delivery description text
+  const getDeliveryDescription = () => {
+    const description = t('form.steps.delivery.postDescription') || 'We charge an extra fee of €49.95 for DHL Express delivery.';
+    
+    if (convertedDeliveryPrice) {
+      // Replace various price formats in the text (€49.95, 49,95 €, 49.95€, etc.)
+      // This regex matches: optional € symbol, number with comma or dot, optional € symbol
+      // Add a space after the converted price to ensure proper spacing before "for"
+      return description.replace(
+        /€?\s*\d+[.,]\d+\s*€?/gi,
+        `${convertedDeliveryPrice} `
+      ).replace(/\s+/g, ' ').trim(); // Normalize multiple spaces to single space
+    }
+    
+    return description;
+  };
 
   const handleSelect = (method) => {
     updateFormData({ deliveryMethod: method });
@@ -55,8 +100,8 @@ const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleCo
                 <p className="text-sm sm:text-base font-semibold text-gray-900">
                   {t('form.steps.delivery.postTitle') || 'Delivery as a physical copy by post'}
                 </p>
-                <p className="mt-1 text-xs sm:text-sm text-gray-600">
-                  {t('form.steps.delivery.postDescription') || 'We charge an extra fee of €49.95 for DHL Express delivery.'}
+                <p key={`delivery-price-${currency}-${cacheVersion}`} className="mt-1 text-xs sm:text-sm text-gray-600">
+                  {getDeliveryDescription()}
                 </p>
               </div>
               <div className="ml-3 sm:ml-4 flex items-center">

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { trackBeginCheckout } from '../../utils/gtm';
-import { formatPrice } from '../../utils/currency';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import PriceDetails from '../PriceDetails';
 
 const DELIVERY_POSTAL_PRICE_EUR = 49.95;
@@ -11,8 +11,11 @@ const DELIVERY_POSTAL_PRICE_EUR = 49.95;
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const { t, language } = useTranslation();
   const { servicesMap, optionsMap, loading } = useServices();
+  const { formatPrice: formatPriceAsync, formatPriceSync, currency } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [footerPadding, setFooterPadding] = useState(300);
+  const [convertedDeliveryPrice, setConvertedDeliveryPrice] = useState('');
 
   // Detect mobile screen size
   useEffect(() => {
@@ -23,6 +26,126 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Calculate footer height and set padding dynamically to maintain 20px gap
+  useEffect(() => {
+    let resizeObserver = null;
+    let checkInterval = null;
+    let resizeHandler = null;
+    
+    const calculateFooterPadding = () => {
+      const footer = document.querySelector('[data-footer="notary-form"]');
+      if (footer && footer.offsetHeight > 0) {
+        const footerHeight = footer.offsetHeight;
+        const desiredGap = 20; // 20px gap
+        const newPadding = footerHeight + desiredGap;
+        setFooterPadding(newPadding);
+        return true; // Footer found and measured
+      }
+      return false; // Footer not found or not yet rendered
+    };
+
+    // Try to find footer and set up observers
+    const setupObservers = () => {
+      const footer = document.querySelector('[data-footer="notary-form"]');
+      if (footer && footer.offsetHeight > 0) {
+        // Footer found, set up ResizeObserver
+        if (!resizeObserver) {
+          resizeObserver = new ResizeObserver(() => {
+            calculateFooterPadding();
+          });
+          resizeObserver.observe(footer);
+        }
+        
+        // Also observe window resize
+        if (!resizeHandler) {
+          resizeHandler = () => {
+            calculateFooterPadding();
+          };
+          window.addEventListener('resize', resizeHandler);
+        }
+        
+        // Calculate immediately
+        calculateFooterPadding();
+        
+        return true;
+      }
+      return false;
+    };
+
+    // Initial attempt with delay to ensure DOM is ready
+    const initialTimeout = setTimeout(() => {
+      if (!setupObservers()) {
+        // Footer not found yet, try periodically
+        let attempts = 0;
+        checkInterval = setInterval(() => {
+          attempts++;
+          if (setupObservers() || attempts >= 30) {
+            clearInterval(checkInterval);
+            if (attempts >= 30) {
+              // Max attempts reached, use safe fallback
+              setFooterPadding(300);
+            }
+          }
+        }, 100);
+      }
+    }, 200);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      if (checkInterval) {
+        clearInterval(checkInterval);
+      }
+      if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+      }
+    };
+  }, []);
+
+  // Convert delivery price when currency changes
+  useEffect(() => {
+    const convertDeliveryPrice = async () => {
+      if (formData.deliveryMethod === 'postal') {
+        // Set initial price synchronously from cache if available
+        const syncPrice = formatPriceSync(DELIVERY_POSTAL_PRICE_EUR);
+        setConvertedDeliveryPrice(syncPrice);
+        
+        // Then convert asynchronously for accurate rate
+        try {
+          const formatted = await formatPriceAsync(DELIVERY_POSTAL_PRICE_EUR);
+          setConvertedDeliveryPrice(formatted);
+        } catch (error) {
+          console.warn('Error converting delivery price:', error);
+          // Keep the synchronous fallback
+        }
+      } else {
+        setConvertedDeliveryPrice('');
+      }
+    };
+    convertDeliveryPrice();
+  }, [currency, formData.deliveryMethod, formatPriceAsync, formatPriceSync]);
+
+  // Helper function to replace price in delivery description text
+  const getDeliveryDescription = () => {
+    const description = formData.deliveryMethod === 'postal'
+      ? t('form.steps.delivery.postDescription')
+      : t('form.steps.delivery.emailDescription');
+    
+    if (formData.deliveryMethod === 'postal' && convertedDeliveryPrice) {
+      // Replace various price formats in the text (€49.95, 49,95 €, 49.95€, etc.)
+      // This regex matches: optional € symbol, number with comma or dot, optional € symbol
+      // Add a space after the converted price to ensure proper spacing before "for"
+      return description.replace(
+        /€?\s*\d+[.,]\d+\s*€?/gi,
+        `${convertedDeliveryPrice} `
+      ).replace(/\s+/g, ' ').trim(); // Normalize multiple spaces to single space
+    }
+    
+    return description;
+  };
 
   // Helper function to truncate file name on mobile
   const truncateFileName = (fileName) => {
@@ -174,10 +297,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   };
 
   return (
-    <>
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-[200px] sm:pb-[220px] md:pb-6 lg:pb-6 xl:pb-6" style={{ minHeight: 0 }}>
-        <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 lg:space-y-6">
+    <div 
+      className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 w-full max-w-full" 
+      style={{ 
+        minHeight: 0,
+        paddingBottom: isMobile ? `${Math.max(footerPadding + 60, 350)}px` : `${footerPadding + 20}px`
+      }}
+    >
+      <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 lg:space-y-6">
           <div>
             <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
               {t('form.steps.summary.title')}
@@ -209,7 +336,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
-                          {documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')} × {formatPrice(service?.base_price || 0)}
+                          {documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')} × {formatPriceSync(service?.base_price || 0)}
                         </p>
                       </div>
                     </div>
@@ -303,13 +430,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 : t('form.steps.delivery.emailTitle')}
             </p>
             <p className="text-[10px] sm:text-xs text-gray-600">
-              {formData.deliveryMethod === 'postal'
-                ? t('form.steps.delivery.postDescription')
-                : t('form.steps.delivery.emailDescription')}
+              {getDeliveryDescription()}
             </p>
             {formData.deliveryMethod === 'postal' && (
               <p className="text-[10px] sm:text-xs font-semibold text-gray-900 mt-1">
-                {t('form.steps.summary.deliveryPrice') || 'Delivery cost'}: {formatPrice(DELIVERY_POSTAL_PRICE_EUR)}
+                {t('form.steps.summary.deliveryPrice') || 'Delivery cost'}: {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR)}
               </p>
             )}
           </div>
@@ -342,7 +467,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       {signatory.firstName} {signatory.lastName}
                       {index > 0 && (
                         <span className="ml-2 text-xs text-gray-600 font-normal">
-                          (+{formatPrice(45)})
+                          (+{formatPriceSync(45)})
                         </span>
                       )}
                     </p>
@@ -386,9 +511,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </div>
       </div>
       </div>
-      </div>
-
-    </>
+    </div>
   );
 };
 

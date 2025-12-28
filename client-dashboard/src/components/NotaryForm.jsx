@@ -18,6 +18,7 @@ import {
 } from '../utils/analytics';
 import { openCrisp } from '../utils/crisp';
 import { useServices } from '../contexts/ServicesContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import DeliveryMethod from './steps/DeliveryMethod';
@@ -44,6 +45,7 @@ const NotaryForm = () => {
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const { t } = useTranslation();
   const { services, loading: servicesLoading } = useServices();
+  const { currency: contextCurrency } = useCurrency();
   const [allowServiceParamBypass, setAllowServiceParamBypass] = useState(false);
   const serviceParam = searchParams.get('service');
   const lastAppliedServiceParamRef = useRef(null); // Pour tracker le dernier service param appliqué
@@ -565,6 +567,18 @@ const NotaryForm = () => {
       }
     }
   }, [searchParams, setFormData]);
+
+  // Synchroniser la devise du contexte avec formData.currency
+  // Cela garantit que la devise sélectionnée dans CurrencySelector est envoyée à Stripe
+  useEffect(() => {
+    if (contextCurrency && contextCurrency !== formData.currency) {
+      console.log('💰 [NotaryForm] Synchronisation de la devise du contexte vers formData:', contextCurrency);
+      setFormData(prev => ({
+        ...prev,
+        currency: contextCurrency
+      }));
+    }
+  }, [contextCurrency, formData.currency, setFormData]);
 
   // Récupérer le GCLID depuis l'URL ou le cookie _gcl_aw créé par Google Ads
   // Le cookie _gcl_aw est créé automatiquement par Google Ads et partagé entre domaines
@@ -1289,8 +1303,23 @@ const NotaryForm = () => {
       // Delivery postal cost (49.95€) if selected
       const deliveryPostalCostEUR = formData.deliveryMethod === 'postal' ? 49.95 : 0;
       
+      // Utiliser la devise du contexte en priorité pour garantir la synchronisation
+      const finalCurrency = (contextCurrency || formData.currency || 'EUR').toUpperCase();
+      console.log('💰 [NotaryForm] ====== DEVISE POUR STRIPE ======');
+      console.log('💰 [NotaryForm] Devise du contexte (CurrencyContext):', contextCurrency);
+      console.log('💰 [NotaryForm] Devise de formData (localStorage):', formData.currency);
+      console.log('💰 [NotaryForm] Devise finale utilisée:', finalCurrency);
+      console.log('💰 [NotaryForm] ================================');
+      
+      // Sauvegarder la devise dans formData pour la prochaine fois
+      if (contextCurrency && contextCurrency !== formData.currency) {
+        console.log('💰 [NotaryForm] Mise à jour de formData.currency avec:', contextCurrency);
+        setFormData(prev => ({ ...prev, currency: contextCurrency }));
+      }
+      
       const submissionData = {
         ...formData,
+        currency: finalCurrency, // Forcer l'utilisation de la devise du contexte
         serviceDocuments: uploadedServiceDocuments, // Add uploaded file paths organized by service
         appointmentDate: defaultAppointmentDate,
         appointmentTime: defaultAppointmentTime,
@@ -1342,16 +1371,44 @@ const NotaryForm = () => {
       const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
         (sum, docs) => sum + (docs?.length || 0), 0
       );
+      // La devise est déjà dans submissionData.currency (forcée depuis le contexte)
+      const currency = submissionData.currency || 'EUR';
+      console.log('💰 [CURRENCY] Devise finale envoyée à Stripe:', currency);
+      console.log('💰 [CURRENCY] Devise dans submissionData:', submissionData.currency);
+      
       trackPaymentInitiated({
         servicesCount: formData.selectedServices?.length || 0,
         totalAmount: 0, // Will be calculated by backend
-        currency: formData.currency || 'EUR'
+        currency: currency // Utiliser la devise finale
       });
-      
-      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
-      const currency = (submissionData.currency || 'EUR').toUpperCase();
-      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
 
+      const requestBody = {
+        formData: {
+          ...submissionData,
+          currency: currency // S'assurer que formData.currency contient aussi la bonne devise
+        },
+        currency: currency, // Envoyer la devise comme paramètre séparé et explicite
+        // IMPORTANT: Edge Function MUST use these fields for signatories:
+        // - formData.signatories: array of signatories
+        // - formData.signatoriesCount: total number of signatories
+        // - formData.additionalSignatoriesCount: number of additional signatories (total - 1, first is free)
+        // - formData.additionalSignatoriesCost: cost in EUR (additionalSignatoriesCount * 45)
+        // 
+        // The Edge Function MUST:
+        // 1. Convert formData.additionalSignatoriesCost from EUR to the target currency if needed
+        // 2. Add this converted cost to the total amount
+        // 3. Create a Stripe line item: {
+        //      name: "Additional Signatories",
+        //      amount: convertedCostInCents, // Convert to cents and to target currency
+        //      quantity: formData.additionalSignatoriesCount
+        //    }
+      };
+      
+      console.log('💰 [CURRENCY] Body envoyé à l\'Edge Function:');
+      console.log('   currency (paramètre séparé):', requestBody.currency);
+      console.log('   formData.currency:', requestBody.formData.currency);
+      console.log('   JSON body:', JSON.stringify(requestBody, null, 2));
+      
       const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
         method: 'POST',
         headers: {
@@ -1359,24 +1416,7 @@ const NotaryForm = () => {
           'Authorization': `Bearer ${authToken}`,
           'apikey': supabaseAnonKey,
         },
-        body: JSON.stringify({
-          formData: submissionData,
-          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
-          // IMPORTANT: Edge Function MUST use these fields for signatories:
-          // - formData.signatories: array of signatories
-          // - formData.signatoriesCount: total number of signatories
-          // - formData.additionalSignatoriesCount: number of additional signatories (total - 1, first is free)
-          // - formData.additionalSignatoriesCost: cost in EUR (additionalSignatoriesCount * 45)
-          // 
-          // The Edge Function MUST:
-          // 1. Convert formData.additionalSignatoriesCost from EUR to the target currency if needed
-          // 2. Add this converted cost to the total amount
-          // 3. Create a Stripe line item: {
-          //      name: "Additional Signatories",
-          //      amount: convertedCostInCents, // Convert to cents and to target currency
-          //      quantity: formData.additionalSignatoriesCount
-          //    }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const responseText = await response.text();
@@ -1458,7 +1498,7 @@ const NotaryForm = () => {
 
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
+    <div className="flex h-screen bg-white overflow-hidden overflow-x-hidden w-full max-w-full">
       {/* Header - Fixed at top - Visible on all screen sizes */}
       <header className="fixed top-0 left-0 right-0 bg-[#F3F4F6] z-50 h-14 sm:h-16 overflow-visible">
         <div className="flex items-center justify-between h-full px-2 sm:px-3 md:px-4 xl:px-6">
@@ -1572,9 +1612,9 @@ const NotaryForm = () => {
       )}
 
       {/* Main Content - Full width without margins */}
-      <main className="flex-1 flex items-center justify-center pt-14 sm:pt-16 pb-28 sm:pb-28 xl:pb-32 overflow-hidden bg-[#F3F4F6]">
+      <main className="flex-1 flex items-center justify-center pt-14 sm:pt-16 pb-0 overflow-hidden overflow-x-hidden bg-[#F3F4F6] w-full max-w-full">
         {/* Form Content */}
-        <div className="w-full max-w-full h-full animate-fade-in-up flex flex-col overflow-hidden relative">
+        <div className="w-full max-w-full h-full animate-fade-in-up flex flex-col overflow-y-auto overflow-x-hidden relative">
           <Routes>
             <Route
               path="choose-services"
@@ -1662,10 +1702,10 @@ const NotaryForm = () => {
       </main>
 
       {/* Footer - Progress Bar as top border + Navigation Buttons + Price Details - Fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom">
+      <div data-footer="notary-form" className="fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden">
         {/* Progress Bar as top border */}
-        <div className="relative">
-          <div className="h-1 bg-gray-300">
+        <div className="relative w-full">
+          <div className="h-1 bg-gray-300 w-full">
             <div
               className="h-full transition-all duration-500"
               style={{
@@ -1677,7 +1717,7 @@ const NotaryForm = () => {
         </div>
 
         {/* Navigation Buttons */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-t border-gray-200">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-t border-gray-200 w-full max-w-full overflow-x-hidden">
           {currentStep > 1 ? (
             <button
               type="button"
@@ -1688,40 +1728,53 @@ const NotaryForm = () => {
               <Icon icon="heroicons:arrow-left" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
             </button>
           ) : <div></div>}
+          
           {currentStep < steps.length ? (
-            <button
-              type="button"
-              onClick={handleContinueClick}
-              disabled={isCreatingUser}
-              className={`px-8 sm:px-12 md:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg ${
-                canProceedFromCurrentStep() && !isCreatingUser
-                  ? 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
-                  : 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
-              }`}
-            >
-              {isCreatingUser ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Creating account...
-                </>
-              ) : (
-                t('form.navigation.continue')
-              )}
-            </button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
+                {currentStep}/{steps.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleContinueClick}
+                disabled={isCreatingUser}
+                className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 ${
+                  canProceedFromCurrentStep() && !isCreatingUser
+                    ? 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
+                    : 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
+                }`}
+              >
+                {isCreatingUser ? (
+                  <>
+                    <svg className="animate-spin -ml-1 h-4 w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="truncate">Creating account...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="truncate">{t('form.navigation.continue')}</span>
+                    <Icon icon="heroicons:arrow-right" className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  </>
+                )}
+              </button>
+            </div>
           ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className={`px-8 sm:px-12 md:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg ${
-                isSubmitting
-                  ? 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
-                  : 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
-              } flex items-center justify-center`}
-            >
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
+                {currentStep}/{steps.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg min-w-0 max-w-full flex items-center justify-center ${
+                  isSubmitting
+                    ? 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
+                    : 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
+                }`}
+              >
               {isSubmitting ? (
                 <>
                   <svg className="animate-spin -ml-1 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1738,7 +1791,8 @@ const NotaryForm = () => {
                   <span className="truncate">Secure Payment</span>
                 </>
               )}
-            </button>
+              </button>
+            </div>
           )}
         </div>
       </div>

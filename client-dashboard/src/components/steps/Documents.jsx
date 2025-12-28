@@ -1,19 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
-import { formatPrice, convertPrice } from '../../utils/currency';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
 const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
   const { getServicesByIds, options, loading: servicesLoading } = useServices();
+  const { formatPriceSync, currency, cacheVersion } = useCurrency();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showOptionInfo, setShowOptionInfo] = useState(null);
+  const [viewingFile, setViewingFile] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [footerPadding, setFooterPadding] = useState(160); // Valeur par défaut
   const scrollContainerRef = useRef(null);
   const savedScrollPositionRef = useRef(null);
   const fileInputRefs = useRef({});
@@ -51,6 +55,87 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Calculate footer height and set padding dynamically to maintain 20px gap
+  useEffect(() => {
+    let resizeObserver = null;
+    let checkInterval = null;
+    let resizeHandler = null;
+    
+    const calculateFooterPadding = () => {
+      const footer = document.querySelector('[data-footer="notary-form"]');
+      if (footer && footer.offsetHeight > 0) {
+        const footerHeight = footer.offsetHeight;
+        const desiredGap = 20; // 20px gap
+        const newPadding = footerHeight + desiredGap;
+        setFooterPadding(prevPadding => {
+          // Always update to ensure accuracy
+          return newPadding;
+        });
+        return true; // Footer found and measured
+      }
+      return false; // Footer not found or not yet rendered
+    };
+
+    // Try to find footer and set up observers
+    const setupObservers = () => {
+      const footer = document.querySelector('[data-footer="notary-form"]');
+      if (footer && footer.offsetHeight > 0) {
+        // Footer found, set up ResizeObserver
+        if (!resizeObserver) {
+          resizeObserver = new ResizeObserver(() => {
+            calculateFooterPadding();
+          });
+          resizeObserver.observe(footer);
+        }
+        
+        // Also observe window resize
+        if (!resizeHandler) {
+          resizeHandler = () => {
+            calculateFooterPadding();
+          };
+          window.addEventListener('resize', resizeHandler);
+        }
+        
+        // Calculate immediately
+        calculateFooterPadding();
+        
+        return true;
+      }
+      return false;
+    };
+
+    // Initial attempt with delay to ensure DOM is ready
+    const initialTimeout = setTimeout(() => {
+      if (!setupObservers()) {
+        // Footer not found yet, try periodically
+        let attempts = 0;
+        checkInterval = setInterval(() => {
+          attempts++;
+          if (setupObservers() || attempts >= 30) {
+            clearInterval(checkInterval);
+            if (attempts >= 30) {
+              // Max attempts reached, use safe fallback
+              setFooterPadding(100);
+            }
+          }
+        }, 100);
+      }
+    }, 200);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      if (checkInterval) {
+        clearInterval(checkInterval);
+      }
+      if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+      }
+    };
   }, []);
 
   // Restaurer la position de scroll après les mises à jour du DOM
@@ -169,14 +254,14 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       }
     });
 
-    return formatPrice(totalEUR);
+    return formatPriceSync(totalEUR);
   };
 
   return (
-    <div className="h-full w-full flex flex-col relative">
+    <div className="h-full w-full flex flex-col relative max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4 w-full max-w-full">
+        <div className="max-w-4xl mx-auto w-full">
           <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
             {t('form.steps.documents.title')}
           </h2>
@@ -189,10 +274,13 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       {/* Content Area - Scrollable */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 px-3 sm:px-4 md:px-6 pb-32 sm:pb-36 md:pb-6 lg:pb-24 overflow-y-auto overflow-x-hidden" 
-        style={{ minHeight: 0 }}
+        className="flex-1 px-3 sm:px-4 md:px-6 overflow-y-auto overflow-x-hidden w-full max-w-full" 
+        style={{ 
+          minHeight: 0,
+          paddingBottom: isMobile ? `${footerPadding}px` : '144px' // sm:pb-36 = 144px, md:pb-6 = 24px, lg:pb-24 = 96px
+        }}
       >
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
@@ -202,7 +290,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             <p className="text-gray-600">{t('form.steps.documents.noServicesSelected')}</p>
           </div>
         ) : (
-          <div className={`space-y-3 sm:space-y-4 ${services.length === 1 && isMobile ? 'flex flex-col h-full' : ''}`}>
+          <div className={`space-y-3 sm:space-y-4 w-full max-w-full ${services.length === 1 && isMobile ? 'flex flex-col h-full' : ''}`}>
             {services.map((service) => {
               const fileCount = getFileCount(service.service_id);
               const files = formData.serviceDocuments?.[service.service_id] || [];
@@ -212,23 +300,23 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
               return (
                 <div
                   key={service.service_id}
-                  className={`bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}
+                  className={`bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 w-full max-w-full box-border ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}
                 >
                   <div className="mb-3 sm:mb-4">
                     <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
-                      {formatPrice(service.base_price)} {t('form.steps.documents.perDocument')}
+                    <p key={`service-price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
+                      {formatPriceSync(service.base_price)} {t('form.steps.documents.perDocument')}
                     </p>
                     {fileCount > 0 && (
-                      <p className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
+                      <p key={`total-price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
                         {t('form.steps.documents.total')}: {getTotalPrice(service)} ({fileCount} {fileCount > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                       </p>
                     )}
                   </div>
 
-                  <div className={`block mb-3 sm:mb-4 ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}>
+                  <div className={`block mb-3 sm:mb-4 w-full ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}>
                     <div 
-                      className={`group bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 sm:p-12 md:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200 ${shouldTakeFullHeight ? 'flex-1 flex flex-col justify-center min-h-[60vh]' : ''}`}
+                      className={`group bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-3 sm:p-8 md:p-12 lg:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200 w-full max-w-full overflow-hidden ${shouldTakeFullHeight ? 'flex-1 flex flex-col justify-center min-h-[60vh]' : isMobile ? 'min-h-[180px] flex flex-col justify-center' : ''}`}
                       onClick={() => {
                         // Sauvegarder la position de scroll avant le clic
                         if (scrollContainerRef.current) {
@@ -242,13 +330,13 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       }}
                     >
                       <Icon
-                        icon="line-md:uploading-loop"
-                        className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-black group-hover:text-blue-600 transition-colors mx-auto mb-4 sm:mb-5 ${shouldTakeFullHeight ? 'mb-6' : ''}`}
+                        icon="hugeicons:file-upload"
+                        className={`w-8 h-8 sm:w-12 sm:h-12 md:w-14 md:h-14 text-black group-hover:text-blue-600 transition-colors mx-auto mb-2 sm:mb-4 md:mb-5 flex-shrink-0 ${shouldTakeFullHeight ? 'mb-6' : ''}`}
                       />
-                      <p className={`text-sm sm:text-base md:text-lg text-black group-hover:text-blue-700 transition-colors font-medium mb-2 sm:mb-3 ${shouldTakeFullHeight ? 'text-base mb-3' : ''}`}>
+                      <p className={`text-xs sm:text-base md:text-lg text-black group-hover:text-blue-700 transition-colors font-medium mb-1 sm:mb-2 md:mb-3 break-words px-1 ${shouldTakeFullHeight ? 'text-base mb-3' : ''}`}>
                         {t('form.steps.documents.clickToUpload') || 'Click here or drag & drop your document'}
                       </p>
-                      <p className={`text-xs sm:text-sm text-gray-600 ${shouldTakeFullHeight ? 'text-sm' : ''}`}>
+                      <p className={`text-[10px] sm:text-xs md:text-sm text-gray-600 leading-relaxed px-1 break-words ${shouldTakeFullHeight ? 'text-sm' : ''}`}>
                         {t('form.steps.documents.uploadDescription') || 'Upload your document securely in PDF, Word, or image format'}
                       </p>
                       <input
@@ -286,7 +374,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                           key={index}
                           className="border border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4"
                         >
-                          <div className="flex items-center justify-between mb-2 sm:mb-3 gap-2">
+                          <div className="flex items-start sm:items-center justify-between mb-2 sm:mb-3 gap-2 flex-wrap">
                             <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
                               <Icon icon="heroicons:document" className="w-6 h-6 sm:w-8 sm:h-8 text-gray-600 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
@@ -296,14 +384,28 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                                 </p>
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => removeFile(service.service_id, index)}
-                              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                              aria-label={t('form.steps.documents.remove')}
-                            >
-                              <Icon icon="heroicons:trash" className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-                            </button>
+                            <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 ml-auto">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewingFile(file);
+                                }}
+                                className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs text-white bg-black hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0 flex items-center gap-0.5 sm:gap-1 whitespace-nowrap"
+                                aria-label={t('form.steps.documents.view')}
+                              >
+                                <Icon icon="heroicons:eye" className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                                <span className="flex-shrink-0">{t('form.steps.documents.view')}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeFile(service.service_id, index)}
+                                className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                                aria-label={t('form.steps.documents.remove')}
+                              >
+                                <Icon icon="heroicons:trash" className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+                              </button>
+                            </div>
                           </div>
 
                           {!isApostilleService && options.length > 0 && (
@@ -330,8 +432,8 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                                           <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-black transition-colors break-words">
                                             {option.name}
                                           </span>
-                                          <span className="text-gray-500 font-normal text-[10px] sm:text-xs whitespace-nowrap">
-                                            (+{formatPrice(option.additional_price || 0)})
+                                          <span key={`option-price-${option.option_id}-${currency}-${cacheVersion}`} className="text-gray-500 font-normal text-[10px] sm:text-xs whitespace-nowrap">
+                                            (+{formatPriceSync(option.additional_price || 0)})
                                           </span>
                                         </div>
                                         {option.description && (
@@ -386,8 +488,8 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
 
               {showOptionInfo.additional_price && (
                 <div className="border-t border-gray-200 pt-3 sm:pt-4">
-                  <p className="text-xs sm:text-sm text-gray-600">
-                    <strong>{t('form.steps.documents.additionalFee')}</strong> {formatPrice(showOptionInfo.additional_price)} {t('form.steps.documents.perDocument')}
+                  <p key={`option-info-price-${showOptionInfo?.option_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm text-gray-600">
+                    <strong>{t('form.steps.documents.additionalFee')}</strong> {formatPriceSync(showOptionInfo.additional_price)} {t('form.steps.documents.perDocument')}
                   </p>
                 </div>
               )}
@@ -403,6 +505,123 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             </div>
           </div>
         </div>
+      )}
+
+      {/* Document Viewer Modal - Full Screen */}
+      {viewingFile && createPortal(
+        <div 
+          style={{ 
+            position: 'fixed',
+            top: '0px', 
+            left: '0px', 
+            right: '0px', 
+            bottom: '0px',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: '#000000',
+            zIndex: 99999,
+            overflow: 'auto'
+          }}
+          onClick={(e) => {
+            // Empêcher les clics de se propager
+            e.stopPropagation();
+          }}
+        >
+          {/* Close Button - Large */}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setViewingFile(null);
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            style={{ 
+              position: 'fixed',
+              top: '24px',
+              right: '24px',
+              zIndex: '100000',
+              padding: '12px 20px',
+              backgroundColor: '#3b82f6',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: 'white',
+              fontSize: '16px',
+              fontWeight: 500
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#2563eb';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#3b82f6';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+            aria-label="Close"
+            type="button"
+          >
+            <Icon icon="heroicons:x-mark" style={{ width: '20px', height: '20px' }} />
+            <span>{t('form.steps.documents.close')}</span>
+          </button>
+
+          {/* Document Content - Full Screen */}
+          <div 
+            style={{
+              width: '100%',
+              height: '100vh',
+              overflow: 'auto'
+            }}
+          >
+            {viewingFile.dataUrl && (
+              <>
+                {viewingFile.type?.startsWith('image/') ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100vh', padding: '32px' }}>
+                    <img 
+                      src={viewingFile.dataUrl} 
+                      alt={viewingFile.name}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
+                ) : viewingFile.type === 'application/pdf' || viewingFile.name?.toLowerCase().endsWith('.pdf') ? (
+                  <iframe
+                    src={viewingFile.dataUrl}
+                    style={{
+                      width: '100%',
+                      height: '100vh',
+                      border: 0
+                    }}
+                    title={viewingFile.name}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', textAlign: 'center', padding: '32px', backgroundColor: 'white' }}>
+                    <Icon icon="heroicons:document" style={{ width: '80px', height: '80px', color: '#9ca3af', marginBottom: '24px' }} />
+                    <p style={{ fontSize: '16px', color: '#4b5563', marginBottom: '24px' }}>
+                      {t('form.steps.documents.previewNotAvailable') || 'Preview not available for this file type.'}
+                    </p>
+                    <a
+                      href={viewingFile.dataUrl}
+                      download={viewingFile.name}
+                      style={{ padding: '12px 24px', backgroundColor: '#000000', color: 'white', borderRadius: '8px', fontSize: '16px', fontWeight: 500, textDecoration: 'none' }}
+                    >
+                      {t('form.steps.documents.download') || 'Download'}
+                    </a>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
