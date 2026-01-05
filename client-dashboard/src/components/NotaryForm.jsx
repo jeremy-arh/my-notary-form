@@ -19,6 +19,8 @@ import {
 import { openCrisp } from '../utils/crisp';
 import { useServices } from '../contexts/ServicesContext';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { saveFormDraft, loadFormDraft } from '../utils/formDraft';
+import { calculateTotalAmount } from '../utils/pricing';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
 import DeliveryMethod from './steps/DeliveryMethod';
@@ -44,7 +46,7 @@ const NotaryForm = () => {
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const { t } = useTranslation();
-  const { services, loading: servicesLoading } = useServices();
+  const { services, options, servicesMap, optionsMap, loading: servicesLoading } = useServices();
   const { currency: contextCurrency } = useCurrency();
   const [allowServiceParamBypass, setAllowServiceParamBypass] = useState(false);
   const serviceParam = searchParams.get('service');
@@ -171,6 +173,36 @@ const NotaryForm = () => {
     } catch (error) {
       console.error('❌ [CLEANUP] Erreur lors du nettoyage:', error);
     }
+  }, []); // Run only once on mount
+
+  // Load form draft from Supabase on mount
+  useEffect(() => {
+    const loadDraft = async () => {
+      console.log('🔍 [FormDraft] Checking for existing draft...');
+      const draft = await loadFormDraft();
+      
+      if (draft) {
+        console.log('✅ [FormDraft] Draft found, restoring data...');
+        // Merge draft data with existing form data (localStorage has priority for now)
+        setFormData(prev => ({
+          ...prev,
+          ...draft,
+          // Preserve certain fields from localStorage if they exist
+          password: prev.password || draft.password || '',
+          confirmPassword: prev.confirmPassword || draft.confirmPassword || ''
+        }));
+        
+        // Restore completed steps
+        if (draft.completedSteps && draft.completedSteps.length > 0) {
+          setCompletedSteps(draft.completedSteps);
+          console.log('📍 [FormDraft] Restored completed steps:', draft.completedSteps);
+        }
+      } else {
+        console.log('ℹ️ [FormDraft] No existing draft found');
+      }
+    };
+    
+    loadDraft();
   }, []); // Run only once on mount
 
   const steps = [
@@ -382,64 +414,17 @@ const NotaryForm = () => {
     // Allow access if:
     // 1. First step (always accessible)
     // 2. Previous step is completed (step index = requestedStep - 2, since steps are 1-indexed and completedSteps are 0-indexed)
-    // 3. User is going to next step from current step AND can proceed from current step (handles async state update)
-    // 4. Summary if all previous steps are completed (for returning from payment)
+    // 3. Summary if all previous steps are completed (for returning from payment)
     const previousStepIndex = requestedStep - 2; // Step 2 -> index 0, Step 3 -> index 1, etc.
-    const currentStepFromPath = getCurrentStepFromPath();
-    const isGoingToNextStep = requestedStep === currentStepFromPath + 1;
-    
-    // Check if we can proceed from current step (for when navigating forward)
-    let canProceedFromCurrent = false;
-    if (isGoingToNextStep && requestedStep > 1) {
-      // Check if previous step (current step) can be completed
-      const prevStepId = requestedStep - 1;
-      switch (prevStepId) {
-        case 1: // Choose Services
-          canProceedFromCurrent = formData.selectedServices && formData.selectedServices.length > 0;
-          break;
-        case 2: // Upload Documents
-          if (formData.selectedServices && formData.selectedServices.length > 0 && formData.serviceDocuments) {
-            canProceedFromCurrent = formData.selectedServices.every(serviceId => {
-              const docs = formData.serviceDocuments[serviceId];
-              return docs && docs.length > 0;
-            });
-          }
-          break;
-        case 3: // Personal Info
-          canProceedFromCurrent = formData.firstName?.trim() && formData.lastName?.trim() && 
-                                  (isAuthenticated || (formData.email?.trim() && formData.password?.trim())) &&
-                                  formData.address?.trim();
-          break;
-        case 4: // Signatories
-          if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0) {
-            canProceedFromCurrent = formData.signatories.every(sig => {
-              const firstName = sig.firstName?.trim();
-              const lastName = sig.lastName?.trim();
-              const email = sig.email?.trim();
-              const phone = sig.phone?.trim();
-              if (!firstName || !lastName || !email || !phone) return false;
-              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-              if (!emailRegex.test(email)) return false;
-              if (phone.length < 5) return false;
-              return true;
-            });
-          }
-          break;
-      }
-    }
     
     const canAccess = requestedStep === 1 || 
                      completedSteps.includes(previousStepIndex) ||
-                     canProceedFromCurrent ||
                      (isSummaryStep && hasCompletedAllPreviousSteps);
     
     console.log('🔍 [GUARD] Vérification accès étape:', {
       requestedStep,
-      currentStepFromPath,
       previousStepIndex,
       completedSteps,
-      isGoingToNextStep,
-      canProceedFromCurrent,
       canAccess,
       allowServiceParamBypass,
       serviceParam,
@@ -461,10 +446,11 @@ const NotaryForm = () => {
         : 1;
       const redirectStep = steps.find(s => s.id === lastCompletedStep);
       if (redirectStep) {
+        console.log('❌ [GUARD] Accès refusé, redirection vers étape:', lastCompletedStep);
         navigate(redirectStep.path, { replace: true });
       }
     }
-  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam, formData, isAuthenticated]);
+  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam]);
 
   // Load user data if authenticated
   useEffect(() => {
@@ -958,6 +944,30 @@ const NotaryForm = () => {
     navigate
   ]);
 
+  // Auto-save form draft to Supabase
+  useEffect(() => {
+    // Debounce the save operation
+    const timer = setTimeout(() => {
+      // Only save if user has started filling the form
+      const hasProgress = formData.selectedServices?.length > 0 || 
+                         Object.keys(formData.serviceDocuments || {}).length > 0 ||
+                         formData.firstName ||
+                         formData.lastName ||
+                         formData.email;
+      
+      if (hasProgress && !servicesLoading) {
+        console.log('💾 [NotaryForm] Auto-saving draft...');
+        
+        // Calculate total amount
+        const totalAmount = calculateTotalAmount(formData, servicesMap, optionsMap);
+        
+        saveFormDraft(formData, currentStep, completedSteps, totalAmount);
+      }
+    }, 2000); // Save 2 seconds after last change
+
+    return () => clearTimeout(timer);
+  }, [formData, currentStep, completedSteps, servicesMap, optionsMap, servicesLoading]);
+
   const updateFormData = (data) => {
     setFormData(prev => ({ ...prev, ...data }));
   };
@@ -1387,21 +1397,21 @@ const NotaryForm = () => {
           ...submissionData,
           currency: currency // S'assurer que formData.currency contient aussi la bonne devise
         },
-        currency: currency, // Envoyer la devise comme paramètre séparé et explicite
-        // IMPORTANT: Edge Function MUST use these fields for signatories:
-        // - formData.signatories: array of signatories
-        // - formData.signatoriesCount: total number of signatories
-        // - formData.additionalSignatoriesCount: number of additional signatories (total - 1, first is free)
-        // - formData.additionalSignatoriesCost: cost in EUR (additionalSignatoriesCount * 45)
-        // 
-        // The Edge Function MUST:
-        // 1. Convert formData.additionalSignatoriesCost from EUR to the target currency if needed
-        // 2. Add this converted cost to the total amount
-        // 3. Create a Stripe line item: {
-        //      name: "Additional Signatories",
-        //      amount: convertedCostInCents, // Convert to cents and to target currency
-        //      quantity: formData.additionalSignatoriesCount
-        //    }
+          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
+          // IMPORTANT: Edge Function MUST use these fields for signatories:
+          // - formData.signatories: array of signatories
+          // - formData.signatoriesCount: total number of signatories
+          // - formData.additionalSignatoriesCount: number of additional signatories (total - 1, first is free)
+          // - formData.additionalSignatoriesCost: cost in EUR (additionalSignatoriesCount * 45)
+          // 
+          // The Edge Function MUST:
+          // 1. Convert formData.additionalSignatoriesCost from EUR to the target currency if needed
+          // 2. Add this converted cost to the total amount
+          // 3. Create a Stripe line item: {
+          //      name: "Additional Signatories",
+          //      amount: convertedCostInCents, // Convert to cents and to target currency
+          //      quantity: formData.additionalSignatoriesCount
+          //    }
       };
       
       console.log('💰 [CURRENCY] Body envoyé à l\'Edge Function:');
@@ -1499,8 +1509,37 @@ const NotaryForm = () => {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden overflow-x-hidden w-full max-w-full">
-      {/* Header - Fixed at top - Visible on all screen sizes */}
-      <header className="fixed top-0 left-0 right-0 bg-[#F3F4F6] z-50 h-14 sm:h-16 overflow-visible">
+      {/* Trust Banner - Fixed at very top with black background */}
+      <div className="fixed top-0 left-0 right-0 bg-black z-[60] py-1.5 w-full">
+        <div className="flex items-center justify-between px-4 sm:px-6 w-full">
+          {/* Left side - Customer count */}
+          <div className="flex items-center text-[10px] sm:text-xs text-white font-light">
+            <span>Already over 5000 customers</span>
+          </div>
+          
+          {/* Right side - Rating */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-0.5">
+              <span className="font-normal text-xs sm:text-sm text-white">4.7</span>
+              <span className="text-[10px] sm:text-xs text-white font-light">Excellent</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              {[...Array(5)].map((_, i) => (
+                <Icon 
+                  key={i} 
+                  icon="heroicons:star-solid" 
+                  className="w-2.5 h-2.5 sm:w-3 sm:h-3"
+                  style={{ color: '#04DA8D' }}
+                />
+              ))}
+            </div>
+            <span className="text-[10px] sm:text-xs text-white font-light">161 reviews</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Header - Fixed below trust banner - Visible on all screen sizes */}
+      <header className="fixed top-8 sm:top-9 left-0 right-0 bg-[#F3F4F6] z-50 h-14 sm:h-16 overflow-visible">
         <div className="flex items-center justify-between h-full px-2 sm:px-3 md:px-4 xl:px-6">
           <Logo width={70} height={70} className="sm:w-[80px] sm:h-[80px]" />
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 xl:gap-3 overflow-visible">
@@ -1508,7 +1547,7 @@ const NotaryForm = () => {
             <CurrencySelector openDirection="bottom" />
             <button
               onClick={openCrisp}
-              className="flex items-center justify-center px-1 sm:px-1.5 py-1 sm:py-1.5 bg-transparent text-black hover:underline underline-offset-4 decoration-2 hover:text-gray-900 transition-colors font-medium text-xs sm:text-sm flex-shrink-0"
+              className="flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-black text-white hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm flex-shrink-0 rounded-lg"
               aria-label="Contact Us"
             >
               <Icon icon="heroicons:chat-bubble-left-right" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
@@ -1521,7 +1560,7 @@ const NotaryForm = () => {
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-16"
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-[88px] sm:top-[100px]"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
@@ -1535,7 +1574,7 @@ const NotaryForm = () => {
                   openCrisp();
                   setIsMobileMenuOpen(false);
                 }}
-                className="flex items-center justify-center w-full px-4 py-2 bg-transparent text-black hover:underline underline-offset-4 decoration-2 hover:text-gray-900 transition-colors font-medium"
+                className="flex items-center justify-center w-full px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors font-medium rounded-lg"
                 aria-label="Contact Us"
               >
                 <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
@@ -1612,7 +1651,7 @@ const NotaryForm = () => {
       )}
 
       {/* Main Content - Full width without margins */}
-      <main className="flex-1 flex items-center justify-center pt-14 sm:pt-16 pb-0 overflow-hidden overflow-x-hidden bg-[#F3F4F6] w-full max-w-full">
+      <main className="flex-1 flex items-center justify-center pt-[90px] sm:pt-[100px] pb-0 overflow-hidden overflow-x-hidden bg-[#F3F4F6] w-full max-w-full">
         {/* Form Content */}
         <div className="w-full max-w-full h-full animate-fade-in-up flex flex-col overflow-y-auto overflow-x-hidden relative">
           <Routes>
@@ -1732,49 +1771,49 @@ const NotaryForm = () => {
           {currentStep < steps.length ? (
             <div className="flex items-center gap-2 sm:gap-3">
               <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
-                {currentStep}/{steps.length}
+                Step {currentStep}/{steps.length}
               </span>
-              <button
-                type="button"
-                onClick={handleContinueClick}
-                disabled={isCreatingUser}
-                className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 ${
-                  canProceedFromCurrentStep() && !isCreatingUser
-                    ? 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
-                    : 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
-                }`}
-              >
-                {isCreatingUser ? (
-                  <>
-                    <svg className="animate-spin -ml-1 h-4 w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="truncate">Creating account...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="truncate">{t('form.navigation.continue')}</span>
-                    <Icon icon="heroicons:arrow-right" className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                  </>
-                )}
-              </button>
+            <button
+              type="button"
+              onClick={handleContinueClick}
+              disabled={isCreatingUser}
+              className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 ${
+                canProceedFromCurrentStep() && !isCreatingUser
+                  ? 'bg-[#3971ed] text-white border-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3]'
+                  : 'bg-[#3971ed]/50 text-white/60 border-[#3971ed]/30 opacity-60 cursor-not-allowed'
+              }`}
+            >
+              {isCreatingUser ? (
+                <>
+                  <svg className="animate-spin -ml-1 h-4 w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="truncate">Creating account...</span>
+                </>
+              ) : (
+                <>
+                  <span className="truncate">{t('form.navigation.continue')}</span>
+                  <Icon icon="heroicons:arrow-right" className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                </>
+              )}
+            </button>
             </div>
           ) : (
             <div className="flex items-center gap-2 sm:gap-3">
               <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
-                {currentStep}/{steps.length}
+                Step {currentStep}/{steps.length}
               </span>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border backdrop-blur-md shadow-lg min-w-0 max-w-full flex items-center justify-center ${
-                  isSubmitting
-                    ? 'bg-black/50 text-white/60 border-white/10 opacity-60 cursor-not-allowed'
-                    : 'bg-black/80 text-white border-white/15 hover:bg-black hover:border-white/20 active:bg-black/90'
-                }`}
-              >
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center ${
+                isSubmitting
+                  ? 'bg-[#3971ed]/50 text-white/60 border-[#3971ed]/30 opacity-60 cursor-not-allowed'
+                  : 'bg-[#3971ed] text-white border-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3]'
+              }`}
+            >
               {isSubmitting ? (
                 <>
                   <svg className="animate-spin -ml-1 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1791,7 +1830,7 @@ const NotaryForm = () => {
                   <span className="truncate">Secure Payment</span>
                 </>
               )}
-              </button>
+            </button>
             </div>
           )}
         </div>

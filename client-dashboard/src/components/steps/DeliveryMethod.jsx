@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { trackDeliveryMethodSelected } from '../../utils/analytics';
 
 const DELIVERY_POSTAL_PRICE_EUR = 49.95;
 
@@ -53,6 +54,8 @@ const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleCo
 
   const handleSelect = (method) => {
     updateFormData({ deliveryMethod: method });
+    // Track delivery method selection
+    trackDeliveryMethodSelected(method);
   };
 
   const handleContinue = () => {

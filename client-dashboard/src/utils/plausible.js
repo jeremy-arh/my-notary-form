@@ -197,6 +197,17 @@ export const trackDocumentsUploaded = async (documentsCount, servicesWithDocs) =
 };
 
 /**
+ * Step 3.5: Delivery Method Selected - User selects delivery method
+ * @param {string} deliveryMethod - 'email' or 'postal'
+ */
+export const trackDeliveryMethodSelected = async (deliveryMethod) => {
+  await trackEvent('delivery_method_selected', {
+    funnel_step: '3.5_delivery_method_selected',
+    delivery_method: deliveryMethod
+  });
+};
+
+/**
  * Step 4: Signatories Added - User adds at least one signatory
  * @param {number} signatoriesCount - Number of signatories added
  */

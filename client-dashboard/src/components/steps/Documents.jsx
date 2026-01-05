@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { uploadDocument, deleteDocument } from '../../utils/formDraft';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
@@ -18,6 +19,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   const [viewingFile, setViewingFile] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [footerPadding, setFooterPadding] = useState(160); // Valeur par défaut
+  const [uploadingServices, setUploadingServices] = useState({}); // Track uploading state per service
   const scrollContainerRef = useRef(null);
   const savedScrollPositionRef = useRef(null);
   const fileInputRefs = useRef({});
@@ -154,6 +156,9 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
 
+    // Set uploading state to true for this service
+    setUploadingServices(prev => ({ ...prev, [serviceId]: true }));
+
     // Sauvegarder la position de scroll avant le traitement
     const scrollContainer = scrollContainerRef.current;
     if (scrollContainer) {
@@ -168,35 +173,63 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       }
     }, 0);
 
-    const convertedFiles = await Promise.all(
-      files.map(async (file) => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            resolve({
+    try {
+      // Get session ID for storage path
+      const sessionId = localStorage.getItem('formSessionId') || 
+                       `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Upload files to Supabase Storage
+      const uploadedFiles = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const uploadedFile = await uploadDocument(file, serviceId, sessionId);
+            return {
+              name: uploadedFile.name,
+              size: uploadedFile.size,
+              type: uploadedFile.type,
+              path: uploadedFile.path,
+              url: uploadedFile.url,
+              uploadedAt: uploadedFile.uploadedAt,
+              selectedOptions: [],
+            };
+          } catch (error) {
+            console.error('Error uploading file:', error);
+            // Return a placeholder on error
+            return {
               name: file.name,
               size: file.size,
               type: file.type,
-              lastModified: file.lastModified,
-              dataUrl: reader.result,
+              error: 'Upload failed',
               selectedOptions: [],
-            });
-          };
-          reader.readAsDataURL(file);
-        });
-      })
-    );
+            };
+          }
+        })
+      );
 
-    const serviceDocuments = { ...(formData.serviceDocuments || {}) };
-    const existingFiles = serviceDocuments[serviceId] || [];
-    serviceDocuments[serviceId] = [...existingFiles, ...convertedFiles];
+      const serviceDocuments = { ...(formData.serviceDocuments || {}) };
+      const existingFiles = serviceDocuments[serviceId] || [];
+      serviceDocuments[serviceId] = [...existingFiles, ...uploadedFiles];
 
-    updateFormData({ serviceDocuments });
-
+      updateFormData({ serviceDocuments });
+    } finally {
+      // Set uploading state to false when done
+      setUploadingServices(prev => ({ ...prev, [serviceId]: false }));
+    }
   };
 
-  const removeFile = (serviceId, fileIndex) => {
+  const removeFile = async (serviceId, fileIndex) => {
     const serviceDocuments = { ...formData.serviceDocuments };
+    const fileToRemove = serviceDocuments[serviceId][fileIndex];
+    
+    // Delete from Supabase Storage if it has a path
+    if (fileToRemove && fileToRemove.path) {
+      try {
+        await deleteDocument(fileToRemove.path);
+      } catch (error) {
+        console.error('Error deleting file from storage:', error);
+      }
+    }
+    
     serviceDocuments[serviceId] = serviceDocuments[serviceId].filter((_, index) => index !== fileIndex);
 
     if (serviceDocuments[serviceId].length === 0) {
@@ -265,8 +298,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
           <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
             {t('form.steps.documents.title')}
           </h2>
-          <p className="text-xs sm:text-sm text-gray-600">
+          <p className="text-xs sm:text-sm text-gray-600 mb-2">
             {t('form.steps.documents.subtitle')}
+          </p>
+          <p className="text-xs sm:text-sm text-gray-500 italic">
+            * Your document will only be viewed by a certified notary for verification purposes
           </p>
         </div>
       </div>
@@ -316,8 +352,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
 
                   <div className={`block mb-3 sm:mb-4 w-full ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}>
                     <div 
-                      className={`group bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-3 sm:p-8 md:p-12 lg:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200 w-full max-w-full overflow-hidden ${shouldTakeFullHeight ? 'flex-1 flex flex-col justify-center min-h-[60vh]' : isMobile ? 'min-h-[180px] flex flex-col justify-center' : ''}`}
+                      className={`group relative bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-3 sm:p-8 md:p-12 lg:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200 w-full max-w-full overflow-hidden ${shouldTakeFullHeight ? 'flex-1 flex flex-col justify-center min-h-[60vh]' : isMobile ? 'min-h-[180px] flex flex-col justify-center' : ''}`}
                       onClick={() => {
+                        // Prevent click during upload
+                        if (uploadingServices[service.service_id]) return;
+                        
                         // Sauvegarder la position de scroll avant le clic
                         if (scrollContainerRef.current) {
                           savedScrollPositionRef.current = scrollContainerRef.current.scrollTop;
@@ -329,6 +368,22 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                         }
                       }}
                     >
+                      {/* Uploading Overlay */}
+                      {uploadingServices[service.service_id] && (
+                        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm rounded-lg flex flex-col items-center justify-center z-10">
+                          <Icon 
+                            icon="svg-spinners:ring-resize" 
+                            className="w-12 h-12 sm:w-16 sm:h-16 text-blue-600 mb-3"
+                          />
+                          <p className="text-sm sm:text-base font-medium text-gray-900">
+                            {t('form.steps.documents.uploading')}
+                          </p>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1">
+                            {t('form.steps.documents.pleaseWait')}
+                          </p>
+                        </div>
+                      )}
+
                       <Icon
                         icon="hugeicons:file-upload"
                         className={`w-8 h-8 sm:w-12 sm:h-12 md:w-14 md:h-14 text-black group-hover:text-blue-600 transition-colors mx-auto mb-2 sm:mb-4 md:mb-5 flex-shrink-0 ${shouldTakeFullHeight ? 'mb-6' : ''}`}
@@ -336,9 +391,26 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       <p className={`text-xs sm:text-base md:text-lg text-black group-hover:text-blue-700 transition-colors font-medium mb-1 sm:mb-2 md:mb-3 break-words px-1 ${shouldTakeFullHeight ? 'text-base mb-3' : ''}`}>
                         {t('form.steps.documents.clickToUpload') || 'Click here or drag & drop your document'}
                       </p>
-                      <p className={`text-[10px] sm:text-xs md:text-sm text-gray-600 leading-relaxed px-1 break-words ${shouldTakeFullHeight ? 'text-sm' : ''}`}>
-                        {t('form.steps.documents.uploadDescription') || 'Upload your document securely in PDF, Word, or image format'}
+                      <p className={`text-[10px] sm:text-xs md:text-sm text-gray-600 leading-relaxed px-1 break-words mb-3 sm:mb-4 ${shouldTakeFullHeight ? 'text-sm' : ''}`}>
+                        {t('form.steps.documents.uploadDescriptionLong')}
                       </p>
+                      
+                      {/* Trust Signals */}
+                      <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-6 flex-wrap px-2">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Icon icon="heroicons:lock-closed" className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                          <span className="text-[9px] sm:text-[10px] font-light whitespace-nowrap">{t('form.steps.documents.encryptedSecure')}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Icon icon="heroicons:trash" className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                          <span className="text-[9px] sm:text-[10px] font-light whitespace-nowrap">{t('form.steps.documents.autoDeleted')}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Icon icon="heroicons:check-badge" className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                          <span className="text-[9px] sm:text-[10px] font-light whitespace-nowrap">{t('form.steps.documents.gdprCompliant')}</span>
+                        </div>
+                      </div>
+                      
                       <input
                         ref={(el) => {
                           if (el) {
@@ -363,6 +435,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                         className="sr-only"
                         accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
                         tabIndex={-1}
+                        disabled={uploadingServices[service.service_id]}
                       />
                     </div>
                   </div>
@@ -582,19 +655,19 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
               overflow: 'auto'
             }}
           >
-            {viewingFile.dataUrl && (
+            {(viewingFile.url || viewingFile.dataUrl) && (
               <>
                 {viewingFile.type?.startsWith('image/') ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100vh', padding: '32px' }}>
                     <img 
-                      src={viewingFile.dataUrl} 
+                      src={viewingFile.url || viewingFile.dataUrl} 
                       alt={viewingFile.name}
                       style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                     />
                   </div>
                 ) : viewingFile.type === 'application/pdf' || viewingFile.name?.toLowerCase().endsWith('.pdf') ? (
                   <iframe
-                    src={viewingFile.dataUrl}
+                    src={viewingFile.url || viewingFile.dataUrl}
                     style={{
                       width: '100%',
                       height: '100vh',
@@ -609,7 +682,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       {t('form.steps.documents.previewNotAvailable') || 'Preview not available for this file type.'}
                     </p>
                     <a
-                      href={viewingFile.dataUrl}
+                      href={viewingFile.url || viewingFile.dataUrl}
                       download={viewingFile.name}
                       style={{ padding: '12px 24px', backgroundColor: '#000000', color: 'white', borderRadius: '8px', fontSize: '16px', fontWeight: 500, textDecoration: 'none' }}
                     >

@@ -1,96 +1,63 @@
 /**
- * Wrapper Analytics - Envoie les événements à la fois à Plausible et Segment
- * Les événements Segment utilisent les noms GA4 standards
+ * Wrapper Analytics - Envoie les événements à Plausible uniquement
  */
 
 /**
- * Load analytics functions (Plausible + Segment)
+ * Load analytics functions (Plausible only)
  * @returns {Promise<object>} Object with all tracking functions
  */
 export const loadAnalytics = async () => {
-  const [plausible, segment] = await Promise.all([
-    import('./plausible').catch(() => ({})),
-    import('./segment').catch(() => ({}))
-  ]);
+  const plausible = await import('./plausible').catch(() => ({}));
 
   return {
     // Generic event tracking
     trackEvent: async (eventName, props) => {
-      await Promise.all([
-        plausible.trackEvent?.(eventName, props),
-        segment.trackEvent?.(eventName, props)
-      ]);
+      await plausible.trackEvent?.(eventName, props);
     },
 
     // Funnel tracking functions
     trackFormStart: async () => {
-      await Promise.all([
-        plausible.trackFormStart?.(),
-        segment.trackFormStart?.()
-      ]);
+      await plausible.trackFormStart?.();
     },
 
     trackServicesSelected: async (servicesCount, serviceIds) => {
-      await Promise.all([
-        plausible.trackServicesSelected?.(servicesCount, serviceIds),
-        segment.trackServicesSelected?.(servicesCount, serviceIds)
-      ]);
+      await plausible.trackServicesSelected?.(servicesCount, serviceIds);
     },
 
     trackDocumentsUploaded: async (documentsCount, servicesWithDocs) => {
-      await Promise.all([
-        plausible.trackDocumentsUploaded?.(documentsCount, servicesWithDocs),
-        segment.trackDocumentsUploaded?.(documentsCount, servicesWithDocs)
-      ]);
+      await plausible.trackDocumentsUploaded?.(documentsCount, servicesWithDocs);
+    },
+
+    trackDeliveryMethodSelected: async (deliveryMethod) => {
+      await plausible.trackDeliveryMethodSelected?.(deliveryMethod);
     },
 
     trackSignatoriesAdded: async (signatoriesCount) => {
-      await Promise.all([
-        plausible.trackSignatoriesAdded?.(signatoriesCount),
-        segment.trackSignatoriesAdded?.(signatoriesCount)
-      ]);
+      await plausible.trackSignatoriesAdded?.(signatoriesCount);
     },
 
     trackPersonalInfoCompleted: async (isAuthenticated) => {
-      await Promise.all([
-        plausible.trackPersonalInfoCompleted?.(isAuthenticated),
-        segment.trackPersonalInfoCompleted?.(isAuthenticated)
-      ]);
+      await plausible.trackPersonalInfoCompleted?.(isAuthenticated);
     },
 
     trackSummaryViewed: async (summaryData) => {
-      await Promise.all([
-        plausible.trackSummaryViewed?.(summaryData),
-        segment.trackSummaryViewed?.(summaryData)
-      ]);
+      await plausible.trackSummaryViewed?.(summaryData);
     },
 
     trackPaymentInitiated: async (paymentData) => {
-      await Promise.all([
-        plausible.trackPaymentInitiated?.(paymentData),
-        segment.trackPaymentInitiated?.(paymentData)
-      ]);
+      await plausible.trackPaymentInitiated?.(paymentData);
     },
 
     trackPaymentCompleted: async (paymentData) => {
-      await Promise.all([
-        plausible.trackPaymentCompleted?.(paymentData),
-        segment.trackPaymentCompleted?.(paymentData)
-      ]);
+      await plausible.trackPaymentCompleted?.(paymentData);
     },
 
     trackFormAbandoned: async (currentStep, stepName) => {
-      await Promise.all([
-        plausible.trackFormAbandoned?.(currentStep, stepName),
-        segment.trackFormAbandoned?.(currentStep, stepName)
-      ]);
+      await plausible.trackFormAbandoned?.(currentStep, stepName);
     },
 
     trackStepNavigation: async (fromStep, toStep, direction) => {
-      await Promise.all([
-        plausible.trackStepNavigation?.(fromStep, toStep, direction),
-        segment.trackStepNavigation?.(fromStep, toStep, direction)
-      ]);
+      await plausible.trackStepNavigation?.(fromStep, toStep, direction);
     }
   };
 };
@@ -114,6 +81,11 @@ export const trackServicesSelected = async (servicesCount, serviceIds) => {
 export const trackDocumentsUploaded = async (documentsCount, servicesWithDocs) => {
   const analytics = await loadAnalytics();
   return analytics.trackDocumentsUploaded(documentsCount, servicesWithDocs);
+};
+
+export const trackDeliveryMethodSelected = async (deliveryMethod) => {
+  const analytics = await loadAnalytics();
+  return analytics.trackDeliveryMethodSelected(deliveryMethod);
 };
 
 export const trackSignatoriesAdded = async (signatoriesCount) => {
@@ -150,4 +122,7 @@ export const trackStepNavigation = async (fromStep, toStep, direction) => {
   const analytics = await loadAnalytics();
   return analytics.trackStepNavigation(fromStep, toStep, direction);
 };
+
+
+
 
