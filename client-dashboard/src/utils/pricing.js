@@ -77,3 +77,5 @@ export const calculateTotalFromArrays = (formData, services = [], options = []) 
   return calculateTotalAmount(formData, servicesMap, optionsMap);
 };
 
+
+

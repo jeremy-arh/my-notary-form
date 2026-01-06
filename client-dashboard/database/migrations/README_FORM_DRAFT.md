@@ -229,3 +229,5 @@ $$ LANGUAGE plpgsql;
 - Le système fonctionne même pour les visiteurs non connectés
 - Compatible avec l'ancien système localStorage (fallback)
 
+
+
