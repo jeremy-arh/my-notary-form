@@ -4,7 +4,7 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale/fr';
-import { Bar, Doughnut } from 'react-chartjs-2';
+import { Line, Doughnut } from 'react-chartjs-2';
 import '../../lib/chartConfig'; // Register Chart.js components
 import { defaultChartOptions } from '../../lib/chartConfig';
 
@@ -16,6 +16,9 @@ const CashFlow = () => {
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dailyView, setDailyView] = useState('table'); // 'table' or 'calendar'
   const [syncingGoogleAds, setSyncingGoogleAds] = useState(false);
+  const [budget, setBudget] = useState({ initial_budget: 0, id: null });
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [budgetForm, setBudgetForm] = useState({ initial_budget: '', description: '' });
   
   // Data
   const [stripeRevenues, setStripeRevenues] = useState([]);
@@ -87,12 +90,82 @@ const CashFlow = () => {
         fetchStripeRevenues(),
         fetchWebserviceCosts(),
         fetchGoogleAdsCosts(),
-        fetchNotaryPayments()
+        fetchNotaryPayments(),
+        fetchBudget()
       ]);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBudget = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('budget')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+      
+      if (data) {
+        setBudget(data);
+        setBudgetForm({
+          initial_budget: data.initial_budget.toString(),
+          description: data.description || ''
+        });
+      } else {
+        // Créer un budget par défaut si aucun n'existe
+        const { data: newBudget, error: insertError } = await supabase
+          .from('budget')
+          .insert([{ initial_budget: 0, description: 'Budget initial' }])
+          .select()
+          .single();
+        
+        if (insertError) throw insertError;
+        if (newBudget) {
+          setBudget(newBudget);
+          setBudgetForm({
+            initial_budget: '0',
+            description: 'Budget initial'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching budget:', error);
+    }
+  };
+
+  const handleSaveBudget = async () => {
+    try {
+      const budgetData = {
+        initial_budget: parseFloat(budgetForm.initial_budget),
+        description: budgetForm.description || null
+      };
+
+      if (budget.id) {
+        // Mettre à jour le budget existant
+        const { error } = await supabase
+          .from('budget')
+          .update(budgetData)
+          .eq('id', budget.id);
+        if (error) throw error;
+      } else {
+        // Créer un nouveau budget
+        const { error } = await supabase
+          .from('budget')
+          .insert([budgetData]);
+        if (error) throw error;
+      }
+
+      setIsBudgetModalOpen(false);
+      await fetchBudget();
+    } catch (error) {
+      console.error('Error saving budget:', error);
+      alert('Erreur lors de la sauvegarde: ' + error.message);
     }
   };
 
@@ -230,6 +303,9 @@ const CashFlow = () => {
   // Calculate KPIs
   const calculateKPIs = () => {
     const { start: periodStart, end: periodEnd } = getPeriodDates();
+    
+    // Date de référence pour le calcul du budget : 05/01/2026
+    const budgetReferenceDate = parseISO('2026-01-05');
 
     // Revenues (Stripe)
     const periodRevenues = stripeRevenues.filter(r => {
@@ -237,6 +313,13 @@ const CashFlow = () => {
       return revenueDate >= periodStart && revenueDate <= periodEnd;
     });
     const totalRevenue = periodRevenues.reduce((sum, r) => sum + r.amount, 0);
+    
+    // Revenues pour le calcul du budget (à partir du 05/01/2026)
+    const budgetRevenues = stripeRevenues.filter(r => {
+      const revenueDate = parseISO(r.date);
+      return revenueDate >= budgetReferenceDate;
+    });
+    const totalBudgetRevenue = budgetRevenues.reduce((sum, r) => sum + r.amount, 0);
 
     // Costs - Webservices (les lignes récurrentes sont déjà générées par le cron)
     const periodWebserviceCosts = webserviceCosts.filter(c => {
@@ -264,6 +347,29 @@ const CashFlow = () => {
     const totalOtherCosts = periodOtherCosts.reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
 
     const totalCosts = totalWebserviceCosts + totalGoogleAdsCosts + totalNotaryPayments + totalOtherCosts;
+    
+    // Coûts pour le calcul du budget (à partir du 05/01/2026)
+    const budgetWebserviceCosts = webserviceCosts.filter(c => {
+      const costDate = parseISO(c.billing_date);
+      return costDate >= budgetReferenceDate;
+    }).reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
+    
+    const budgetGoogleAdsCosts = googleAdsCosts.filter(c => {
+      const costDate = parseISO(c.cost_date);
+      return costDate >= budgetReferenceDate;
+    }).reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
+    
+    const budgetNotaryPayments = notaryPayments.filter(p => {
+      const paymentDate = parseISO(p.payment_date);
+      return paymentDate >= budgetReferenceDate;
+    }).reduce((sum, p) => sum + parseFloat(p.payment_amount || 0), 0);
+    
+    const budgetOtherCosts = otherCosts.filter(c => {
+      const costDate = parseISO(c.cost_date);
+      return costDate >= budgetReferenceDate;
+    }).reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
+    
+    const totalBudgetCosts = budgetWebserviceCosts + budgetGoogleAdsCosts + budgetNotaryPayments + budgetOtherCosts;
     const margin = totalRevenue - totalCosts;
     const marginPercentage = totalRevenue > 0 ? (margin / totalRevenue) * 100 : 0;
 
@@ -307,6 +413,12 @@ const CashFlow = () => {
     // %conversion = (Revenu / Coûts Google Ads) * 100
     const conversionPercentage = totalGoogleAdsCosts > 0 ? (totalRevenue / totalGoogleAdsCosts) * 100 : 0;
 
+    // Budget restant = Budget initial - Coûts totaux + Revenus
+    // Calculé uniquement avec les données à partir du 05/01/2026
+    const initialBudget = parseFloat(budget.initial_budget || 0);
+    const remainingBudget = initialBudget - totalBudgetCosts + totalBudgetRevenue;
+    const budgetPercentage = initialBudget > 0 ? (remainingBudget / initialBudget) * 100 : 0;
+
     return {
       totalRevenue,
       totalCosts,
@@ -325,7 +437,10 @@ const CashFlow = () => {
       costsPercentage,
       numberOfSales,
       averageBasket,
-      conversionPercentage
+      conversionPercentage,
+      initialBudget,
+      remainingBudget,
+      budgetPercentage
     };
   };
 
@@ -493,37 +608,72 @@ const CashFlow = () => {
       {
         label: 'Revenus',
         data: barChartRawData.map(item => item.revenue),
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
         borderColor: '#10b981',
-        borderWidth: 1
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#10b981',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6
       },
       {
         label: 'Google Ads',
         data: barChartRawData.map(item => item.googleAds),
-        backgroundColor: 'rgba(249, 115, 22, 0.8)',
+        backgroundColor: 'rgba(249, 115, 22, 0.1)',
         borderColor: '#f97316',
-        borderWidth: 1
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#f97316',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6
       },
       {
         label: 'Notaires',
         data: barChartRawData.map(item => item.notary),
-        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
         borderColor: '#ef4444',
-        borderWidth: 1
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#ef4444',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6
       },
       {
         label: 'Webservices',
         data: barChartRawData.map(item => item.webservice),
-        backgroundColor: 'rgba(99, 102, 241, 0.8)',
+        backgroundColor: 'rgba(99, 102, 241, 0.1)',
         borderColor: '#6366f1',
-        borderWidth: 1
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#6366f1',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6
       },
       {
         label: 'Autres coûts',
         data: barChartRawData.map(item => item.otherCosts || 0),
-        backgroundColor: 'rgba(168, 85, 247, 0.8)',
+        backgroundColor: 'rgba(168, 85, 247, 0.1)',
         borderColor: '#a855f7',
-        borderWidth: 1
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#a855f7',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6
       }
     ]
   };
@@ -947,9 +1097,43 @@ const CashFlow = () => {
           </div>
         </div>
 
-        {/* Nouveaux KPI en haut */}
+        {/* Budget et Nouveaux KPI en haut */}
         <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Indicateurs Clés</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Indicateurs Clés</h2>
+            <button
+              onClick={() => setIsBudgetModalOpen(true)}
+              className="px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 font-semibold flex items-center gap-2"
+            >
+              <Icon icon="heroicons:currency-euro" className="w-5 h-5" />
+              Configurer le budget
+            </button>
+          </div>
+          
+          {/* Budget restant */}
+          <div className="mb-6 p-4 bg-white rounded-xl border-2 border-gray-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-gray-600 mb-1">Budget restant</div>
+                <p className={`text-3xl font-bold ${kpis.remainingBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(kpis.remainingBudget)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Budget initial: {formatCurrency(kpis.initialBudget)} | 
+                  Utilisé: {formatCurrency(kpis.initialBudget - kpis.remainingBudget)} 
+                  ({Math.abs(kpis.budgetPercentage).toFixed(1)}%)
+                </p>
+                <p className="text-xs text-blue-600 mt-1 font-semibold">
+                  ⓘ Calculé à partir du 05/01/2026
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-semibold text-gray-600 mb-1">Budget initial</div>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.initialBudget)}</p>
+              </div>
+            </div>
+          </div>
+          
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <div className="text-sm font-semibold text-gray-600 mb-1">Gads</div>
@@ -1034,7 +1218,7 @@ const CashFlow = () => {
           <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Revenus et Coûts par Jour</h2>
             <div style={{ height: '300px' }}>
-              <Bar data={barChartData} options={barChartOptions} />
+              <Line data={barChartData} options={barChartOptions} />
             </div>
           </div>
 
@@ -2005,6 +2189,83 @@ const CashFlow = () => {
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Budget Modal */}
+        {isBudgetModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Configurer le budget</h2>
+                <button
+                  onClick={() => setIsBudgetModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <Icon icon="heroicons:x-mark" className="w-6 h-6 text-gray-600" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Budget initial (€) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={budgetForm.initial_budget}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, initial_budget: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
+                    placeholder="0.00"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Le budget restant sera calculé automatiquement : Budget initial - Coûts + Revenus
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1 font-semibold">
+                    ⓘ Le calcul du budget prend en compte uniquement les données à partir du 05/01/2026
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Description</label>
+                  <textarea
+                    value={budgetForm.description}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, description: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
+                    rows="3"
+                    placeholder="Ex: Budget mensuel janvier 2026"
+                  />
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <Icon icon="heroicons:information-circle" className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div className="text-sm text-blue-800">
+                      <p className="font-semibold mb-1">Comment ça fonctionne ?</p>
+                      <p>Le budget restant est calculé en temps réel :</p>
+                      <ul className="list-disc list-inside mt-2 space-y-1">
+                        <li>Budget initial : Montant que vous définissez</li>
+                        <li>Coûts : Tous les coûts à partir du 05/01/2026 (Google Ads, Notaires, Webservices, Autres)</li>
+                        <li>Revenus : Tous les revenus Stripe à partir du 05/01/2026</li>
+                        <li>Budget restant = Budget initial - Coûts + Revenus</li>
+                        <li className="font-semibold text-blue-700">Les données avant le 05/01/2026 ne sont pas prises en compte</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button
+                    onClick={handleSaveBudget}
+                    className="flex-1 px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 font-semibold"
+                  >
+                    Enregistrer
+                  </button>
+                  <button
+                    onClick={() => setIsBudgetModalOpen(false)}
+                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold"
+                  >
+                    Annuler
+                  </button>
+                </div>
               </div>
             </div>
           </div>
