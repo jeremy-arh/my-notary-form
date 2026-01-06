@@ -14,6 +14,8 @@ const CashFlow = () => {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [dailyView, setDailyView] = useState('table'); // 'table' or 'calendar'
+  const [syncingGoogleAds, setSyncingGoogleAds] = useState(false);
   
   // Data
   const [stripeRevenues, setStripeRevenues] = useState([]);
@@ -70,6 +72,13 @@ const CashFlow = () => {
   useEffect(() => {
     fetchAllData();
   }, [selectedMonth, startDate, endDate, periodType]);
+
+  // Reset to table view when switching to custom period
+  useEffect(() => {
+    if (periodType === 'custom' && dailyView === 'calendar') {
+      setDailyView('table');
+    }
+  }, [periodType, dailyView]);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -150,6 +159,28 @@ const CashFlow = () => {
       setGoogleAdsCosts(data || []);
     } catch (error) {
       console.error('Error fetching Google Ads costs:', error);
+    }
+  };
+
+  const syncGoogleAdsCosts = async () => {
+    setSyncingGoogleAds(true);
+    try {
+      // Appeler la Supabase Edge Function pour synchroniser les coûts
+      const { data, error } = await supabase.functions.invoke('sync-google-ads-costs', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      // Rafraîchir les données après synchronisation
+      await fetchGoogleAdsCosts();
+      
+      alert('Synchronisation Google Ads terminée avec succès !');
+    } catch (error) {
+      console.error('Error syncing Google Ads costs:', error);
+      alert('Erreur lors de la synchronisation: ' + (error.message || 'Vérifiez que la fonction Edge est déployée et configurée'));
+    } finally {
+      setSyncingGoogleAds(false);
     }
   };
 
@@ -269,6 +300,13 @@ const CashFlow = () => {
       mrr = avgDailyRevenue * 30;
     }
 
+    // Calculs supplémentaires pour les nouveaux KPI
+    const numberOfSales = periodRevenues.length;
+    const averageBasket = numberOfSales > 0 ? totalRevenue / numberOfSales : 0;
+    
+    // %conversion = (Revenu / Coûts Google Ads) * 100
+    const conversionPercentage = totalGoogleAdsCosts > 0 ? (totalRevenue / totalGoogleAdsCosts) * 100 : 0;
+
     return {
       totalRevenue,
       totalCosts,
@@ -284,7 +322,10 @@ const CashFlow = () => {
       googleAdsPercentage,
       notaryPercentage,
       otherCostsPercentage,
-      costsPercentage
+      costsPercentage,
+      numberOfSales,
+      averageBasket,
+      conversionPercentage
     };
   };
 
@@ -592,6 +633,60 @@ const CashFlow = () => {
 
   const calendarData = getCalendarData();
 
+  // Daily indicators data for table
+  const getDailyIndicators = () => {
+    const { start: periodStart, end: periodEnd } = getPeriodDates();
+    const days = eachDayOfInterval({ start: periodStart, end: periodEnd });
+
+    return days.map(day => {
+      const dayStr = format(day, 'yyyy-MM-dd');
+      
+      // Revenus du jour
+      const dayRevenues = stripeRevenues.filter(r => {
+        const revenueDate = parseISO(r.date);
+        return isSameDay(revenueDate, day);
+      });
+      const dayRevenue = dayRevenues.reduce((sum, r) => sum + r.amount, 0);
+      const numberOfSales = dayRevenues.length;
+      const averageUnitRevenue = numberOfSales > 0 ? dayRevenue / numberOfSales : 0;
+
+      // Coûts Google Ads du jour
+      const dayGoogleAds = googleAdsCosts.filter(c => {
+        const costDate = parseISO(c.cost_date);
+        return isSameDay(costDate, day);
+      });
+      const dayGoogleAdsCost = dayGoogleAds.reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
+
+      // Coûts notaires du jour
+      const dayNotary = notaryPayments.filter(p => {
+        const paymentDate = parseISO(p.payment_date);
+        return isSameDay(paymentDate, day);
+      });
+      const dayNotaryCost = dayNotary.reduce((sum, p) => sum + parseFloat(p.payment_amount || 0), 0);
+
+      // Marge brute = Revenu total - Coûts Google Ads - Coûts notaires
+      const grossMargin = dayRevenue - dayGoogleAdsCost - dayNotaryCost;
+
+      // ROAS = Revenu total / Coûts Google Ads (si coûts > 0)
+      const roas = dayGoogleAdsCost > 0 ? dayRevenue / dayGoogleAdsCost : null;
+
+      return {
+        date: day,
+        dateStr: dayStr,
+        dateFormatted: format(day, 'dd-MMM-yyyy', { locale: fr }),
+        googleAds: dayGoogleAdsCost,
+        notaryCost: dayNotaryCost,
+        numberOfSales: numberOfSales,
+        averageUnitRevenue: averageUnitRevenue,
+        totalRevenue: dayRevenue,
+        grossMargin: grossMargin,
+        roas: roas
+      };
+    });
+  };
+
+  const dailyIndicators = getDailyIndicators();
+
   // Save handlers
   const handleSaveWebservice = async () => {
     try {
@@ -852,6 +947,44 @@ const CashFlow = () => {
           </div>
         </div>
 
+        {/* Nouveaux KPI en haut */}
+        <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Indicateurs Clés</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-sm font-semibold text-gray-600 mb-1">Gads</div>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.totalGoogleAdsCosts)}</p>
+            </div>
+            
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-sm font-semibold text-gray-600 mb-1">Notaire</div>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.totalNotaryPayments)}</p>
+            </div>
+            
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-sm font-semibold text-gray-600 mb-1">%conversion</div>
+              <p className="text-2xl font-bold text-gray-900">{kpis.conversionPercentage.toFixed(2)}%</p>
+            </div>
+            
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-sm font-semibold text-gray-600 mb-1">%marge</div>
+              <p className={`text-2xl font-bold ${kpis.marginPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {kpis.marginPercentage.toFixed(2)}%
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-sm font-semibold text-gray-600 mb-1">Revenu</div>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.totalRevenue)}</p>
+            </div>
+            
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-sm font-semibold text-gray-600 mb-1">Panier moyen</div>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.averageBasket)}</p>
+            </div>
+          </div>
+        </div>
+
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
@@ -952,22 +1085,35 @@ const CashFlow = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-gray-900">Google Ads</h3>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingItem(null);
-                  setGoogleAdsForm({
-                    cost_amount: '',
-                    cost_date: format(new Date(), 'yyyy-MM-dd'),
-                    campaign_name: '',
-                    description: ''
-                  });
-                  setIsGoogleAdsModalOpen(true);
-                }}
-                className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all"
-              >
-                <Icon icon="heroicons:plus" className="w-4 h-4" />
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await syncGoogleAdsCosts();
+                  }}
+                  disabled={syncingGoogleAds}
+                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Synchroniser depuis l'API Google Ads"
+                >
+                  <Icon icon={syncingGoogleAds ? "heroicons:arrow-path" : "heroicons:arrow-path"} className={`w-4 h-4 ${syncingGoogleAds ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingItem(null);
+                    setGoogleAdsForm({
+                      cost_amount: '',
+                      cost_date: format(new Date(), 'yyyy-MM-dd'),
+                      campaign_name: '',
+                      description: ''
+                    });
+                    setIsGoogleAdsModalOpen(true);
+                  }}
+                  className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all"
+                >
+                  <Icon icon="heroicons:plus" className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <p className="text-3xl font-bold text-gray-900">{formatCurrency(kpis.totalGoogleAdsCosts)}</p>
             <p className="text-sm text-gray-600 mt-2">{kpis.googleAdsPercentage.toFixed(1)}% des revenus</p>
@@ -1030,64 +1176,153 @@ const CashFlow = () => {
           </div>
         </div>
 
-        {/* Calendar - Only show for month view */}
-        {periodType === 'month' && (
-          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Calendrier - {format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}
+        {/* Tableau des indicateurs quotidiens et Calendrier */}
+        <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">
+              {dailyView === 'table' ? 'Indicateurs Quotidiens' : `Calendrier - ${format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}`}
             </h2>
-          <div className="grid grid-cols-7 gap-2">
-            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
-              <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
-                {day}
-              </div>
-            ))}
-            {/* Empty cells for days before the first day of the month */}
-            {(() => {
-              const firstDay = calendarData[0]?.date;
-              if (!firstDay) return null;
-              const firstDayOfWeek = firstDay.getDay() === 0 ? 7 : firstDay.getDay();
-              const emptyCells = [];
-              for (let i = 1; i < firstDayOfWeek; i++) {
-                emptyCells.push(<div key={`empty-${i}`} className="bg-transparent" />);
-              }
-              return emptyCells;
-            })()}
-            {calendarData.map((day) => (
-              <div
-                key={day.dateStr}
-                className={`bg-white rounded-xl border-2 p-3 min-h-[100px] ${
-                  day.net > 0 ? 'border-green-200' : day.net < 0 ? 'border-red-200' : 'border-gray-200'
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDailyView('table')}
+                className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                  dailyView === 'table'
+                    ? 'bg-black text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
-                <div className="text-sm font-bold text-gray-900 mb-2">{day.date.getDate()}</div>
-                {day.revenue > 0 && (
-                  <div className="text-xs text-green-600 font-semibold mb-1">
-                    +{formatCurrency(day.revenue)}
+                Tableau
+              </button>
+              {periodType === 'month' && (
+                <button
+                  onClick={() => setDailyView('calendar')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                    dailyView === 'calendar'
+                      ? 'bg-black text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Calendrier
+                </button>
+              )}
+            </div>
+          </div>
+
+          {dailyView === 'table' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b-2 border-gray-300">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Gads</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Cout notaire</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900"># Nbrs de vente</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Revenu moyen unitaire</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Revenu total</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Marge Brute</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">ROAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyIndicators.map((day, index) => (
+                    <tr 
+                      key={day.dateStr} 
+                      className={`border-b border-gray-200 hover:bg-gray-50 ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                      }`}
+                    >
+                      <td className="py-3 px-4 text-gray-900 font-medium">
+                        {format(day.date, 'dd', { locale: fr })}-{format(day.date, 'MMMM', { locale: fr })}-{format(day.date, 'yyyy', { locale: fr })}
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-900">
+                        {day.googleAds > 0 ? formatCurrency(day.googleAds) : '0,00 €'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-900">
+                        {day.notaryCost > 0 ? formatCurrency(day.notaryCost) : '0,00 €'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-900 font-semibold">
+                        {day.numberOfSales}
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-900">
+                        {day.averageUnitRevenue > 0 ? formatCurrency(day.averageUnitRevenue) : '0,00 €'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-900 font-semibold">
+                        {day.totalRevenue > 0 ? formatCurrency(day.totalRevenue) : '0,00 €'}
+                      </td>
+                      <td className={`py-3 px-4 text-right font-semibold ${
+                        day.grossMargin >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {formatCurrency(day.grossMargin)}
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-900">
+                        {day.roas !== null ? (
+                          <span className={day.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                            {day.roas.toFixed(2)}x
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            periodType === 'month' && (
+              <div className="grid grid-cols-7 gap-2">
+                {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
+                  <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
+                    {day}
                   </div>
-                )}
-                {day.googleAdsCost > 0 && (
-                  <div className="text-xs text-orange-600">
-                    Ads: -{formatCurrency(day.googleAdsCost)}
+                ))}
+                {/* Empty cells for days before the first day of the month */}
+                {(() => {
+                  const firstDay = calendarData[0]?.date;
+                  if (!firstDay) return null;
+                  const firstDayOfWeek = firstDay.getDay() === 0 ? 7 : firstDay.getDay();
+                  const emptyCells = [];
+                  for (let i = 1; i < firstDayOfWeek; i++) {
+                    emptyCells.push(<div key={`empty-${i}`} className="bg-transparent" />);
+                  }
+                  return emptyCells;
+                })()}
+                {calendarData.map((day) => (
+                  <div
+                    key={day.dateStr}
+                    className={`bg-white rounded-xl border-2 p-3 min-h-[100px] ${
+                      day.net > 0 ? 'border-green-200' : day.net < 0 ? 'border-red-200' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="text-sm font-bold text-gray-900 mb-2">{day.date.getDate()}</div>
+                    {day.revenue > 0 && (
+                      <div className="text-xs text-green-600 font-semibold mb-1">
+                        +{formatCurrency(day.revenue)}
+                      </div>
+                    )}
+                    {day.googleAdsCost > 0 && (
+                      <div className="text-xs text-orange-600">
+                        Ads: -{formatCurrency(day.googleAdsCost)}
+                      </div>
+                    )}
+                    {day.notaryCost > 0 && (
+                      <div className="text-xs text-red-600">
+                        Notaire: -{formatCurrency(day.notaryCost)}
+                      </div>
+                    )}
+                    {day.net !== 0 && (
+                      <div className={`text-xs font-bold mt-1 ${
+                        day.net > 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        Net: {formatCurrency(day.net)}
+                      </div>
+                    )}
                   </div>
-                )}
-                {day.notaryCost > 0 && (
-                  <div className="text-xs text-red-600">
-                    Notaire: -{formatCurrency(day.notaryCost)}
-                  </div>
-                )}
-                {day.net !== 0 && (
-                  <div className={`text-xs font-bold mt-1 ${
-                    day.net > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    Net: {formatCurrency(day.net)}
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-          </div>
-        )}
+            )
+          )}
+        </div>
 
         {/* Modals will be added here */}
         {/* WebService Modal */}
