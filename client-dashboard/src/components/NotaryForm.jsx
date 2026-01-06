@@ -45,8 +45,8 @@ const NotaryForm = () => {
   const [countdown, setCountdown] = useState(5);
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
-  const { t } = useTranslation();
-  const { services, options, servicesMap, optionsMap, loading: servicesLoading } = useServices();
+  const { t, language } = useTranslation();
+  const { services, options, servicesMap, optionsMap, getServiceName, getOptionName, loading: servicesLoading } = useServices();
   const { currency: contextCurrency } = useCurrency();
   const [allowServiceParamBypass, setAllowServiceParamBypass] = useState(false);
   const serviceParam = searchParams.get('service');
@@ -1327,6 +1327,59 @@ const NotaryForm = () => {
         setFormData(prev => ({ ...prev, currency: contextCurrency }));
       }
       
+      // Préparer des libellés localisés pour le checkout Stripe
+      const localizedLineItems = [];
+
+      if (formData.selectedServices && formData.selectedServices.length > 0) {
+        formData.selectedServices.forEach(serviceId => {
+          const service = servicesMap[serviceId];
+          const documents = formData.serviceDocuments?.[serviceId] || [];
+          if (service && documents.length > 0) {
+            localizedLineItems.push({
+              type: 'service',
+              id: serviceId,
+              name: getServiceName(service) || service?.name || serviceId,
+              quantity: documents.length,
+            });
+
+            // Options associées
+            documents.forEach(doc => {
+              if (doc.selectedOptions && doc.selectedOptions.length > 0) {
+                doc.selectedOptions.forEach(optionId => {
+                  const option = optionsMap[optionId];
+                  if (option) {
+                    localizedLineItems.push({
+                      type: 'option',
+                      id: optionId,
+                      name: getOptionName(option) || option?.name || optionId,
+                      quantity: 1,
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+
+      if (formData.deliveryMethod === 'postal') {
+        localizedLineItems.push({
+          type: 'delivery',
+          id: 'delivery_postal',
+          name: t('form.steps.delivery.postTitle', 'Physical delivery (DHL Express)'),
+          quantity: 1,
+        });
+      }
+
+      if (additionalSignatoriesCount > 0) {
+        localizedLineItems.push({
+          type: 'additional_signatories',
+          id: 'additional_signatories',
+          name: t('form.priceDetails.additionalSignatories', 'Additional signatories'),
+          quantity: additionalSignatoriesCount,
+        });
+      }
+      
       const submissionData = {
         ...formData,
         currency: finalCurrency, // Forcer l'utilisation de la devise du contexte
@@ -1341,6 +1394,8 @@ const NotaryForm = () => {
         // Delivery method & cost (EUR)
         deliveryMethod: formData.deliveryMethod,
         deliveryPostalCostEUR,
+        language,
+        localizedLineItems,
       };
 
       // Call Supabase Edge Function to create Stripe checkout session
