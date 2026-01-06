@@ -1328,6 +1328,8 @@ const NotaryForm = () => {
       }
       
       // Préparer des libellés localisés pour le checkout Stripe
+      // Structure: mapping des IDs vers les noms traduits pour faciliter l'utilisation par l'Edge Function
+      const localizedNames = {};
       const localizedLineItems = [];
 
       if (formData.selectedServices && formData.selectedServices.length > 0) {
@@ -1335,10 +1337,15 @@ const NotaryForm = () => {
           const service = servicesMap[serviceId];
           const documents = formData.serviceDocuments?.[serviceId] || [];
           if (service && documents.length > 0) {
+            const translatedName = getServiceName(service) || service?.name || serviceId;
+            // Format pour Stripe: "Service Name (X document(s))"
+            const displayName = `${translatedName} (${documents.length} ${documents.length === 1 ? t('form.steps.summary.document', 'document') : t('form.steps.summary.documentPlural', 'documents')})`;
+            
+            localizedNames[`service_${serviceId}`] = displayName;
             localizedLineItems.push({
               type: 'service',
               id: serviceId,
-              name: getServiceName(service) || service?.name || serviceId,
+              name: displayName,
               quantity: documents.length,
             });
 
@@ -1348,10 +1355,12 @@ const NotaryForm = () => {
                 doc.selectedOptions.forEach(optionId => {
                   const option = optionsMap[optionId];
                   if (option) {
+                    const translatedOptionName = getOptionName(option) || option?.name || optionId;
+                    localizedNames[`option_${optionId}`] = translatedOptionName;
                     localizedLineItems.push({
                       type: 'option',
                       id: optionId,
-                      name: getOptionName(option) || option?.name || optionId,
+                      name: translatedOptionName,
                       quantity: 1,
                     });
                   }
@@ -1363,19 +1372,23 @@ const NotaryForm = () => {
       }
 
       if (formData.deliveryMethod === 'postal') {
+        const deliveryName = t('form.steps.delivery.postTitle', 'Physical delivery (DHL Express)');
+        localizedNames['delivery_postal'] = deliveryName;
         localizedLineItems.push({
           type: 'delivery',
           id: 'delivery_postal',
-          name: t('form.steps.delivery.postTitle', 'Physical delivery (DHL Express)'),
+          name: deliveryName,
           quantity: 1,
         });
       }
 
       if (additionalSignatoriesCount > 0) {
+        const signatoriesName = t('form.priceDetails.additionalSignatories', 'Additional signatories');
+        localizedNames['additional_signatories'] = signatoriesName;
         localizedLineItems.push({
           type: 'additional_signatories',
           id: 'additional_signatories',
-          name: t('form.priceDetails.additionalSignatories', 'Additional signatories'),
+          name: signatoriesName,
           quantity: additionalSignatoriesCount,
         });
       }
@@ -1396,6 +1409,7 @@ const NotaryForm = () => {
         deliveryPostalCostEUR,
         language,
         localizedLineItems,
+        localizedNames, // Mapping des IDs vers les noms traduits pour faciliter l'utilisation par l'Edge Function
       };
 
       // Call Supabase Edge Function to create Stripe checkout session
@@ -1408,6 +1422,9 @@ const NotaryForm = () => {
       console.log('   additional signatories:', submissionData.additionalSignatoriesCount);
       console.log('   additional signatories cost:', submissionData.additionalSignatoriesCost, 'EUR');
       console.log('   currency:', submissionData.currency || 'EUR (default)');
+      console.log('   language:', submissionData.language);
+      console.log('   localizedNames:', submissionData.localizedNames);
+      console.log('   localizedLineItems:', submissionData.localizedLineItems);
       console.log('   appointmentDate:', submissionData.appointmentDate);
       console.log('   appointmentTime:', submissionData.appointmentTime);
       console.log('   timezone:', submissionData.timezone);
