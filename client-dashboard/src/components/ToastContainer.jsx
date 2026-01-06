@@ -1,4 +1,5 @@
 import { Icon } from '@iconify/react';
+import { useTranslation } from '../hooks/useTranslation';
 
 const ToastContainer = ({ toasts, removeToast }) => {
   return (
@@ -11,6 +12,7 @@ const ToastContainer = ({ toasts, removeToast }) => {
 };
 
 const Toast = ({ toast, onClose }) => {
+  const { t } = useTranslation();
   const styles = {
     success: {
       bg: 'bg-green-50 border-green-200',
@@ -57,7 +59,7 @@ const Toast = ({ toast, onClose }) => {
         <button
           onClick={onClose}
           className={`flex-shrink-0 ${style.textColor} hover:opacity-70 transition-opacity`}
-          aria-label="Close notification"
+          aria-label={t('form.notifications.close', 'Close notification')}
         >
           <Icon icon="heroicons:x-mark" className="w-5 h-5" />
         </button>

@@ -3,13 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
 import { handleNotificationNavigation } from '../utils/notificationNavigation';
+import { useTranslation } from '../hooks/useTranslation';
 
 const Notifications = ({ clientId }) => {
   const navigate = useNavigate();
+  const { t, language } = useTranslation();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const localeMap = {
+    en: 'en-US',
+    fr: 'fr-FR',
+    es: 'es-ES',
+    de: 'de-DE',
+    it: 'it-IT',
+    pt: 'pt-PT'
+  };
+
+  const dateLocale = localeMap[language] || 'en-US';
 
   useEffect(() => {
     if (clientId) {
@@ -140,11 +153,17 @@ const Notifications = ({ clientId }) => {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (diffMins < 1) return t('form.notifications.justNow', 'Just now');
+    if (diffMins < 60) {
+      return t('form.notifications.minutesAgo', `${diffMins}m ago`).replace('{count}', diffMins);
+    }
+    if (diffHours < 24) {
+      return t('form.notifications.hoursAgo', `${diffHours}h ago`).replace('{count}', diffHours);
+    }
+    if (diffDays < 7) {
+      return t('form.notifications.daysAgo', `${diffDays}d ago`).replace('{count}', diffDays);
+    }
+    return date.toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' });
   };
 
   return (
@@ -165,21 +184,23 @@ const Notifications = ({ clientId }) => {
         <div className="fixed inset-0 z-[100] bg-white flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 flex-shrink-0 bg-white">
-            <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Notifications</h3>
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
+              {t('form.notifications.title', 'Notifications')}
+            </h3>
             <div className="flex items-center gap-3 sm:gap-4">
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
                   className="text-sm text-gray-600 hover:text-gray-900 font-semibold"
                 >
-                  Mark all as read
+                  {t('form.notifications.markAllAsRead', 'Mark all as read')}
                 </button>
               )}
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-2 sm:p-3 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors border border-gray-300 hover:border-gray-400 lg:shadow-sm"
-                title="Close"
-                aria-label="Close notifications"
+                title={t('form.notifications.close', 'Close')}
+                aria-label={t('form.notifications.close', 'Close')}
               >
                 <Icon icon="heroicons:x-mark" className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-gray-900" />
               </button>
@@ -195,8 +216,12 @@ const Notifications = ({ clientId }) => {
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-8 text-center text-gray-500">
                 <Icon icon="heroicons:bell-slash" className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <p className="text-lg font-semibold text-gray-900 mb-2">No notifications</p>
-                <p className="text-sm text-gray-600">You're all caught up!</p>
+                <p className="text-lg font-semibold text-gray-900 mb-2">
+                  {t('form.notifications.emptyTitle', 'No notifications')}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {t('form.notifications.emptySubtitle', "You're all caught up!")}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-gray-200">

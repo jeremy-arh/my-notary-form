@@ -1514,14 +1514,16 @@ const NotaryForm = () => {
         <div className="flex items-center justify-between px-4 sm:px-6 w-full">
           {/* Left side - Customer count */}
           <div className="flex items-center text-[10px] sm:text-xs text-white font-light">
-            <span>Already over 5000 customers</span>
+            <span>{t('form.topbar.customers', 'Already over 5000 customers')}</span>
           </div>
           
           {/* Right side - Rating */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="flex items-center gap-0.5">
               <span className="font-normal text-xs sm:text-sm text-white">4.7</span>
-              <span className="text-[10px] sm:text-xs text-white font-light">Excellent</span>
+              <span className="text-[10px] sm:text-xs text-white font-light">
+                {t('form.topbar.ratingLabel', 'Excellent')}
+              </span>
             </div>
             <div className="flex items-center gap-0.5">
               {[...Array(5)].map((_, i) => (
@@ -1533,7 +1535,9 @@ const NotaryForm = () => {
                 />
               ))}
             </div>
-            <span className="text-[10px] sm:text-xs text-white font-light">161 reviews</span>
+            <span className="text-[10px] sm:text-xs text-white font-light">
+              {`161 ${t('form.topbar.reviews', 'reviews')}`}
+            </span>
           </div>
         </div>
       </div>
@@ -1547,7 +1551,7 @@ const NotaryForm = () => {
             <CurrencySelector openDirection="bottom" />
             <button
               onClick={openCrisp}
-              className="flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-black text-white hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm flex-shrink-0 rounded-lg"
+              className="flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-transparent sm:bg-black text-black sm:text-white hover:bg-gray-100 sm:hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm flex-shrink-0 rounded-lg"
               aria-label="Contact Us"
             >
               <Icon icon="heroicons:chat-bubble-left-right" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
@@ -1574,7 +1578,7 @@ const NotaryForm = () => {
                   openCrisp();
                   setIsMobileMenuOpen(false);
                 }}
-                className="flex items-center justify-center w-full px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors font-medium rounded-lg"
+                className="flex items-center justify-center w-full px-4 py-2 bg-transparent text-black hover:bg-gray-100 transition-colors font-medium rounded-lg border-2 border-black"
                 aria-label="Contact Us"
               >
                 <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
@@ -1771,7 +1775,7 @@ const NotaryForm = () => {
           {currentStep < steps.length ? (
             <div className="flex items-center gap-2 sm:gap-3">
               <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
-                Step {currentStep}/{steps.length}
+                {t('form.navigation.step')} {currentStep}/{steps.length}
               </span>
             <button
               type="button"
@@ -1789,7 +1793,7 @@ const NotaryForm = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="truncate">Creating account...</span>
+                  <span className="truncate">{t('form.navigation.creatingAccount')}</span>
                 </>
               ) : (
                 <>
