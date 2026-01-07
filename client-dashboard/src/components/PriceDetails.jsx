@@ -3,15 +3,14 @@ import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useTranslation } from '../hooks/useTranslation';
+import { useServices } from '../contexts/ServicesContext';
 
 const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
   const { formatPriceSync, formatPrice: formatPriceAsync, currency } = useCurrency();
   const { t } = useTranslation();
+  const { servicesMap, optionsMap, loading, getServiceName, getOptionName } = useServices();
   const [services, setServices] = useState([]);
-  const [servicesMap, setServicesMap] = useState({});
   const [options, setOptions] = useState([]);
-  const [optionsMap, setOptionsMap] = useState({});
-  const [loading, setLoading] = useState(true);
   const [internalIsOpen, setInternalIsOpen] = useState(true);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [priceCache, setPriceCache] = useState({});
@@ -257,7 +256,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                             className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-1 ${index === 0 ? 'pb-1.5 sm:pb-2 border-b border-gray-200' : ''}`}
                           >
                             <span className="text-[10px] sm:text-xs text-gray-600 flex-1 min-w-0 break-words sm:truncate sm:pr-2">
-                              {service.name} ({documents.length} {documents.length > 1 ? t('form.priceDetails.documentPlural') : t('form.priceDetails.document')})
+                              {getServiceName(service)} ({documents.length} {documents.length > 1 ? t('form.priceDetails.documentPlural') : t('form.priceDetails.document')})
                             </span>
                             <span className="text-[10px] sm:text-xs font-semibold text-gray-900 flex-shrink-0">
                               {formatPrice(serviceTotal)}

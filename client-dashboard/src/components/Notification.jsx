@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { useTranslation } from '../hooks/useTranslation';
 
 const Notification = ({ type = 'success', message, onClose, duration = 5000 }) => {
+  const { t } = useTranslation();
   useEffect(() => {
     if (duration > 0) {
       const timer = setTimeout(() => {
@@ -60,7 +62,7 @@ const Notification = ({ type = 'success', message, onClose, duration = 5000 }) =
           <button
             onClick={onClose}
             className={`ml-2 sm:ml-4 flex-shrink-0 ${style.textColor} hover:opacity-70 transition-opacity`}
-            aria-label="Close notification"
+            aria-label={t('form.steps.documents.close')}
           >
             <Icon icon="heroicons:x-mark" className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>

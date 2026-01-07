@@ -17,3 +17,5 @@ CREATE INDEX IF NOT EXISTS idx_submission_gclid ON submission(gclid) WHERE gclid
 
 
 
+
+

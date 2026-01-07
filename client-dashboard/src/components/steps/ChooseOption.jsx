@@ -6,7 +6,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 
 const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
-  const { services, loading } = useServices();
+  const { services, loading, getServiceName } = useServices();
   const { formatPriceSync, currency, cacheVersion } = useCurrency();
 
   const handleContinue = () => {
@@ -87,7 +87,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
                 <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm sm:text-base text-gray-900 break-words">
-                      {service.name}
+                      {getServiceName(service)}
                     </h3>
                     <p key={`price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm font-semibold text-gray-900 mt-0.5">
                       {formatPriceSync(service.base_price || 0)} {t('form.steps.documents.perDocument')}

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useLanguage } from './LanguageContext';
 
 const ServicesContext = createContext();
 
@@ -54,6 +55,7 @@ export const ServicesProvider = ({ children }) => {
   const [optionsMap, setOptionsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { language } = useLanguage();
 
   useEffect(() => {
     const loadData = async () => {
@@ -217,6 +219,34 @@ export const ServicesProvider = ({ children }) => {
     return optionIds.map(id => optionsMap[id]).filter(Boolean);
   };
 
+  // Helper function to get translated service name
+  const getServiceName = (service) => {
+    if (!service) return '';
+    
+    // Check if service has translation fields (name_en, name_fr, etc.)
+    const translationKey = `name_${language}`;
+    if (service[translationKey]) {
+      return service[translationKey];
+    }
+    
+    // Fallback to name field
+    return service.name || '';
+  };
+
+  // Helper function to get translated option name
+  const getOptionName = (option) => {
+    if (!option) return '';
+    
+    // Check if option has translation fields
+    const translationKey = `name_${language}`;
+    if (option[translationKey]) {
+      return option[translationKey];
+    }
+    
+    // Fallback to name field
+    return option.name || '';
+  };
+
   const value = {
     services,
     options,
@@ -229,6 +259,8 @@ export const ServicesProvider = ({ children }) => {
     getOptionById,
     getServicesByIds,
     getOptionsByIds,
+    getServiceName,
+    getOptionName,
   };
 
   return (
@@ -237,6 +269,7 @@ export const ServicesProvider = ({ children }) => {
     </ServicesContext.Provider>
   );
 };
+
 
 
 

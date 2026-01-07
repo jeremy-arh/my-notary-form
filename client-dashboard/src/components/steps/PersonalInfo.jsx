@@ -415,6 +415,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
     }
     if (validate()) {
       // Call original handleContinueClick or nextStep
+      // L'envoi à Brevo est géré dans NotaryForm.handleContinueClick
       if (handleContinueClick) {
         handleContinueClick();
       } else {
@@ -709,7 +710,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             </div>
           </div>
           <span className="text-xs sm:text-sm text-gray-700 select-none">
-            I am one of the signatories
+            {t('form.steps.personalInfo.isSignatory')}
           </span>
         </label>
           </div>

@@ -175,6 +175,35 @@ const NotaryForm = () => {
     }
   }, []); // Run only once on mount
 
+  // Get current step from URL (defined early for use in useEffect)
+  const getCurrentStepFromPath = () => {
+    const step = steps.find(s => s.path === location.pathname);
+    return step ? step.id : 1;
+  };
+
+  // Track form_started event when form is opened (step 1 or 2)
+  const formStartedTrackedRef = useRef(false);
+  useEffect(() => {
+    const requestedStep = getCurrentStepFromPath();
+    
+    // Envoyer form_started dès l'ouverture du formulaire à l'étape 1 ou 2
+    if (!formStartedTrackedRef.current && (requestedStep === 1 || requestedStep === 2)) {
+      formStartedTrackedRef.current = true;
+      console.log('📊 [PLAUSIBLE] Tracking form_started - Form opened at step', requestedStep);
+      
+      // Track GTM form start
+      trackFormStart({
+        formName: 'notarization_form',
+        serviceType: 'Document Notarization',
+        ctaLocation: 'homepage_hero',
+        ctaText: 'Commencer ma notarisation'
+      });
+      
+      // Track Plausible form start
+      trackPlausibleFormStart();
+    }
+  }, [location.pathname]); // Track when pathname changes
+
   // Load form draft from Supabase on mount
   useEffect(() => {
     const loadDraft = async () => {
@@ -299,12 +328,6 @@ const NotaryForm = () => {
     }
   };
 
-  // Get current step from URL
-  const getCurrentStepFromPath = () => {
-    const step = steps.find(s => s.path === location.pathname);
-    return step ? step.id : 1;
-  };
-
   const currentStep = getCurrentStepFromPath();
 
   // Update page title with current step name
@@ -377,18 +400,6 @@ const NotaryForm = () => {
     const currentStepData = steps.find(s => s.path === location.pathname);
     if (currentStepData) {
       trackPageView(currentStepData.name, location.pathname);
-      
-      // Track form_start when user arrives on first step (Choose Services)
-      if (currentStepData.id === 1 && completedSteps.length === 0) {
-        trackFormStart({
-          formName: 'notarization_form',
-          serviceType: 'Document Notarization',
-          ctaLocation: 'homepage_hero',
-          ctaText: 'Commencer ma notarisation'
-        });
-        // Track Plausible form start
-        trackPlausibleFormStart();
-      }
     }
 
     // Bypass guard when on-boarding via param service -> documents
@@ -1013,6 +1024,58 @@ const NotaryForm = () => {
 
   const handleContinueClick = async () => {
     if (canProceedFromCurrentStep()) {
+      // Envoyer les données à Brevo dans la liste "Form abandonné" quand l'utilisateur passe l'étape Personal Info
+      // Faire l'appel en arrière-plan pour ne pas bloquer l'interface
+      if (currentStep === 4) {
+        // Ne pas attendre la réponse, laisser tourner en arrière-plan
+        (async () => {
+          try {
+            // Collecter toutes les informations des fichiers uploadés
+            const documentUrls = [];
+            if (formData.serviceDocuments) {
+              Object.entries(formData.serviceDocuments).forEach(([serviceId, files]) => {
+                if (Array.isArray(files)) {
+                  files.forEach(file => {
+                    if (file.url || file.public_url || file.path || file.storage_path) {
+                      documentUrls.push({
+                        name: file.name || 'Document',
+                        url: file.url || file.public_url,
+                        path: file.path || file.storage_path,
+                        serviceId: serviceId
+                      });
+                    }
+                  });
+                }
+              });
+            }
+
+            const brevoData = {
+              email: formData.email,
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              phone: formData.phone,
+              address: formData.address,
+              language: language || 'fr',
+              documents: documentUrls
+            };
+
+            console.log('📧 [BREVO] Sending contact data (background):', brevoData);
+
+            const { data, error } = await supabase.functions.invoke('add-to-brevo-list', {
+              body: brevoData
+            });
+
+            if (error) {
+              console.error('❌ [BREVO] Error sending to Brevo:', error);
+            } else {
+              console.log('✅ [BREVO] Contact sent to Brevo successfully:', data);
+            }
+          } catch (error) {
+            console.error('❌ [BREVO] Unexpected error sending to Brevo:', error);
+          }
+        })();
+      }
+
       // Update user information at Personal Info step if authenticated
       if (currentStep === 4 && isAuthenticated) {
         setIsCreatingUser(true);

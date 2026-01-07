@@ -6,12 +6,13 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { uploadDocument, deleteDocument } from '../../utils/formDraft';
+import Notification from '../Notification';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
 const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
-  const { getServicesByIds, options, loading: servicesLoading } = useServices();
+  const { getServicesByIds, options, loading: servicesLoading, getServiceName } = useServices();
   const { formatPriceSync, currency, cacheVersion } = useCurrency();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   const [isMobile, setIsMobile] = useState(false);
   const [footerPadding, setFooterPadding] = useState(160); // Valeur par défaut
   const [uploadingServices, setUploadingServices] = useState({}); // Track uploading state per service
+  const [notification, setNotification] = useState(null);
   const scrollContainerRef = useRef(null);
   const savedScrollPositionRef = useRef(null);
   const fileInputRefs = useRef({});
@@ -155,6 +157,33 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   const handleFileUpload = async (event, serviceId) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
+
+    // Validate file types - only PDF and images allowed
+    const allowedTypes = [
+      'application/pdf',
+      'image/png',
+      'image/jpg',
+      'image/jpeg',
+      'image/gif',
+      'image/webp'
+    ];
+
+    const invalidFiles = files.filter(file => !allowedTypes.includes(file.type.toLowerCase()));
+    
+    if (invalidFiles.length > 0) {
+      const fileNames = invalidFiles.map(f => f.name).join(', ');
+      setNotification({
+        type: 'error',
+        message: t('form.steps.documents.invalidFileFormat').replace('{fileNames}', fileNames)
+      });
+      
+      // Réinitialiser l'input
+      const inputElement = event.target;
+      if (inputElement) {
+        inputElement.value = '';
+      }
+      return;
+    }
 
     // Set uploading state to true for this service
     setUploadingServices(prev => ({ ...prev, [serviceId]: true }));
@@ -292,31 +321,25 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
 
   return (
     <div className="h-full w-full flex flex-col relative max-w-full overflow-x-hidden">
-      {/* Header */}
-      <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4 w-full max-w-full">
-        <div className="max-w-4xl mx-auto w-full">
-          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
-            {t('form.steps.documents.title')}
-          </h2>
-          <p className="text-xs sm:text-sm text-gray-600 mb-2">
-            {t('form.steps.documents.subtitle')}
-          </p>
-          <p className="text-xs sm:text-sm text-gray-500 italic">
-            * Your document will only be viewed by a certified notary for verification purposes
-          </p>
-        </div>
-      </div>
-
-      {/* Content Area - Scrollable */}
+      {/* Scrollable Content - Entire step including header */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 px-3 sm:px-4 md:px-6 overflow-y-auto overflow-x-hidden w-full max-w-full" 
+        className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 w-full max-w-full" 
         style={{ 
           minHeight: 0,
           paddingBottom: isMobile ? `${footerPadding}px` : '144px' // sm:pb-36 = 144px, md:pb-6 = 24px, lg:pb-24 = 96px
         }}
       >
         <div className="max-w-4xl mx-auto w-full">
+          {/* Header */}
+          <div className="mb-3 sm:mb-4">
+            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
+              {t('form.steps.documents.title')}
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-600 mb-2">
+              {t('form.steps.documents.subtitle')}
+            </p>
+          </div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
@@ -339,7 +362,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                   className={`bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 w-full max-w-full box-border ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}
                 >
                   <div className="mb-3 sm:mb-4">
-                    <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{service.name}</h3>
+                    <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{getServiceName(service)}</h3>
                     <p key={`service-price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
                       {formatPriceSync(service.base_price)} {t('form.steps.documents.perDocument')}
                     </p>
@@ -396,7 +419,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       </p>
                       
                       {/* Trust Signals */}
-                      <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-6 flex-wrap px-2">
+                      <div className="hidden sm:flex items-center justify-center gap-3 sm:gap-4 md:gap-6 flex-wrap px-2">
                         <div className="flex items-center gap-1.5 text-gray-500">
                           <Icon icon="heroicons:lock-closed" className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                           <span className="text-[9px] sm:text-[10px] font-light whitespace-nowrap">{t('form.steps.documents.encryptedSecure')}</span>
@@ -433,7 +456,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                           }
                         }}
                         className="sr-only"
-                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                        accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,image/*,application/pdf"
                         tabIndex={-1}
                         disabled={uploadingServices[service.service_id]}
                       />
@@ -542,7 +565,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             <button
               onClick={() => setShowOptionInfo(null)}
               className="absolute top-3 sm:top-4 right-3 sm:right-4 p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-              aria-label="Close"
+              aria-label={t('form.steps.documents.close')}
             >
               <Icon icon="heroicons:x-mark" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
             </button>
@@ -573,7 +596,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                 onClick={() => setShowOptionInfo(null)}
                 className="btn-glassy px-4 sm:px-6 py-2 text-sm sm:text-base text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
               >
-                Got it
+                {t('form.steps.documents.gotIt')}
               </button>
             </div>
           </div>
@@ -640,7 +663,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
               e.currentTarget.style.backgroundColor = '#3b82f6';
               e.currentTarget.style.transform = 'scale(1)';
             }}
-            aria-label="Close"
+            aria-label={t('form.steps.documents.close')}
             type="button"
           >
             <Icon icon="heroicons:x-mark" style={{ width: '20px', height: '20px' }} />
@@ -695,6 +718,15 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Notification */}
+      {notification && (
+        <Notification
+          type={notification.type}
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
       )}
     </div>
   );

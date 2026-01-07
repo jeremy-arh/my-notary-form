@@ -10,7 +10,7 @@ const DELIVERY_POSTAL_PRICE_EUR = 49.95;
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const { t, language } = useTranslation();
-  const { servicesMap, optionsMap, loading } = useServices();
+  const { servicesMap, optionsMap, loading, getServiceName, getOptionName } = useServices();
   const { formatPrice: formatPriceAsync, formatPriceSync, currency } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -172,7 +172,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           // Add service as item
           items.push({
             item_id: service.service_id || serviceId,
-            item_name: service.name || serviceId,
+            item_name: getServiceName(service) || serviceId,
             item_category: 'Notarization Service',
             price: service.base_price || 0,
             quantity: documents.length
@@ -186,7 +186,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 if (option) {
                   items.push({
                     item_id: option.option_id || optionId,
-                    item_name: option.name || optionId,
+                    item_name: getOptionName(option) || optionId,
                     item_category: 'Additional Service',
                     price: option.additional_price || 0,
                     quantity: 1
@@ -340,7 +340,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   <div key={serviceId} className="border border-gray-200 rounded-lg sm:rounded-xl p-2.5 sm:p-3 lg:p-4 overflow-hidden">
                     <div className="mb-2 sm:mb-3">
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{service?.name || serviceId}</h4>
+                        <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{getServiceName(service) || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
                           {documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')} × {formatPriceSync(service?.base_price || 0)}
                         </p>
@@ -365,7 +365,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                   return option ? (
                                     <span key={optionId} className="inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] lg:text-xs font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
                                       <Icon icon={option.icon || "heroicons:check-badge"} className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1 flex-shrink-0" />
-                                      <span className="truncate max-w-[60px] sm:max-w-[80px] lg:max-w-none">{option.name}</span>
+                                      <span className="truncate max-w-[60px] sm:max-w-[80px] lg:max-w-none">{getOptionName(option)}</span>
                                     </span>
                                   ) : null;
                                 })}
@@ -391,17 +391,17 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
-            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Full Name</p>
+            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">{t('form.steps.summary.fullName')}</p>
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-words">
               {formData.firstName} {formData.lastName}
             </p>
           </div>
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden">
-            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Email</p>
+            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">{t('form.steps.summary.emailLabel')}</p>
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-all">{formData.email}</p>
           </div>
           <div className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl sm:col-span-2 overflow-hidden">
-            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Address</p>
+            <p className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">{t('form.steps.summary.addressLabel')}</p>
             <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 break-words">
               {formData.address}, {formData.city}, {formData.postalCode}
             </p>
@@ -538,7 +538,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     <div key={serviceId}>
                       <div className="flex justify-between items-center pb-2 border-b border-gray-200">
                         <span className="text-xs sm:text-sm text-gray-700">
-                          {service.name} ({documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
+                          {getServiceName(service)} ({documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                         </span>
                         <span className="text-xs sm:text-sm font-semibold text-gray-900">
                           {formatPriceSync(serviceTotal)}
@@ -554,7 +554,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                             return (
                               <div key={optionId} className="flex justify-between items-center">
                                 <span className="text-[10px] sm:text-xs text-gray-500 italic">
-                                  + {option.name} ({count} {count > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
+                                  + {getOptionName(option)} ({count} {count > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                                 </span>
                                 <span className="text-[10px] sm:text-xs font-semibold text-gray-700">
                                   {formatPriceSync(optionTotal)}
@@ -573,9 +573,15 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 <p className="text-sm text-gray-500">No services selected</p>
               </div>
             )}
+            {/* Show no services selected message */}
+            {!formData.selectedServices || formData.selectedServices.length === 0 ? (
+              <div className="text-center py-2">
+                <p className="text-sm text-gray-500">{t('form.steps.summary.noServicesSelected')}</p>
+              </div>
+            ) : null}
 
             {/* Delivery Cost */}
-            {formData.deliveryMethod === 'postal' && (
+            {formData.selectedServices && formData.selectedServices.length > 0 && formData.deliveryMethod === 'postal' && (
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                 <span className="text-xs sm:text-sm text-gray-700">
                   {t('form.steps.summary.delivery')}
@@ -641,28 +647,16 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-1">
-                      What happens next?
+                      {t('form.steps.summary.whatHappensNext')}
                     </h4>
                     <p className="text-[10px] sm:text-xs text-gray-700 break-words">
                       {(() => {
-                        const message = t('form.steps.summary.confirmationMessage');
                         const email = formData.email || 'your email';
-                        
-                        if (language === 'fr') {
-                          // French: "Une fois le paiement effectué, vous recevrez instantanément un lien sécurisé sur votre mail {email} pour vérifier votre identité..."
-                          return (
-                            <>
-                              Une fois le paiement effectué, <strong>vous recevrez instantanément un lien sécurisé sur votre mail {email}</strong> pour vérifier votre identité, puis rejoindre votre session vidéo avec un notaire certifié.
-                            </>
-                          );
-                        } else {
-                          // English: "Once payment is complete, you will instantly receive a secure link to your email {email} to verify..."
-                          return (
-                            <>
-                              Once payment is complete, <strong>you will instantly receive a secure link to your email {email}</strong> to verify your identity, then join your video session with a certified notary.
-                            </>
-                          );
-                        }
+                        const message = t(
+                          'form.steps.summary.confirmationMessage',
+                          'Once payment is complete, you will instantly receive a secure link to your email {email} to verify your identity, then join your video session with a certified notary.'
+                        ).replace('{email}', email);
+                        return message;
                       })()}
                     </p>
                   </div>
@@ -679,15 +673,15 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-1">
-                      Secure payment by Stripe
+                      {t('form.steps.summary.securePaymentStripe')}
                     </h4>
                     <p className="text-[10px] sm:text-xs text-gray-600 break-words">
-                      Your payment information is encrypted and processed securely through Stripe. <strong>We never store your card details.</strong>
+                      {t('form.steps.summary.stripeDescription')}
                     </p>
                     <div className="flex items-center gap-2 mt-2">
                       <div className="flex items-center gap-1 text-[10px] text-gray-500">
                         <Icon icon="heroicons:shield-check" className="w-3 h-3 text-green-600" />
-                        <span>SSL Encrypted</span>
+                        <span>{t('form.steps.summary.sslEncrypted')}</span>
                       </div>
                     </div>
                   </div>

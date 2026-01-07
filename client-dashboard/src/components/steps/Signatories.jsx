@@ -3,9 +3,11 @@ import { Icon } from '@iconify/react';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const { formatPriceSync } = useCurrency();
+  const { t } = useTranslation();
   const handleContinue = () => {
     // Call original handleContinueClick or nextStep
     if (handleContinueClick) {
@@ -104,7 +106,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
       const errorKey = signatoryIndex;
       if (value && value.length > 3) {
         if (!isValidPhoneNumber(value)) {
-          setPhoneErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid phone number' }));
+          setPhoneErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validationPhoneInvalid') }));
         } else {
           setPhoneErrors(prev => {
             const newErrors = { ...prev };
@@ -127,7 +129,7 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (value && value.trim()) {
         if (!emailRegex.test(value.trim())) {
-setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email address' }));
+setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validationEmailInvalid') }));
         } else {
           setEmailErrors(prev => {
             const newErrors = { ...prev };
@@ -298,13 +300,13 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
         <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
           <div>
             <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
-              Signatories Overview
+              {t('form.steps.signatories.title')}
             </h2>
             <p className="text-xs sm:text-sm text-gray-600">
-              Verify and complete the persons appearing as signatories on the document.
+              {t('form.steps.signatories.subtitle')}
               {signatories.length > 1 && (
                 <span className="block mt-1">
-                  The first signatory is included. Each additional signatory costs {formatPriceSync(45)}.
+                  {t('form.steps.signatories.firstSignatoryIncluded')} {formatPriceSync(45)}.
                 </span>
               )}
             </p>
@@ -322,7 +324,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
                   >
                     <div className="flex items-center justify-between mb-4 sm:mb-6">
                       <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                        Edit Signatory {signatoryIndex + 1}
+                        {t('form.steps.signatories.editSignatory')} {signatoryIndex + 1}
                       </h3>
                       <button
                         type="button"
@@ -343,33 +345,33 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                          First Name <span className="text-red-500">*</span>
+                          {t('form.steps.signatories.firstName')} <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
                           value={signatory.firstName || ''}
                           onChange={(e) => updateSignatoryField(signatoryIndex, 'firstName', e.target.value)}
                           className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                          placeholder="First Name"
+                          placeholder={t('form.steps.signatories.firstName')}
                         />
                       </div>
 
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                          Last Name <span className="text-red-500">*</span>
+                          {t('form.steps.signatories.lastName')} <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
                           value={signatory.lastName || ''}
                           onChange={(e) => updateSignatoryField(signatoryIndex, 'lastName', e.target.value)}
                           className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                          placeholder="Last Name"
+                          placeholder={t('form.steps.signatories.lastName')}
                         />
                       </div>
 
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                          Email <span className="text-red-500">*</span>
+                          {t('form.steps.signatories.email')} <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="email"
@@ -380,7 +382,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
                               ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
                               : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
                           }`}
-                          placeholder="email@example.com"
+                          placeholder={t('form.steps.signatories.placeholderEmail')}
                         />
                         {emailErrors[signatoryIndex] && (
                           <p className="mt-1 text-xs text-red-600 flex items-center">
@@ -392,7 +394,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
 
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
-                          Phone Number <span className="text-red-500">*</span>
+                          {t('form.steps.signatories.phone')} <span className="text-red-500">*</span>
                         </label>
                         <div className={`flex items-center bg-white border ${
                           phoneErrors[signatoryIndex] ? 'border-red-500' : 'border-gray-300'
@@ -455,7 +457,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
                         }}
                         className="px-4 sm:px-6 py-2 sm:py-2.5 bg-black text-white font-medium rounded-lg transition-colors hover:bg-gray-800 text-sm"
                       >
-                        Save Changes
+                        {t('form.steps.signatories.saveChanges')}
                       </button>
                     </div>
                   </div>
@@ -479,14 +481,14 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
                           <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
                             {signatory.firstName} {signatory.lastName}
                             {isUserSignatory(signatory) && (
-                              <span className="ml-2 text-xs text-gray-500 font-normal">(you)</span>
+                              <span className="ml-2 text-xs text-gray-500 font-normal">{t('form.steps.signatories.youLabel')}</span>
                             )}
                             {signatoryIndex > 0 && (
                               <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPriceSync(45)})</span>
                             )}
                           </h3>
                           <p className="text-xs sm:text-sm text-gray-600 truncate mt-0.5">
-                            {signatory.email || 'No email'}
+                            {signatory.email || t('form.steps.signatories.noEmail')}
                           </p>
                         </div>
                       </div>
@@ -525,12 +527,12 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                    Add a signatory
+                    {t('form.steps.signatories.addSignatory')}
                   </h3>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     {signatories.length === 0 
-                      ? 'Add another person as signatory'
-                      : `Add another person as signatory (+${formatPriceSync(45)})`
+                      ? t('form.steps.signatories.addAnotherSignatory')
+                      : `${t('form.steps.signatories.addAnotherSignatory')} (+${formatPriceSync(45)})`
                     }
                   </p>
                 </div>
@@ -541,7 +543,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email addre
             {/* No signatories message - shown below the add button */}
             {signatories.length === 0 && (
               <div className="text-center py-4">
-                <p className="text-sm text-gray-600">No signatories added yet.</p>
+                <p className="text-sm text-gray-600">{t('form.steps.signatories.noSignatoriesYet')}</p>
               </div>
             )}
           </div>
