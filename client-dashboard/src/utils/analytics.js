@@ -54,10 +54,6 @@ export const loadAnalytics = async () => {
 
     trackFormAbandoned: async (currentStep, stepName) => {
       await plausible.trackFormAbandoned?.(currentStep, stepName);
-    },
-
-    trackStepNavigation: async (fromStep, toStep, direction) => {
-      await plausible.trackStepNavigation?.(fromStep, toStep, direction);
     }
   };
 };
@@ -118,10 +114,6 @@ export const trackFormAbandoned = async (currentStep, stepName) => {
   return analytics.trackFormAbandoned(currentStep, stepName);
 };
 
-export const trackStepNavigation = async (fromStep, toStep, direction) => {
-  const analytics = await loadAnalytics();
-  return analytics.trackStepNavigation(fromStep, toStep, direction);
-};
 
 
 

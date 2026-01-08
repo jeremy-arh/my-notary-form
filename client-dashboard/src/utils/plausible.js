@@ -281,19 +281,6 @@ export const trackFormAbandoned = async (currentStep, stepName) => {
   });
 };
 
-/**
- * Track step navigation
- * @param {number} fromStep - Step user is leaving
- * @param {number} toStep - Step user is going to
- * @param {string} direction - 'next' or 'prev'
- */
-export const trackStepNavigation = async (fromStep, toStep, direction) => {
-  await trackEvent('step_navigation', {
-    from_step: fromStep,
-    to_step: toStep,
-    direction: direction
-  });
-};
 
 
 

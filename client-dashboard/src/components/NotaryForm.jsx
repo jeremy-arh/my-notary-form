@@ -13,8 +13,7 @@ import {
   trackSummaryViewed,
   trackPaymentInitiated,
   trackPaymentCompleted,
-  trackFormAbandoned,
-  trackStepNavigation
+  trackFormAbandoned
 } from '../utils/analytics';
 import { openCrisp } from '../utils/crisp';
 import { useServices } from '../contexts/ServicesContext';
@@ -108,6 +107,32 @@ const NotaryForm = () => {
 
   // Load completed steps from localStorage
   const [completedSteps, setCompletedSteps] = useLocalStorage('notaryCompletedSteps', []);
+
+  // Restore form data from localStorage when returning from external pages (like Stripe checkout)
+  useEffect(() => {
+    const restoreFormData = () => {
+      try {
+        const savedFormData = localStorage.getItem('notaryFormData');
+        if (savedFormData) {
+          const parsedData = JSON.parse(savedFormData);
+          // Only restore if the saved data is different from current formData
+          // This prevents unnecessary updates but ensures data is restored when returning
+          const currentDataStr = JSON.stringify(formData);
+          const savedDataStr = JSON.stringify(parsedData);
+          
+          if (currentDataStr !== savedDataStr) {
+            console.log('🔄 [RESTORE] Restauration des données depuis localStorage');
+            setFormData(parsedData);
+          }
+        }
+      } catch (error) {
+        console.error('❌ [RESTORE] Erreur lors de la restauration:', error);
+      }
+    };
+
+    // Restore on mount and when location changes (especially when returning from payment)
+    restoreFormData();
+  }, [location.pathname]); // Restore when pathname changes (e.g., returning from /payment/failed)
 
   // Clean up obsolete localStorage data on mount - Remove ALL old form data
   useEffect(() => {
@@ -1168,9 +1193,6 @@ const NotaryForm = () => {
   };
 
   const nextStep = () => {
-    // Track step navigation
-    trackStepNavigation(currentStep, currentStep + 1, 'next');
-    
     // Mark current step as completed
     markStepCompleted(currentStep);
 
@@ -1197,7 +1219,6 @@ const NotaryForm = () => {
 
   const prevStep = () => {
     if (currentStep > 1) {
-      trackStepNavigation(currentStep, currentStep - 1, 'prev');
       const prevStepData = steps.find(s => s.id === currentStep - 1);
       if (prevStepData) {
         navigate(prevStepData.path);
@@ -1212,10 +1233,6 @@ const NotaryForm = () => {
     if (canNavigate) {
       const currentStepData = steps.find(s => s.id === currentStep);
       const targetStepData = steps.find(s => s.id === stepId);
-      
-      if (currentStepData && targetStepData) {
-        trackStepNavigation(currentStep, stepId, currentStep < stepId ? 'next' : 'prev');
-      }
       
       const step = steps.find(s => s.id === stepId);
       if (step) {
@@ -1578,7 +1595,17 @@ const NotaryForm = () => {
         throw new Error('No checkout URL received from payment service');
       }
 
-      // Form data is already saved in localStorage by useLocalStorage hook
+      // Explicitly save form data to localStorage before redirecting to ensure persistence
+      // This ensures data is available when returning from Stripe checkout
+      try {
+        localStorage.setItem('notaryFormData', JSON.stringify(formData));
+        localStorage.setItem('notaryCompletedSteps', JSON.stringify(completedSteps));
+        console.log('💾 [SAVE] Form data explicitly saved to localStorage before redirect');
+      } catch (saveError) {
+        console.error('❌ [SAVE] Error saving to localStorage:', saveError);
+        // Continue anyway - useLocalStorage hook should have already saved it
+      }
+
       // Redirect to Stripe Checkout
       console.log('✅ Redirecting to Stripe Checkout:', data.url);
       window.location.href = data.url;
@@ -1852,7 +1879,8 @@ const NotaryForm = () => {
       </main>
 
       {/* Footer - Progress Bar as top border + Navigation Buttons + Price Details - Fixed at bottom */}
-      <div data-footer="notary-form" className="fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden">
+      {/* Hide footer on mobile when on Summary step (step 6) */}
+      <div data-footer="notary-form" className={`fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden ${currentStep === 6 ? 'lg:block hidden' : ''}`}>
         {/* Progress Bar as top border */}
         <div className="relative w-full">
           <div className="h-1 bg-gray-300 w-full">
@@ -1911,7 +1939,7 @@ const NotaryForm = () => {
             </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 lg:hidden">
               <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
                 Step {currentStep}/{steps.length}
               </span>

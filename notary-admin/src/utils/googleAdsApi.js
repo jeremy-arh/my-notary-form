@@ -138,3 +138,4 @@ export async function syncYesterdayGoogleAdsCosts(supabase, customerId) {
   return await syncGoogleAdsCosts(supabase, startDate, endDate, customerId);
 }
 
+

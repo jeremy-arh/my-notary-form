@@ -81,3 +81,4 @@ Il est recommandé de configurer un cron job qui :
 - Il faut gérer les erreurs et les retry en cas d'échec
 - Les coûts sont en micros (diviser par 1,000,000 pour obtenir l'euro)
 
+

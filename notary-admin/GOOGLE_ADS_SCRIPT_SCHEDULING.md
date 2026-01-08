@@ -145,3 +145,4 @@ Pour vérifier que les déclencheurs fonctionnent :
 - Vous pouvez désactiver temporairement un déclencheur sans le supprimer
 - Les exécutions manuelles ne comptent pas dans les quotas automatiques
 
+

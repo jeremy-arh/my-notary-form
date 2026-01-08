@@ -43,14 +43,6 @@
         
         if (typeof window.plausible === 'function') {
           console.log('✅ [Plausible] Function is available and callable');
-          
-          // Test event to verify it works
-          try {
-            window.plausible('test_event', { props: { test: true } });
-            console.log('✅ [Plausible] Test event sent');
-          } catch (error) {
-            console.error('❌ [Plausible] Error sending test event:', error);
-          }
         } else {
           console.error('❌ [Plausible] Function is NOT available');
           console.error('❌ [Plausible] This usually means:');

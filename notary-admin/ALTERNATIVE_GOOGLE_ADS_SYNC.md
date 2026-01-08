@@ -132,3 +132,4 @@ Je recommande **l'Option 1 (Google Ads Scripts)** car :
 
 Voulez-vous que je crée le script Google Ads complet et l'endpoint API pour recevoir les données ?
 
+

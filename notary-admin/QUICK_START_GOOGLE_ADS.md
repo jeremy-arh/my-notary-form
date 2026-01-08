@@ -69,3 +69,4 @@ GOOGLE_ADS_REFRESH_TOKEN=1//xxxxx
 
 Pour plus de détails, consultez : `GOOGLE_ADS_API_SETUP_GUIDE.md`
 
+
