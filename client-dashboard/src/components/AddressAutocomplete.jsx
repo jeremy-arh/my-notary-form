@@ -92,10 +92,31 @@ const AddressAutocomplete = ({
       const input = document.createElement('input');
       input.type = 'text';
       input.placeholder = placeholder;
-      input.className = `w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${className}`;
+      // Build className with proper border color handling
+      const borderColor = className.includes('border-red-500') ? 'border-red-500' : 'border-gray-200';
+      const baseClasses = 'w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic';
+      input.className = `${baseClasses} ${borderColor} ${className.replace('border-red-500', '').trim()}`;
+      // Add inline style for placeholder to ensure it's styled correctly
+      input.style.setProperty('--placeholder-color', '#9ca3af');
       if (inputValue) {
         input.value = inputValue;
       }
+      
+      // Add style element for placeholder styling if not already present
+      if (!document.getElementById('address-autocomplete-placeholder-style')) {
+        const style = document.createElement('style');
+        style.id = 'address-autocomplete-placeholder-style';
+        style.textContent = `
+          .address-autocomplete-input::placeholder {
+            color: #9ca3af !important;
+            font-style: italic !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      // Add a class to the input for styling
+      input.classList.add('address-autocomplete-input');
 
       // Clear container and add the input
       containerRef.current.innerHTML = '';

@@ -408,6 +408,60 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.phone]);
 
+  // Initialiser automatiquement le signatory si isSignatory est true et que les informations sont disponibles
+  useEffect(() => {
+    if (!formData.isSignatory) {
+      return;
+    }
+    
+    const currentSignatories = formData.signatories || [];
+    const hasRequiredInfo = formData.firstName && formData.lastName && formData.email;
+    
+    // Vérifier si l'utilisateur n'est pas déjà dans la liste
+    const exists = currentSignatories.some(sig => 
+      sig.email === formData.email && 
+      sig.firstName === formData.firstName && 
+      sig.lastName === formData.lastName
+    );
+    
+    // Si les informations sont disponibles et que le signatory n'existe pas encore, l'ajouter
+    if (hasRequiredInfo && !exists) {
+      const signatory = {
+        id: Date.now(),
+        firstName: formData.firstName || '',
+        lastName: formData.lastName || '',
+        birthDate: '',
+        birthCity: '',
+        postalAddress: formData.address || '',
+        email: formData.email || '',
+        phone: formData.phone || ''
+      };
+      updateFormData({ 
+        signatories: [...currentSignatories, signatory]
+      });
+    } else if (hasRequiredInfo && exists) {
+      // Mettre à jour le signatory existant avec les informations actuelles
+      const updatedSignatories = currentSignatories.map(sig => {
+        const isUserSig = sig.email === formData.email && 
+                         sig.firstName === formData.firstName && 
+                         sig.lastName === formData.lastName;
+        if (isUserSig) {
+          return {
+            ...sig,
+            firstName: formData.firstName || '',
+            lastName: formData.lastName || '',
+            email: formData.email || '',
+            phone: formData.phone || '',
+            postalAddress: formData.address || ''
+          };
+        }
+        return sig;
+      });
+      updateFormData({ signatories: updatedSignatories });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.isSignatory, formData.firstName, formData.lastName, formData.email, formData.phone, formData.address]);
+
   const handleNext = () => {
     if (emailExists && !isAuthenticated) {
       // Don't allow submission if email exists and user is not authenticated
@@ -453,7 +507,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               id="firstName"
               value={formData.firstName || ''}
               onChange={(e) => handleChange('firstName', e.target.value)}
-              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
                 errors.firstName ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder={t('form.steps.personalInfo.placeholderFirstName')}
@@ -476,7 +530,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               id="lastName"
               value={formData.lastName || ''}
               onChange={(e) => handleChange('lastName', e.target.value)}
-              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
                 errors.lastName ? 'border-red-500' : 'border-gray-200'
               }`}
               placeholder={t('form.steps.personalInfo.placeholderLastName')}
@@ -504,7 +558,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 value={formData.email || ''}
                 onChange={(e) => handleChange('email', e.target.value)}
                 onBlur={(e) => checkEmailExists(e.target.value)}
-                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
+                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
                   errors.email || emailExists ? 'border-red-500' : 'border-gray-200'
                 }`}
                 placeholder={t('form.steps.personalInfo.placeholderEmail')}
@@ -536,7 +590,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                   id="password"
                   value={formData.password || ''}
                   onChange={(e) => handleChange('password', e.target.value)}
-                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
                     errors.password ? 'border-red-500' : 'border-gray-200'
                   }`}
                   placeholder={t('form.steps.personalInfo.placeholderPassword')}

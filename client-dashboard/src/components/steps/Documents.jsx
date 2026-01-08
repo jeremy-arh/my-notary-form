@@ -61,7 +61,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Calculate footer height and set padding dynamically to maintain 20px gap
+  // Calculate footer height and set padding dynamically to maintain gap (10px on mobile, 20px on desktop)
   useEffect(() => {
     let resizeObserver = null;
     let checkInterval = null;
@@ -71,7 +71,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       const footer = document.querySelector('[data-footer="notary-form"]');
       if (footer && footer.offsetHeight > 0) {
         const footerHeight = footer.offsetHeight;
-        const desiredGap = 20; // 20px gap
+        const desiredGap = isMobile ? 50 : 20; // 50px gap on mobile pour permettre de voir le dernier fichier avec ses options, 20px on desktop
         const newPadding = footerHeight + desiredGap;
         setFooterPadding(prevPadding => {
           // Always update to ensure accuracy
@@ -121,7 +121,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             clearInterval(checkInterval);
             if (attempts >= 30) {
               // Max attempts reached, use safe fallback
-              setFooterPadding(100);
+              setFooterPadding(isMobile ? 110 : 100);
             }
           }
         }, 100);
@@ -140,7 +140,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
         window.removeEventListener('resize', resizeHandler);
       }
     };
-  }, []);
+  }, [isMobile]);
 
   // Restaurer la position de scroll après les mises à jour du DOM
   useEffect(() => {
@@ -207,10 +207,18 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       const sessionId = localStorage.getItem('formSessionId') || 
                        `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Upload files to Supabase Storage
+      // Upload files to Supabase Storage and create dataUrl for localStorage
       const uploadedFiles = await Promise.all(
         files.map(async (file) => {
           try {
+            // Create dataUrl from file for localStorage (to avoid Supabase bucket errors)
+            const dataUrl = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+
             const uploadedFile = await uploadDocument(file, serviceId, sessionId);
             return {
               name: uploadedFile.name,
@@ -218,6 +226,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
               type: uploadedFile.type,
               path: uploadedFile.path,
               url: uploadedFile.url,
+              dataUrl: dataUrl, // Ajout du dataUrl pour affichage depuis localStorage
               uploadedAt: uploadedFile.uploadedAt,
               selectedOptions: [],
             };
@@ -319,6 +328,31 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
     return formatPriceSync(totalEUR);
   };
 
+  // Get file type icon and color based on file extension or MIME type
+  const getFileTypeIcon = (file) => {
+    const fileName = file.name?.toLowerCase() || '';
+    const fileType = file.type?.toLowerCase() || '';
+    
+    // Check by extension first, then by MIME type
+    if (fileName.endsWith('.pdf') || fileType === 'application/pdf') {
+      return { icon: 'mdi:file-pdf-box', color: 'text-red-600', bgColor: 'bg-red-50' };
+    }
+    if (fileName.endsWith('.png') || fileType === 'image/png') {
+      return { icon: 'mdi:file-image', color: 'text-blue-600', bgColor: 'bg-blue-50' };
+    }
+    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileType === 'image/jpeg' || fileType === 'image/jpg') {
+      return { icon: 'mdi:file-image', color: 'text-purple-600', bgColor: 'bg-purple-50' };
+    }
+    if (fileName.endsWith('.gif') || fileType === 'image/gif') {
+      return { icon: 'mdi:file-image', color: 'text-pink-600', bgColor: 'bg-pink-50' };
+    }
+    if (fileName.endsWith('.webp') || fileType === 'image/webp') {
+      return { icon: 'mdi:file-image', color: 'text-green-600', bgColor: 'bg-green-50' };
+    }
+    // Default for other file types
+    return { icon: 'heroicons:document', color: 'text-gray-600', bgColor: 'bg-gray-50' };
+  };
+
   return (
     <div className="h-full w-full flex flex-col relative max-w-full overflow-x-hidden">
       {/* Scrollable Content - Entire step including header */}
@@ -330,9 +364,9 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
           paddingBottom: isMobile ? `${footerPadding}px` : '144px' // sm:pb-36 = 144px, md:pb-6 = 24px, lg:pb-24 = 96px
         }}
       >
-        <div className="max-w-4xl mx-auto w-full">
+        <div className={`max-w-4xl mx-auto w-full ${services.length === 1 && isMobile && !loading ? 'h-full flex flex-col min-h-0' : ''}`}>
           {/* Header */}
-          <div className="mb-3 sm:mb-4">
+          <div className="mb-3 sm:mb-4 flex-shrink-0">
             <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
               {t('form.steps.documents.title')}
             </h2>
@@ -349,7 +383,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             <p className="text-gray-600">{t('form.steps.documents.noServicesSelected')}</p>
           </div>
         ) : (
-          <div className={`space-y-3 sm:space-y-4 w-full max-w-full ${services.length === 1 && isMobile ? 'flex flex-col h-full' : ''}`}>
+          <div className={`space-y-3 sm:space-y-4 w-full max-w-full ${services.length === 1 && isMobile ? 'flex flex-col flex-1 min-h-0' : ''}`}>
             {services.map((service) => {
               const fileCount = getFileCount(service.service_id);
               const files = formData.serviceDocuments?.[service.service_id] || [];
@@ -359,7 +393,8 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
               return (
                 <div
                   key={service.service_id}
-                  className={`bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 w-full max-w-full box-border ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}
+                  className={`bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 w-full max-w-full box-border ${shouldTakeFullHeight ? 'flex-1 flex flex-col min-h-0' : ''}`}
+                  style={isMobile && files.length === 0 ? { minHeight: '400px', display: 'flex', flexDirection: 'column' } : {}}
                 >
                   <div className="mb-3 sm:mb-4">
                     <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{getServiceName(service)}</h3>
@@ -373,9 +408,18 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                     )}
                   </div>
 
-                  <div className={`block mb-3 sm:mb-4 w-full ${shouldTakeFullHeight ? 'flex-1 flex flex-col' : ''}`}>
+                  <div className={`block mb-3 sm:mb-4 w-full ${shouldTakeFullHeight ? 'flex-1 flex flex-col min-h-0' : isMobile && files.length === 0 ? 'flex-1 flex flex-col min-h-0' : ''}`}>
                     <div 
-                      className={`group relative bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-3 sm:p-8 md:p-12 lg:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200 w-full max-w-full overflow-hidden ${shouldTakeFullHeight ? 'flex-1 flex flex-col justify-center min-h-[60vh]' : isMobile ? 'min-h-[180px] flex flex-col justify-center' : ''}`}
+                      className={`group relative bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-3 sm:p-8 md:p-12 lg:p-16 text-center cursor-pointer transition-all hover:bg-blue-50 hover:border-blue-200 active:bg-blue-100 active:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-200 w-full max-w-full overflow-hidden ${shouldTakeFullHeight ? 'flex-1 flex flex-col justify-center' : isMobile && files.length === 0 ? 'flex-1 flex flex-col justify-center min-h-0' : isMobile ? 'flex flex-col justify-center' : ''}`}
+                      style={shouldTakeFullHeight && isMobile ? {
+                        maxHeight: '100%',
+                        minHeight: '250px'
+                      } : isMobile && files.length === 0 ? {
+                        minHeight: '250px',
+                        height: '100%'
+                      } : isMobile ? {
+                        minHeight: '250px'
+                      } : {}}
                       onClick={() => {
                         // Prevent click during upload
                         if (uploadingServices[service.service_id]) return;
@@ -468,11 +512,18 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       {files.map((file, index) => (
                         <div
                           key={index}
-                          className="border border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4"
+                          className={`border border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4 ${isMobile && index === files.length - 1 ? 'mb-3' : ''}`}
                         >
                           <div className="flex items-start sm:items-center justify-between mb-2 sm:mb-3 gap-2 flex-wrap">
                             <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-                              <Icon icon="heroicons:document" className="w-6 h-6 sm:w-8 sm:h-8 text-gray-600 flex-shrink-0" />
+                              {(() => {
+                                const fileType = getFileTypeIcon(file);
+                                return (
+                                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${fileType.bgColor}`}>
+                                    <Icon icon={fileType.icon} className={`w-5 h-5 sm:w-6 sm:h-6 ${fileType.color}`} />
+                                  </div>
+                                );
+                              })()}
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs sm:text-sm font-medium text-gray-900 truncate" title={file.name}>{truncateFileName(file.name)}</p>
                                 <p className="text-[10px] sm:text-xs text-gray-500">
@@ -678,19 +729,25 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
               overflow: 'auto'
             }}
           >
-            {(viewingFile.url || viewingFile.dataUrl) && (
+            {(viewingFile.dataUrl || viewingFile.url) && (
               <>
                 {viewingFile.type?.startsWith('image/') ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100vh', padding: '32px' }}>
                     <img 
-                      src={viewingFile.url || viewingFile.dataUrl} 
+                      src={viewingFile.dataUrl || viewingFile.url} 
                       alt={viewingFile.name}
                       style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                      onError={(e) => {
+                        // Si dataUrl échoue, essayer avec url
+                        if (viewingFile.url && e.target.src !== viewingFile.url) {
+                          e.target.src = viewingFile.url;
+                        }
+                      }}
                     />
                   </div>
                 ) : viewingFile.type === 'application/pdf' || viewingFile.name?.toLowerCase().endsWith('.pdf') ? (
                   <iframe
-                    src={viewingFile.url || viewingFile.dataUrl}
+                    src={viewingFile.dataUrl || viewingFile.url}
                     style={{
                       width: '100%',
                       height: '100vh',
@@ -705,7 +762,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                       {t('form.steps.documents.previewNotAvailable') || 'Preview not available for this file type.'}
                     </p>
                     <a
-                      href={viewingFile.url || viewingFile.dataUrl}
+                      href={viewingFile.dataUrl || viewingFile.url}
                       download={viewingFile.name}
                       style={{ padding: '12px 24px', backgroundColor: '#000000', color: 'white', borderRadius: '8px', fontSize: '16px', fontWeight: 500, textDecoration: 'none' }}
                     >

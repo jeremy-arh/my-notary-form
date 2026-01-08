@@ -24,16 +24,25 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
   const autocompleteRefs = useRef({});
   const googleMapsLoaded = useRef(false);
 
-  // Load signatories from formData
+  // Load signatories from formData and update whenever formData.signatories changes
   useEffect(() => {
-    if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0) {
-      setSignatories(formData.signatories);
-    } else {
-      // Don't create empty signatory - start with empty array
-      setSignatories([]);
-      updateFormData({ signatories: [] });
+    if (formData.signatories && Array.isArray(formData.signatories)) {
+      // Update local state with formData.signatories
+      // Use JSON.stringify to detect deep changes, but only update if different
+      const currentStr = JSON.stringify(signatories.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName, email: s.email })));
+      const newStr = JSON.stringify(formData.signatories.map(s => ({ id: s.id, firstName: s.firstName, lastName: s.lastName, email: s.email })));
+      
+      if (currentStr !== newStr) {
+        setSignatories(formData.signatories);
+      }
+    } else if (!formData.signatories || formData.signatories.length === 0) {
+      // Only clear if we have signatories locally but formData is empty
+      if (signatories.length > 0) {
+        setSignatories([]);
+      }
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.signatories]);
 
   // Load Google Maps API for address autocomplete
   useEffect(() => {
@@ -315,8 +324,13 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
           <div className="space-y-3 sm:space-y-4">
             {/* Signatories list - Card view */}
             {signatories.length > 0 && (
-              signatories.map((signatory, signatoryIndex) => (
-                editingIndex === signatoryIndex ? (
+              signatories.map((signatory, signatoryIndex) => {
+                // Don't show signatories that are new and not being edited (empty signatories)
+                if (signatory._isNew && editingIndex !== signatoryIndex) {
+                  return null;
+                }
+                
+                return editingIndex === signatoryIndex ? (
                   // Edit mode - show form
                   <div
                     key={signatory.id || signatoryIndex}
@@ -351,8 +365,8 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                           type="text"
                           value={signatory.firstName || ''}
                           onChange={(e) => updateSignatoryField(signatoryIndex, 'firstName', e.target.value)}
-                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                          placeholder={t('form.steps.signatories.firstName')}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder:text-gray-400 placeholder:italic"
+                          placeholder="John"
                         />
                       </div>
 
@@ -364,8 +378,8 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                           type="text"
                           value={signatory.lastName || ''}
                           onChange={(e) => updateSignatoryField(signatoryIndex, 'lastName', e.target.value)}
-                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                          placeholder={t('form.steps.signatories.lastName')}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder:text-gray-400 placeholder:italic"
+                          placeholder="Doe"
                         />
                       </div>
 
@@ -377,7 +391,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                           type="email"
                           value={signatory.email || ''}
                           onChange={(e) => updateSignatoryField(signatoryIndex, 'email', e.target.value)}
-                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border rounded-lg focus:ring-2 text-sm ${
+                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white border rounded-lg focus:ring-2 text-sm placeholder:text-gray-400 placeholder:italic ${
                             emailErrors[signatoryIndex] 
                               ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
                               : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
@@ -455,9 +469,10 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                             setEditingIndex(null);
                           }
                         }}
-                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-black text-white font-medium rounded-lg transition-colors hover:bg-gray-800 text-sm"
+                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-black text-white font-medium rounded-lg transition-colors hover:bg-gray-800 text-sm flex items-center gap-2"
                       >
-                        {t('form.steps.signatories.saveChanges')}
+                        <Icon icon="heroicons:check" className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span>{t('form.steps.signatories.saveChanges')}</span>
                       </button>
                     </div>
                   </div>
@@ -483,9 +498,18 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                             {isUserSignatory(signatory) && (
                               <span className="ml-2 text-xs text-gray-500 font-normal">{t('form.steps.signatories.youLabel')}</span>
                             )}
-                            {signatoryIndex > 0 && (
-                              <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPriceSync(45)})</span>
-                            )}
+                            {(() => {
+                              // Le premier signataire (index 0) est toujours gratuit
+                              // Les signataires suivants (index > 0) sont payants
+                              if (signatoryIndex === 0) {
+                                return null;
+                              }
+                              
+                              // Afficher le prix pour les signataires supplémentaires
+                              return (
+                                <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPriceSync(45)})</span>
+                              );
+                            })()}
                           </h3>
                           <p className="text-xs sm:text-sm text-gray-600 truncate mt-0.5">
                             {signatory.email || t('form.steps.signatories.noEmail')}
@@ -514,16 +538,17 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                       </div>
                     </div>
                   </div>
-                )
-              ))
+                );
+              }).filter(Boolean)
             )}
 
-            {/* Add signatory card */}
-            <button
-              type="button"
-              onClick={addSignatory}
-              className="w-full bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
-            >
+            {/* Add signatory card - Hide when adding a new signatory */}
+            {!(editingIndex !== null && signatories[editingIndex]?._isNew) && (
+              <button
+                type="button"
+                onClick={addSignatory}
+                className="w-full bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
+              >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900">
@@ -539,6 +564,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                 <Icon icon="heroicons:plus" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 flex-shrink-0" />
               </div>
             </button>
+            )}
 
             {/* No signatories message - shown below the add button */}
             {signatories.length === 0 && (

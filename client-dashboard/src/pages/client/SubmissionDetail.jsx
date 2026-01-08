@@ -858,7 +858,7 @@ const SubmissionDetail = () => {
                           }
                         });
                         
-                        // Calculate additional signatories cost (€10 per additional signatory)
+                        // Calculate additional signatories cost (€45 per additional signatory)
                         // First, try to get signatories from database (if payment completed)
                         if (signatories.length > 0) {
                           // Group signatories by document_key
@@ -874,7 +874,7 @@ const SubmissionDetail = () => {
                           Object.values(signatoriesByDoc).forEach(docSignatories => {
                             if (docSignatories.length > 1) {
                               // First signatory is included, count additional ones
-                              grandTotal += (docSignatories.length - 1) * 10;
+                              grandTotal += (docSignatories.length - 1) * 45;
                             }
                           });
                         } else {

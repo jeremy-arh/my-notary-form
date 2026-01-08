@@ -4,7 +4,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { trackDeliveryMethodSelected } from '../../utils/analytics';
 
-const DELIVERY_POSTAL_PRICE_EUR = 49.95;
+const DELIVERY_POSTAL_PRICE_EUR = 29.95;
 
 const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const { t } = useTranslation();
@@ -37,10 +37,10 @@ const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleCo
 
   // Helper function to replace price in delivery description text
   const getDeliveryDescription = () => {
-    const description = t('form.steps.delivery.postDescription') || 'We charge an extra fee of €49.95 for DHL Express delivery.';
+    const description = t('form.steps.delivery.postDescription') || 'We charge an extra fee of €29.95 for DHL Express delivery.';
     
     if (convertedDeliveryPrice) {
-      // Replace various price formats in the text (€49.95, 49,95 €, 49.95€, etc.)
+      // Replace various price formats in the text (€29.95, 29,95 €, 29.95€, etc.)
       // This regex matches: optional € symbol, number with comma or dot, optional € symbol
       // Add a space after the converted price to ensure proper spacing before "for"
       return description.replace(
@@ -144,7 +144,7 @@ const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleCo
             <div className="flex items-center p-4 sm:p-5 flex-1">
               <div className="mr-4 sm:mr-5 flex-shrink-0">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                  <Icon icon="heroicons-envelope-open" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                  <span className="text-lg sm:text-xl font-semibold text-gray-700">@</span>
                 </div>
               </div>
               <div className="flex-1 min-w-0">
@@ -179,10 +179,15 @@ const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleCo
             </div>
           </button>
 
-          {/* Helper text */}
-          <p className="text-[11px] sm:text-xs text-gray-500 mt-2">
-            {t('form.steps.delivery.helper') || 'You can always contact us later if you need to change the delivery method.'}
-          </p>
+          {/* Additional info about personal space */}
+          <div className="mt-4 sm:mt-6 bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-3 sm:p-4 flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <Icon icon="heroicons:information-circle" className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+            </div>
+            <p className="text-xs sm:text-sm text-blue-900 flex-1">
+              {t('form.steps.delivery.personalSpaceInfo') || 'Une fois la notarisation terminée vos documents seront également disponible sur votre espace personnel, pour un accés facile, à tout moment'}
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import PriceDetails from '../PriceDetails';
 
-const DELIVERY_POSTAL_PRICE_EUR = 49.95;
+const DELIVERY_POSTAL_PRICE_EUR = 29.95;
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const { t, language } = useTranslation();
@@ -135,7 +135,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       : t('form.steps.delivery.emailDescription');
     
     if (formData.deliveryMethod === 'postal' && convertedDeliveryPrice) {
-      // Replace various price formats in the text (€49.95, 49,95 €, 49.95€, etc.)
+      // Replace various price formats in the text (€29.95, 29,95 €, 29.95€, etc.)
       // This regex matches: optional € symbol, number with comma or dot, optional € symbol
       // Add a space after the converted price to ensure proper spacing before "for"
       return description.replace(
@@ -319,6 +319,36 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
           {/* Left Column - Main Content */}
           <div className="lg:col-span-7 space-y-3 sm:space-y-4 lg:space-y-6">
+            {/* What happens next */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-3 sm:p-4 flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <Icon icon="heroicons:information-circle" className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs sm:text-sm font-semibold text-blue-900 mb-1">
+                  {t('form.steps.summary.whatHappensNext')}
+                </h4>
+                <p 
+                  className="text-xs sm:text-sm text-blue-900 break-words"
+                  dangerouslySetInnerHTML={{
+                    __html: (() => {
+                      const email = formData.email || 'your email';
+                      const message = t(
+                        'form.steps.summary.confirmationMessage',
+                        'Once payment is complete, you will instantly receive a secure link to your email {email} to verify your identity, then join your video session with a certified notary.'
+                      );
+                      // Mettre en gras les informations importantes
+                      return message
+                        .replace('{email}', `<strong>${email}</strong>`)
+                        .replace(/secure link/g, '<strong>secure link</strong>')
+                        .replace(/verify your identity/g, '<strong>verify your identity</strong>')
+                        .replace(/video session/g, '<strong>video session</strong>')
+                        .replace(/certified notary/g, '<strong>certified notary</strong>');
+                    })()
+                  }}
+                />
+              </div>
+            </div>
 
       {/* Selected Services with Documents */}
       {formData.selectedServices && formData.selectedServices.length > 0 && (
@@ -423,10 +453,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         <div className="flex items-start space-x-3 sm:space-x-4">
           <div className="flex-shrink-0">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
-              <Icon
-                icon={formData.deliveryMethod === 'postal' ? 'heroicons-envelope' : 'heroicons-envelope-open'}
-                className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700"
-              />
+              {formData.deliveryMethod === 'postal' ? (
+                <Icon
+                  icon="heroicons-envelope"
+                  className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700"
+                />
+              ) : (
+                <span className="text-lg sm:text-xl font-semibold text-gray-700">@</span>
+              )}
             </div>
           </div>
           <div className="flex-1 min-w-0 space-y-0.5">
@@ -471,6 +505,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs sm:text-sm font-semibold text-gray-900 break-words">
                       {signatory.firstName} {signatory.lastName}
+                      {index === 0 && (
+                        <span className="ml-2 text-xs text-gray-500 font-normal">
+                          ({t('form.steps.summary.included') || 'included'})
+                        </span>
+                      )}
                       {index > 0 && (
                         <span className="ml-2 text-xs text-gray-600 font-normal">
                           (+{formatPriceSync(45)})
@@ -536,7 +575,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
                   return (
                     <div key={serviceId}>
-                      <div className="flex justify-between items-center pb-2 border-b border-gray-200">
+                      <div className="flex justify-between items-center pb-2">
                         <span className="text-xs sm:text-sm text-gray-700">
                           {getServiceName(service)} ({documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                         </span>
@@ -584,7 +623,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             {formData.selectedServices && formData.selectedServices.length > 0 && formData.deliveryMethod === 'postal' && (
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                 <span className="text-xs sm:text-sm text-gray-700">
-                  {t('form.steps.summary.delivery')}
+                  + {t('form.steps.summary.delivery')}
                 </span>
                 <span className="text-xs sm:text-sm font-semibold text-gray-900">
                   {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR)}
@@ -595,11 +634,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             {/* Additional Signatories */}
             {formData.signatories && formData.signatories.length > 1 && (
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                <span className="text-xs sm:text-sm text-gray-500 italic">
+                <span className="text-xs sm:text-sm text-gray-700">
                   + {t('form.priceDetails.additionalSignatories')} ({formData.signatories.length - 1})
                 </span>
-                <span className="text-xs sm:text-sm font-semibold text-gray-700">
-                  {formatPriceSync((formData.signatories.length - 1) * 10)}
+                <span className="text-xs sm:text-sm font-semibold text-gray-900">
+                  {formatPriceSync((formData.signatories.length - 1) * 45)}
                 </span>
               </div>
             )}
@@ -629,38 +668,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     return total;
                   }, 0) || 0) + 
                   (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0) +
-                  (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 10 : 0)
+                  (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
                 )}
               </span>
             </div>
-          </div>
-        )}
               </div>
-
-              {/* What happens next */}
-              <div className="bg-gray-50 border-2 border-gray-200 rounded-xl sm:rounded-2xl p-3 sm:p-4 overflow-hidden mt-4">
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                      <Icon icon="heroicons:information-circle" className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-1">
-                      {t('form.steps.summary.whatHappensNext')}
-                    </h4>
-                    <p className="text-[10px] sm:text-xs text-gray-700 break-words">
-                      {(() => {
-                        const email = formData.email || 'your email';
-                        const message = t(
-                          'form.steps.summary.confirmationMessage',
-                          'Once payment is complete, you will instantly receive a secure link to your email {email} to verify your identity, then join your video session with a certified notary.'
-                        ).replace('{email}', email);
-                        return message;
-                      })()}
-                    </p>
-                  </div>
-                </div>
+        )}
               </div>
 
               {/* Secure Payment by Stripe */}

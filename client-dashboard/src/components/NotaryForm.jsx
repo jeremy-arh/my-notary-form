@@ -19,7 +19,7 @@ import {
 import { openCrisp } from '../utils/crisp';
 import { useServices } from '../contexts/ServicesContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { saveFormDraft, loadFormDraft } from '../utils/formDraft';
+import { saveFormDraft } from '../utils/formDraft';
 import { calculateTotalAmount } from '../utils/pricing';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
@@ -77,7 +77,7 @@ const NotaryForm = () => {
 
     // Signatories (step 4) - global list for the entire order
     signatories: [], // [signatories] - global list for all documents
-    isSignatory: false, // Whether the user is one of the signatories
+    isSignatory: false, // Whether the user is one of the signatories (unchecked by default to avoid auto-adding)
 
     timezone: 'UTC-5',
 
@@ -204,35 +204,10 @@ const NotaryForm = () => {
     }
   }, [location.pathname]); // Track when pathname changes
 
-  // Load form draft from Supabase on mount
-  useEffect(() => {
-    const loadDraft = async () => {
-      console.log('🔍 [FormDraft] Checking for existing draft...');
-      const draft = await loadFormDraft();
-      
-      if (draft) {
-        console.log('✅ [FormDraft] Draft found, restoring data...');
-        // Merge draft data with existing form data (localStorage has priority for now)
-        setFormData(prev => ({
-          ...prev,
-          ...draft,
-          // Preserve certain fields from localStorage if they exist
-          password: prev.password || draft.password || '',
-          confirmPassword: prev.confirmPassword || draft.confirmPassword || ''
-        }));
-        
-        // Restore completed steps
-        if (draft.completedSteps && draft.completedSteps.length > 0) {
-          setCompletedSteps(draft.completedSteps);
-          console.log('📍 [FormDraft] Restored completed steps:', draft.completedSteps);
-        }
-      } else {
-        console.log('ℹ️ [FormDraft] No existing draft found');
-      }
-    };
-    
-    loadDraft();
-  }, []); // Run only once on mount
+  // FormDraft is NEVER used to load/display data in the form
+  // It is ONLY used for saving/backup purposes
+  // All form data comes from localStorage only
+  // The formDraft is saved but never loaded/restored
 
   const steps = [
     { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
@@ -1373,8 +1348,8 @@ const NotaryForm = () => {
       const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
       const additionalSignatoriesCost = additionalSignatoriesCount * 45;
 
-      // Delivery postal cost (49.95€) if selected
-      const deliveryPostalCostEUR = formData.deliveryMethod === 'postal' ? 49.95 : 0;
+      // Delivery postal cost (29.95€) if selected
+      const deliveryPostalCostEUR = formData.deliveryMethod === 'postal' ? 29.95 : 0;
       
       // Utiliser la devise du contexte en priorité pour garantir la synchronisation
       const finalCurrency = (contextCurrency || formData.currency || 'EUR').toUpperCase();
@@ -1670,9 +1645,6 @@ const NotaryForm = () => {
                 />
               ))}
             </div>
-            <span className="text-[10px] sm:text-xs text-white font-light">
-              {`161 ${t('form.topbar.reviews', 'reviews')}`}
-            </span>
           </div>
         </div>
       </div>

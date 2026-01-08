@@ -4,7 +4,7 @@
  */
 
 const DELIVERY_POSTAL_PRICE_EUR = 20;
-const ADDITIONAL_SIGNATORY_PRICE_EUR = 10;
+const ADDITIONAL_SIGNATORY_PRICE_EUR = 45;
 
 /**
  * Calculate the total amount for the form
