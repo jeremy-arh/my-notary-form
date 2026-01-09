@@ -1271,25 +1271,29 @@ const NotaryForm = () => {
       return;
     }
 
+    // Don't reset timer if modal is already shown
+    if (showInactivityModal) {
+      return;
+    }
+
     let inactivityTimer = null;
     let lastActivityTime = Date.now();
-    let isModalShown = false;
 
-    const resetTimer = () => {
+    const resetTimer = (e) => {
+      // Don't reset if clicking inside the modal
+      if (e && e.target && e.target.closest('[data-inactivity-modal]')) {
+        return;
+      }
+
       lastActivityTime = Date.now();
       if (inactivityTimer) {
         clearTimeout(inactivityTimer);
-      }
-      if (isModalShown) {
-        setShowInactivityModal(false);
-        isModalShown = false;
       }
       
       // Set new timer for 15 seconds
       inactivityTimer = setTimeout(() => {
         const timeSinceLastActivity = Date.now() - lastActivityTime;
-        if (timeSinceLastActivity >= 15000 && !isModalShown) {
-          isModalShown = true;
+        if (timeSinceLastActivity >= 15000 && !showInactivityModal) {
           setShowInactivityModal(true);
         }
       }, 15000);
@@ -1313,7 +1317,7 @@ const NotaryForm = () => {
         document.removeEventListener(event, resetTimer, true);
       });
     };
-  }, [completedSteps, currentStep, isSubmitting]);
+  }, [completedSteps, currentStep, isSubmitting, showInactivityModal]);
 
   // Gérer le compteur de 5 secondes quand isSubmitting est true
   useEffect(() => {
