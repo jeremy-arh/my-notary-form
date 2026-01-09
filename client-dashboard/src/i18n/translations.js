@@ -104,7 +104,8 @@ export const translations = {
           noSignatoriesYet: 'No signatories added yet.',
           validationPhoneInvalid: 'Please enter a valid phone number',
           validationEmailInvalid: 'Please enter a valid email address',
-          infoBlockText: 'Most notarizations involve only one signatory. This is the case for identity documents (passport, ID card, visa), diplomas, personal certificates, or common administrative documents. In these situations, you are the only one who needs to verify your identity and participate in the video session with the notary. For more complex documents involving multiple parties — such as powers of attorney, contracts, or acts requiring multiple signatures — each signatory receives a personal link. Each will then need to verify their identity independently and join the video conference session with the notary to finalize the notarization.',
+          infoBlockTextPart1: 'Most notarizations involve only one signatory. This is the case for identity documents (passport, ID card, visa), diplomas, personal certificates, or common administrative documents. In these situations, you are the only one who needs to verify your identity and participate in the video session with the notary.',
+          infoBlockTextPart2: 'For more complex documents involving multiple parties — such as powers of attorney, contracts, or acts requiring multiple signatures — each signatory receives a personal link. Each will then need to verify their identity independently and join the video conference session with the notary to finalize the notarization.',
         },
         summary: {
           title: 'Summary',
@@ -328,7 +329,8 @@ export const translations = {
           noSignatoriesYet: 'Aucun signataire ajouté pour le moment.',
           validationPhoneInvalid: 'Veuillez entrer un numéro de téléphone valide',
           validationEmailInvalid: 'Veuillez entrer une adresse email valide',
-          infoBlockText: 'La plupart des notarisations ne concernent qu\'un seul signataire. C\'est le cas notamment pour les documents d\'identité (passeport, carte d\'identité, visa), les diplômes, les attestations personnelles ou les documents administratifs courants. Dans ces situations, vous êtes le seul à devoir vérifier votre identité et à participer à la session vidéo avec le notaire. Pour les documents plus complexes impliquant plusieurs parties — comme les procurations, les contrats ou les actes nécessitant plusieurs signatures — chaque signataire reçoit un lien personnel. Chacun devra alors vérifier son identité de manière indépendante et rejoindre la session de visioconférence avec le notaire pour finaliser la notarisation.',
+          infoBlockTextPart1: 'La plupart des notarisations ne concernent qu\'un seul signataire. C\'est le cas notamment pour les documents d\'identité (passeport, carte d\'identité, visa), les diplômes, les attestations personnelles ou les documents administratifs courants. Dans ces situations, vous êtes le seul à devoir vérifier votre identité et à participer à la session vidéo avec le notaire.',
+          infoBlockTextPart2: 'Pour les documents plus complexes impliquant plusieurs parties — comme les procurations, les contrats ou les actes nécessitant plusieurs signatures — chaque signataire reçoit un lien personnel. Chacun devra alors vérifier son identité de manière indépendante et rejoindre la session de visioconférence avec le notaire pour finaliser la notarisation.',
         },
         summary: {
           title: 'Résumé',
@@ -555,7 +557,8 @@ export const translations = {
           noSignatoriesYet: 'Aún no se han agregado firmantes.',
           validationPhoneInvalid: 'Por favor ingrese un número de teléfono válido',
           validationEmailInvalid: 'Por favor ingrese una dirección de correo válida',
-          infoBlockText: 'La mayoría de las notarizaciones involucran solo un firmante. Este es el caso de documentos de identidad (pasaporte, tarjeta de identidad, visa), diplomas, certificados personales o documentos administrativos comunes. En estas situaciones, usted es el único que necesita verificar su identidad y participar en la sesión de video con el notario. Para documentos más complejos que involucran múltiples partes — como poderes notariales, contratos o actos que requieren múltiples firmas — cada firmante recibe un enlace personal. Cada uno deberá verificar su identidad de forma independiente y unirse a la sesión de videoconferencia con el notario para finalizar la notarización.',
+          infoBlockTextPart1: 'La mayoría de las notarizaciones involucran solo un firmante. Este es el caso de documentos de identidad (pasaporte, tarjeta de identidad, visa), diplomas, certificados personales o documentos administrativos comunes. En estas situaciones, usted es el único que necesita verificar su identidad y participar en la sesión de video con el notario.',
+          infoBlockTextPart2: 'Para documentos más complejos que involucran múltiples partes — como poderes notariales, contratos o actos que requieren múltiples firmas — cada firmante recibe un enlace personal. Cada uno deberá verificar su identidad de forma independiente y unirse a la sesión de videoconferencia con el notario para finalizar la notarización.',
         },
         summary: {
           title: 'Resumen',
@@ -767,7 +770,8 @@ export const translations = {
           noSignatoriesYet: 'Noch keine Unterzeichner hinzugefügt.',
           validationPhoneInvalid: 'Bitte geben Sie eine gültige Telefonnummer ein',
           validationEmailInvalid: 'Bitte geben Sie eine gültige E-Mail-Adresse ein',
-          infoBlockText: 'Die meisten Notarisierungen betreffen nur einen Unterzeichner. Dies gilt insbesondere für Ausweisdokumente (Reisepass, Personalausweis, Visum), Diplome, persönliche Bescheinigungen oder gängige Verwaltungsdokumente. In diesen Situationen sind Sie der Einzige, der seine Identität verifizieren und an der Videositzung mit dem Notar teilnehmen muss. Für komplexere Dokumente mit mehreren Parteien — wie Vollmachten, Verträge oder Akte, die mehrere Unterschriften erfordern — erhält jeder Unterzeichner einen persönlichen Link. Jeder muss dann seine Identität unabhängig verifizieren und der Videokonferenzsitzung mit dem Notar beitreten, um die Notarisierung abzuschließen.',
+          infoBlockTextPart1: 'Die meisten Notarisierungen betreffen nur einen Unterzeichner. Dies gilt insbesondere für Ausweisdokumente (Reisepass, Personalausweis, Visum), Diplome, persönliche Bescheinigungen oder gängige Verwaltungsdokumente. In diesen Situationen sind Sie der Einzige, der seine Identität verifizieren und an der Videositzung mit dem Notar teilnehmen muss.',
+          infoBlockTextPart2: 'Für komplexere Dokumente mit mehreren Parteien — wie Vollmachten, Verträge oder Akte, die mehrere Unterschriften erfordern — erhält jeder Unterzeichner einen persönlichen Link. Jeder muss dann seine Identität unabhängig verifizieren und der Videokonferenzsitzung mit dem Notar beitreten, um die Notarisierung abzuschließen.',
         },
         summary: {
           title: 'Zusammenfassung',
@@ -980,7 +984,8 @@ export const translations = {
           noSignatoriesYet: 'Nessun firmatario aggiunto ancora.',
           validationPhoneInvalid: 'Si prega di inserire un numero di telefono valido',
           validationEmailInvalid: 'Si prega di inserire un indirizzo email valido',
-          infoBlockText: 'La maggior parte delle notarizzazioni coinvolge un solo firmatario. Questo è il caso di documenti di identità (passaporto, carta d\'identità, visto), diplomi, certificati personali o documenti amministrativi comuni. In queste situazioni, sei l\'unico che deve verificare la tua identità e partecipare alla sessione video con il notaio. Per documenti più complessi che coinvolgono più parti — come procure, contratti o atti che richiedono più firme — ogni firmatario riceve un link personale. Ognuno dovrà quindi verificare la propria identità in modo indipendente e unirsi alla sessione di videoconferenza con il notaio per finalizzare la notarizzazione.',
+          infoBlockTextPart1: 'La maggior parte delle notarizzazioni coinvolge un solo firmatario. Questo è il caso di documenti di identità (passaporto, carta d\'identità, visto), diplomi, certificati personali o documenti amministrativi comuni. In queste situazioni, sei l\'unico che deve verificare la tua identità e partecipare alla sessione video con il notaio.',
+          infoBlockTextPart2: 'Per documenti più complessi che coinvolgono più parti — come procure, contratti o atti che richiedono più firme — ogni firmatario riceve un link personale. Ognuno dovrà quindi verificare la propria identità in modo indipendente e unirsi alla sessione di videoconferenza con il notaio per finalizzare la notarizzazione.',
         },
         summary: {
           title: 'Riepilogo',
@@ -1189,7 +1194,8 @@ export const translations = {
           noSignatoriesYet: 'Nenhum signatário adicionado ainda.',
           validationPhoneInvalid: 'Por favor, insira um número de telefone válido',
           validationEmailInvalid: 'Por favor, insira um endereço de email válido',
-          infoBlockText: 'A maioria das notarizações envolve apenas um signatário. Este é o caso de documentos de identidade (passaporte, cartão de identidade, visto), diplomas, certificados pessoais ou documentos administrativos comuns. Nessas situações, você é o único que precisa verificar sua identidade e participar da sessão de vídeo com o notário. Para documentos mais complexos envolvendo várias partes — como procurações, contratos ou atos que requerem várias assinaturas — cada signatário recebe um link pessoal. Cada um precisará então verificar sua identidade de forma independente e ingressar na sessão de videoconferência com o notário para finalizar a notarização.',
+          infoBlockTextPart1: 'A maioria das notarizações envolve apenas um signatário. Este é o caso de documentos de identidade (passaporte, cartão de identidade, visto), diplomas, certificados pessoais ou documentos administrativos comuns. Nessas situações, você é o único que precisa verificar sua identidade e participar da sessão de vídeo com o notário.',
+          infoBlockTextPart2: 'Para documentos mais complexos envolvendo várias partes — como procurações, contratos ou atos que requerem várias assinaturas — cada signatário recebe um link pessoal. Cada um precisará então verificar sua identidade de forma independente e ingressar na sessão de videoconferência com o notário para finalizar a notarização.',
         },
         summary: {
           title: 'Resumo',

@@ -321,18 +321,6 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
             </p>
           </div>
 
-          {/* Information Block */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-3 sm:p-4 flex items-start gap-3">
-            <div className="flex-shrink-0 mt-0.5">
-              <Icon icon="heroicons:information-circle" className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm text-blue-900 break-words">
-                {t('form.steps.signatories.infoBlockText')}
-              </p>
-            </div>
-          </div>
-
           <div className="space-y-3 sm:space-y-4">
             {/* Signatories list - Card view */}
             {signatories.length > 0 && (
@@ -584,6 +572,21 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                 <p className="text-sm text-gray-600">{t('form.steps.signatories.noSignatoriesYet')}</p>
               </div>
             )}
+          </div>
+
+          {/* Information Block */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-4 sm:p-6 flex items-start gap-3 sm:gap-4">
+            <div className="flex-shrink-0 mt-0.5">
+              <Icon icon="heroicons:information-circle" className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-3">
+              <p className="text-xs sm:text-sm text-blue-900 break-words leading-relaxed">
+                {t('form.steps.signatories.infoBlockTextPart1')}
+              </p>
+              <p className="text-xs sm:text-sm text-blue-900 break-words leading-relaxed">
+                {t('form.steps.signatories.infoBlockTextPart2')}
+              </p>
+            </div>
           </div>
         </div>
       </div>
