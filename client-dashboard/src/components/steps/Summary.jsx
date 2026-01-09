@@ -20,16 +20,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [footerPadding, setFooterPadding] = useState(300);
   const [convertedDeliveryPrice, setConvertedDeliveryPrice] = useState('');
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(true);
-
-  // Function to preview/open file
-  const handlePreviewFile = (doc) => {
-    if (doc.dataUrl) {
-      // Open in new window/tab
-      window.open(doc.dataUrl, '_blank');
-    } else if (doc.url || doc.public_url) {
-      window.open(doc.url || doc.public_url, '_blank');
-    }
-  };
+  const [viewingFile, setViewingFile] = useState(null);
 
   // Navigation functions for editing each section
   const handleEditServices = () => navigate('/form/choose-services');
@@ -424,7 +415,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                 <p className="text-[10px] sm:text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
                               </div>
                               <button
-                                onClick={() => handlePreviewFile(doc)}
+                                onClick={() => setViewingFile(doc)}
                                 className="ml-2 p-1.5 sm:p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
                                 aria-label={`View ${doc.name}`}
                                 title={`View ${doc.name}`}
@@ -1074,6 +1065,131 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 )}
               </button>
             </div>
+          )}
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Document Viewer Modal - Full Screen */}
+    {viewingFile && createPortal(
+      <div 
+        style={{ 
+          position: 'fixed',
+          top: '0px', 
+          left: '0px', 
+          right: '0px', 
+          bottom: '0px',
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: '#000000',
+          zIndex: 99999,
+          overflow: 'auto'
+        }}
+        onClick={(e) => {
+          // Empêcher les clics de se propager
+          e.stopPropagation();
+        }}
+      >
+        {/* Close Button - Large */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setViewingFile(null);
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+          }}
+          style={{ 
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: '100000',
+            padding: '12px 20px',
+            backgroundColor: '#3b82f6',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: 'white',
+            fontSize: '16px',
+            fontWeight: 500
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#2563eb';
+            e.currentTarget.style.transform = 'scale(1.05)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#3b82f6';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          aria-label={t('form.steps.documents.close') || 'Close'}
+          type="button"
+        >
+          <Icon icon="heroicons:x-mark" style={{ width: '20px', height: '20px' }} />
+          <span>{t('form.steps.documents.close') || 'Close'}</span>
+        </button>
+
+        {/* Document Content - Full Screen */}
+        <div 
+          style={{
+            width: '100%',
+            height: '100vh',
+            overflow: 'auto'
+          }}
+        >
+          {(viewingFile.dataUrl || viewingFile.url || viewingFile.public_url) && (
+            <>
+              {viewingFile.type?.startsWith('image/') ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100vh', padding: '32px' }}>
+                  <img 
+                    src={viewingFile.dataUrl || viewingFile.url || viewingFile.public_url} 
+                    alt={viewingFile.name}
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                      // Si dataUrl échoue, essayer avec url ou public_url
+                      if (viewingFile.url && e.target.src !== viewingFile.url) {
+                        e.target.src = viewingFile.url;
+                      } else if (viewingFile.public_url && e.target.src !== viewingFile.public_url) {
+                        e.target.src = viewingFile.public_url;
+                      }
+                    }}
+                  />
+                </div>
+              ) : viewingFile.type === 'application/pdf' || viewingFile.name?.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={viewingFile.dataUrl || viewingFile.url || viewingFile.public_url}
+                  style={{
+                    width: '100%',
+                    height: '100vh',
+                    border: 0
+                  }}
+                  title={viewingFile.name}
+                />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', textAlign: 'center', padding: '32px', backgroundColor: 'white' }}>
+                  <Icon icon="heroicons:document" style={{ width: '80px', height: '80px', color: '#9ca3af', marginBottom: '24px' }} />
+                  <p style={{ fontSize: '16px', color: '#4b5563', marginBottom: '24px' }}>
+                    {t('form.steps.documents.previewNotAvailable') || 'Preview not available for this file type.'}
+                  </p>
+                  <a
+                    href={viewingFile.dataUrl || viewingFile.url || viewingFile.public_url}
+                    download={viewingFile.name}
+                    style={{ padding: '12px 24px', backgroundColor: '#000000', color: 'white', borderRadius: '8px', fontSize: '16px', fontWeight: 500, textDecoration: 'none' }}
+                  >
+                    {t('form.steps.documents.download') || 'Download'}
+                  </a>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>,
