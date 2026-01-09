@@ -9,8 +9,8 @@ const InactivityModal = ({ isVisible, onClose }) => {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 relative animate-fade-in-up shadow-2xl">
+    <div className="fixed inset-0 bg-white/30 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+      <div className="bg-white/90 backdrop-blur-xl rounded-2xl max-w-md w-full p-6 relative animate-fade-in-up shadow-2xl border border-white/20">
         {/* Close Button */}
         <button
           onClick={onClose}
