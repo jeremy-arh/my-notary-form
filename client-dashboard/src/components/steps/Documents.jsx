@@ -538,11 +538,11 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                                   e.stopPropagation();
                                   setViewingFile(file);
                                 }}
-                                className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs text-white bg-black hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0 flex items-center gap-0.5 sm:gap-1 whitespace-nowrap"
+                                className="p-1.5 sm:p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
                                 aria-label={t('form.steps.documents.view')}
+                                title={t('form.steps.documents.view')}
                               >
-                                <Icon icon="heroicons:eye" className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                                <span className="flex-shrink-0">{t('form.steps.documents.view')}</span>
+                                <Icon icon="heroicons:eye" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-gray-900" />
                               </button>
                               <button
                                 type="button"
