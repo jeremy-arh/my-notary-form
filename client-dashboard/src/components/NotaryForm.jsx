@@ -47,6 +47,7 @@ const NotaryForm = () => {
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
   const [showInactivityModal, setShowInactivityModal] = useState(false);
+  const [hasShownInactivityModal, setHasShownInactivityModal] = useState(false);
   const { t, language } = useTranslation();
   const { services, options, servicesMap, optionsMap, getServiceName, getOptionName, loading: servicesLoading } = useServices();
   const { currency: contextCurrency } = useCurrency();
@@ -1263,11 +1264,16 @@ const NotaryForm = () => {
     };
   }, [currentStep, completedSteps]);
 
-  // Detect user inactivity and show modal after 15 seconds
+  // Detect user inactivity and show modal after 15 seconds (only once)
   useEffect(() => {
     // Only show modal if user has started the form (completed at least step 1)
     if (completedSteps.length === 0 || currentStep === 6 || isSubmitting) {
       setShowInactivityModal(false);
+      return;
+    }
+
+    // Don't show modal if it has already been shown
+    if (hasShownInactivityModal) {
       return;
     }
 
@@ -1293,8 +1299,9 @@ const NotaryForm = () => {
       // Set new timer for 15 seconds
       inactivityTimer = setTimeout(() => {
         const timeSinceLastActivity = Date.now() - lastActivityTime;
-        if (timeSinceLastActivity >= 15000 && !showInactivityModal) {
+        if (timeSinceLastActivity >= 15000 && !showInactivityModal && !hasShownInactivityModal) {
           setShowInactivityModal(true);
+          setHasShownInactivityModal(true);
         }
       }, 15000);
     };
@@ -1317,7 +1324,7 @@ const NotaryForm = () => {
         document.removeEventListener(event, resetTimer, true);
       });
     };
-  }, [completedSteps, currentStep, isSubmitting, showInactivityModal]);
+  }, [completedSteps, currentStep, isSubmitting, showInactivityModal, hasShownInactivityModal]);
 
   // Gérer le compteur de 5 secondes quand isSubmitting est true
   useEffect(() => {
@@ -2048,7 +2055,10 @@ const NotaryForm = () => {
       {/* Inactivity Modal */}
       <InactivityModal
         isVisible={showInactivityModal}
-        onClose={() => setShowInactivityModal(false)}
+        onClose={() => {
+          setShowInactivityModal(false);
+          setHasShownInactivityModal(true);
+        }}
       />
 
       {/* Exit Confirmation Modal */}
