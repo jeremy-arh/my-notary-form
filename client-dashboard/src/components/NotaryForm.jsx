@@ -1718,38 +1718,8 @@ const NotaryForm = () => {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden overflow-x-hidden w-full max-w-full">
-      {/* Trust Banner - Fixed at very top with black background */}
-      <div className="fixed top-0 left-0 right-0 bg-black z-[60] py-1.5 w-full">
-        <div className="flex items-center justify-between px-4 sm:px-6 w-full">
-          {/* Left side - Customer count */}
-          <div className="flex items-center text-[10px] sm:text-xs text-white font-light">
-            <span>{t('form.topbar.customers', 'Already over 5000 customers')}</span>
-          </div>
-          
-          {/* Right side - Rating */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="flex items-center gap-0.5">
-              <span className="font-normal text-xs sm:text-sm text-white">4.7</span>
-              <span className="text-[10px] sm:text-xs text-white font-light">
-                {t('form.topbar.ratingLabel', 'Excellent')}
-              </span>
-            </div>
-            <div className="flex items-center gap-0.5">
-              {[...Array(5)].map((_, i) => (
-                <Icon 
-                  key={i} 
-                  icon="heroicons:star-solid" 
-                  className="w-2.5 h-2.5 sm:w-3 sm:h-3"
-                  style={{ color: '#04DA8D' }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Header - Fixed below trust banner - Visible on all screen sizes */}
-      <header className="fixed top-8 sm:top-9 left-0 right-0 bg-[#F3F4F6] z-50 h-14 sm:h-16 overflow-visible">
+      {/* Header - Fixed at top - Visible on all screen sizes */}
+      <header className="fixed top-0 left-0 right-0 bg-[#F3F4F6] z-50 h-14 sm:h-16 overflow-visible">
         <div className="flex items-center justify-between h-full px-2 sm:px-3 md:px-4 xl:px-6">
           <Logo width={70} height={70} className="sm:w-[80px] sm:h-[80px]" />
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 xl:gap-3 overflow-visible">
@@ -1770,7 +1740,7 @@ const NotaryForm = () => {
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-[88px] sm:top-[100px]"
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-14 sm:top-16"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
@@ -1861,7 +1831,7 @@ const NotaryForm = () => {
       )}
 
       {/* Main Content - Full width without margins */}
-      <main className="flex-1 flex items-center justify-center pt-[90px] sm:pt-[100px] pb-0 overflow-hidden overflow-x-hidden bg-[#F3F4F6] w-full max-w-full">
+      <main className="flex-1 flex items-center justify-center pt-14 sm:pt-16 pb-0 overflow-hidden overflow-x-hidden bg-[#F3F4F6] w-full max-w-full">
         {/* Form Content */}
         <div className="w-full max-w-full h-full animate-fade-in-up flex flex-col overflow-y-auto overflow-x-hidden relative">
           <Routes>
