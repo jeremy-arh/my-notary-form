@@ -170,6 +170,12 @@ export const translations = {
         cancel: 'Cancel',
         leave: 'Leave',
       },
+      inactivityModal: {
+        title: 'Need help?',
+        message: 'Our team is here to help! If you have any questions or need assistance, feel free to contact us.',
+        contactUs: 'Contact Us',
+        close: 'Close',
+      },
       topbar: {
         customers: 'Already over 5000 customers',
         ratingLabel: 'Excellent',
@@ -387,6 +393,12 @@ export const translations = {
         cancel: 'Annuler',
         leave: 'Quitter',
       },
+      inactivityModal: {
+        title: 'Besoin d\'aide ?',
+        message: 'Notre équipe est là pour vous aider ! Si vous avez des questions ou besoin d\'assistance, n\'hésitez pas à nous contacter.',
+        contactUs: 'Nous contacter',
+        close: 'Fermer',
+      },
       topbar: {
         customers: 'Déjà plus de 5000 clients',
         ratingLabel: 'Excellent',
@@ -602,6 +614,12 @@ export const translations = {
         cancel: 'Cancelar',
         leave: 'Salir',
       },
+      inactivityModal: {
+        title: '¿Necesita ayuda?',
+        message: '¡Nuestro equipo está aquí para ayudarle! Si tiene alguna pregunta o necesita asistencia, no dude en contactarnos.',
+        contactUs: 'Contáctenos',
+        close: 'Cerrar',
+      },
       topbar: {
         customers: 'Más de 5000 clientes',
         ratingLabel: 'Excelente',
@@ -806,6 +824,12 @@ export const translations = {
         message: 'Sie haben nicht gespeicherte Änderungen. Sind Sie sicher, dass Sie die Seite verlassen möchten? Ihr Fortschritt geht verloren.',
         cancel: 'Abbrechen',
         leave: 'Verlassen',
+      },
+      inactivityModal: {
+        title: 'Brauchen Sie Hilfe?',
+        message: 'Unser Team ist hier, um Ihnen zu helfen! Wenn Sie Fragen haben oder Unterstützung benötigen, kontaktieren Sie uns gerne.',
+        contactUs: 'Kontaktieren Sie uns',
+        close: 'Schließen',
       },
       topbar: {
         customers: 'Bereits über 5000 Kunden',
@@ -1013,6 +1037,12 @@ export const translations = {
         cancel: 'Annulla',
         leave: 'Esci',
       },
+      inactivityModal: {
+        title: 'Hai bisogno di aiuto?',
+        message: 'Il nostro team è qui per aiutarti! Se hai domande o hai bisogno di assistenza, non esitare a contattarci.',
+        contactUs: 'Contattaci',
+        close: 'Chiudi',
+      },
       topbar: {
         customers: 'Già oltre 5000 clienti',
         ratingLabel: 'Eccellente',
@@ -1214,6 +1244,12 @@ export const translations = {
         message: 'Tem alterações não guardadas. Tem a certeza de que deseja sair? O seu progresso será perdido.',
         cancel: 'Cancelar',
         leave: 'Sair',
+      },
+      inactivityModal: {
+        title: 'Precisa de ajuda?',
+        message: 'A nossa equipa está aqui para ajudar! Se tiver alguma dúvida ou precisar de assistência, não hesite em contactar-nos.',
+        contactUs: 'Contacte-nos',
+        close: 'Fechar',
       },
       topbar: {
         customers: 'Já mais de 5000 clientes',

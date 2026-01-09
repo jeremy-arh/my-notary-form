@@ -30,6 +30,7 @@ import Notification from './Notification';
 import CurrencySelector from './CurrencySelector';
 import LanguageSelector from './LanguageSelector';
 import PriceDetails from './PriceDetails';
+import InactivityModal from './InactivityModal';
 import { useTranslation } from '../hooks/useTranslation';
 
 const NotaryForm = () => {
@@ -45,6 +46,7 @@ const NotaryForm = () => {
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
+  const [showInactivityModal, setShowInactivityModal] = useState(false);
   const { t, language } = useTranslation();
   const { services, options, servicesMap, optionsMap, getServiceName, getOptionName, loading: servicesLoading } = useServices();
   const { currency: contextCurrency } = useCurrency();
@@ -1261,6 +1263,57 @@ const NotaryForm = () => {
     };
   }, [currentStep, completedSteps]);
 
+  // Detect user inactivity and show modal after 15 seconds
+  useEffect(() => {
+    // Only show modal if user has started the form (completed at least step 1)
+    if (completedSteps.length === 0 || currentStep === 6 || isSubmitting) {
+      setShowInactivityModal(false);
+      return;
+    }
+
+    let inactivityTimer = null;
+    let lastActivityTime = Date.now();
+    let isModalShown = false;
+
+    const resetTimer = () => {
+      lastActivityTime = Date.now();
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      if (isModalShown) {
+        setShowInactivityModal(false);
+        isModalShown = false;
+      }
+      
+      // Set new timer for 15 seconds
+      inactivityTimer = setTimeout(() => {
+        const timeSinceLastActivity = Date.now() - lastActivityTime;
+        if (timeSinceLastActivity >= 15000 && !isModalShown) {
+          isModalShown = true;
+          setShowInactivityModal(true);
+        }
+      }, 15000);
+    };
+
+    // Track user activity events
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    activityEvents.forEach(event => {
+      document.addEventListener(event, resetTimer, true);
+    });
+
+    // Initialize timer
+    resetTimer();
+
+    return () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, resetTimer, true);
+      });
+    };
+  }, [completedSteps, currentStep, isSubmitting]);
 
   // Gérer le compteur de 5 secondes quand isSubmitting est true
   useEffect(() => {
@@ -1987,6 +2040,12 @@ const NotaryForm = () => {
           onClose={() => setNotification(null)}
         />
       )}
+
+      {/* Inactivity Modal */}
+      <InactivityModal
+        isVisible={showInactivityModal}
+        onClose={() => setShowInactivityModal(false)}
+      />
 
       {/* Exit Confirmation Modal */}
       {showExitConfirmModal && (
