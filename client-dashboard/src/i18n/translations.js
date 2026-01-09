@@ -164,6 +164,12 @@ export const translations = {
         step: 'Step',
         creatingAccount: 'Creating account...',
       },
+      exitConfirm: {
+        title: 'Leave this page?',
+        message: 'You have unsaved changes. Are you sure you want to leave? Your progress will be lost.',
+        cancel: 'Cancel',
+        leave: 'Leave',
+      },
       topbar: {
         customers: 'Already over 5000 customers',
         ratingLabel: 'Excellent',
@@ -375,6 +381,12 @@ export const translations = {
         step: 'Étape',
         creatingAccount: 'Création du compte...',
       },
+      exitConfirm: {
+        title: 'Quitter cette page ?',
+        message: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir quitter ? Votre progression sera perdue.',
+        cancel: 'Annuler',
+        leave: 'Quitter',
+      },
       topbar: {
         customers: 'Déjà plus de 5000 clients',
         ratingLabel: 'Excellent',
@@ -584,6 +596,12 @@ export const translations = {
         step: 'Paso',
         creatingAccount: 'Creando cuenta...',
       },
+      exitConfirm: {
+        title: '¿Salir de esta página?',
+        message: 'Tiene cambios sin guardar. ¿Está seguro de que desea salir? Se perderá su progreso.',
+        cancel: 'Cancelar',
+        leave: 'Salir',
+      },
       topbar: {
         customers: 'Más de 5000 clientes',
         ratingLabel: 'Excelente',
@@ -782,6 +800,12 @@ export const translations = {
         stepsRemaining: 'Schritte verbleibend',
         step: 'Schritt',
         creatingAccount: 'Konto wird erstellt...',
+      },
+      exitConfirm: {
+        title: 'Seite verlassen?',
+        message: 'Sie haben nicht gespeicherte Änderungen. Sind Sie sicher, dass Sie die Seite verlassen möchten? Ihr Fortschritt geht verloren.',
+        cancel: 'Abbrechen',
+        leave: 'Verlassen',
       },
       topbar: {
         customers: 'Bereits über 5000 Kunden',
@@ -983,6 +1007,12 @@ export const translations = {
         step: 'Passo',
         creatingAccount: 'Creazione account...',
       },
+      exitConfirm: {
+        title: 'Lasciare questa pagina?',
+        message: 'Hai modifiche non salvate. Sei sicuro di voler uscire? Il tuo progresso andrà perso.',
+        cancel: 'Annulla',
+        leave: 'Esci',
+      },
       topbar: {
         customers: 'Già oltre 5000 clienti',
         ratingLabel: 'Eccellente',
@@ -1178,6 +1208,12 @@ export const translations = {
         stepsRemaining: 'etapas restantes',
         step: 'Etapa',
         creatingAccount: 'Criando conta...',
+      },
+      exitConfirm: {
+        title: 'Sair desta página?',
+        message: 'Tem alterações não guardadas. Tem a certeza de que deseja sair? O seu progresso será perdido.',
+        cancel: 'Cancelar',
+        leave: 'Sair',
       },
       topbar: {
         customers: 'Já mais de 5000 clientes',

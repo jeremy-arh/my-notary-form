@@ -44,6 +44,7 @@ const NotaryForm = () => {
   const [countdown, setCountdown] = useState(5);
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
   const { t, language } = useTranslation();
   const { services, options, servicesMap, optionsMap, getServiceName, getOptionName, loading: servicesLoading } = useServices();
   const { currency: contextCurrency } = useCurrency();
@@ -1241,13 +1242,15 @@ const NotaryForm = () => {
     }
   };
 
-  // Track form abandonment when user leaves the page
+  // Prevent page close/refresh with confirmation modal
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      // Only track abandonment if user has started the form (completed at least step 1)
+      // Only prevent if user has started the form (completed at least step 1)
       if (completedSteps.length > 0 && currentStep < 6) {
-        const currentStepData = steps.find(s => s.id === currentStep);
-        trackFormAbandoned(currentStep, currentStepData?.name || 'Unknown');
+        // Show browser's default confirmation dialog
+        e.preventDefault();
+        e.returnValue = ''; // Required for Chrome
+        return ''; // Required for some browsers
       }
     };
 
@@ -1257,6 +1260,7 @@ const NotaryForm = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [currentStep, completedSteps]);
+
 
   // Gérer le compteur de 5 secondes quand isSubmitting est true
   useEffect(() => {
@@ -1982,6 +1986,48 @@ const NotaryForm = () => {
           message={notification.message}
           onClose={() => setNotification(null)}
         />
+      )}
+
+      {/* Exit Confirmation Modal */}
+      {showExitConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 relative animate-fade-in-up">
+            <div className="flex items-start space-x-4 mb-4">
+              <div className="p-3 bg-yellow-100 rounded-lg flex-shrink-0">
+                <Icon icon="heroicons:exclamation-triangle" className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  {t('form.exitConfirm.title') || 'Leave this page?'}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {t('form.exitConfirm.message') || 'You have unsaved changes. Are you sure you want to leave? Your progress will be lost.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowExitConfirmModal(false);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                {t('form.exitConfirm.cancel') || 'Cancel'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowExitConfirmModal(false);
+                  // Allow navigation/close after confirmation
+                  window.location.href = '/';
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                {t('form.exitConfirm.leave') || 'Leave'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
