@@ -21,6 +21,16 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [convertedDeliveryPrice, setConvertedDeliveryPrice] = useState('');
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(true);
 
+  // Function to preview/open file
+  const handlePreviewFile = (doc) => {
+    if (doc.dataUrl) {
+      // Open in new window/tab
+      window.open(doc.dataUrl, '_blank');
+    } else if (doc.url || doc.public_url) {
+      window.open(doc.url || doc.public_url, '_blank');
+    }
+  };
+
   // Navigation functions for editing each section
   const handleEditServices = () => navigate('/form/choose-services');
   const handleEditDocuments = () => navigate('/form/documents');
@@ -413,6 +423,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                                 <p className="text-[10px] sm:text-xs font-medium text-gray-900 truncate" title={doc.name}>{truncateFileName(doc.name)}</p>
                                 <p className="text-[10px] sm:text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
                               </div>
+                              <button
+                                onClick={() => handlePreviewFile(doc)}
+                                className="ml-2 p-1.5 sm:p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+                                aria-label={`View ${doc.name}`}
+                                title={`View ${doc.name}`}
+                              >
+                                <Icon icon="heroicons:eye" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-gray-900" />
+                              </button>
                             </div>
                             {doc.selectedOptions && doc.selectedOptions.length > 0 && (
                               <div className="flex flex-wrap gap-1 flex-shrink-0 ml-5 sm:ml-7 lg:ml-0">
