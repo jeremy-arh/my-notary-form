@@ -47,7 +47,10 @@ const NotaryForm = () => {
   const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
   const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
   const [showInactivityModal, setShowInactivityModal] = useState(false);
-  const [hasShownInactivityModal, setHasShownInactivityModal] = useState(false);
+  const [hasShownInactivityModal, setHasShownInactivityModal] = useState(() => {
+    // Check if modal has already been shown in this session
+    return sessionStorage.getItem('inactivityModalShown') === 'true';
+  });
   const { t, language } = useTranslation();
   const { services, options, servicesMap, optionsMap, getServiceName, getOptionName, loading: servicesLoading } = useServices();
   const { currency: contextCurrency } = useCurrency();
@@ -1302,6 +1305,7 @@ const NotaryForm = () => {
         if (timeSinceLastActivity >= 15000 && !showInactivityModal && !hasShownInactivityModal) {
           setShowInactivityModal(true);
           setHasShownInactivityModal(true);
+          sessionStorage.setItem('inactivityModalShown', 'true');
         }
       }, 15000);
     };
@@ -2058,6 +2062,7 @@ const NotaryForm = () => {
         onClose={() => {
           setShowInactivityModal(false);
           setHasShownInactivityModal(true);
+          sessionStorage.setItem('inactivityModalShown', 'true');
         }}
       />
 
