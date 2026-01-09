@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { trackBeginCheckout } from '../../utils/gtm';
@@ -829,9 +830,9 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       </div>
     </div>
     
-    {/* Mobile: Fixed Price Details at bottom - Outside scrollable container */}
-    {isMobile && (
-      <div className="fixed bottom-0 left-0 right-0 z-40">
+    {/* Mobile: Fixed Price Details at bottom - Rendered via Portal to escape overflow:hidden containers */}
+    {isMobile && createPortal(
+      <div className="fixed bottom-0 left-0 right-0 z-[100]">
         {/* Price Details - Always visible container */}
         <div className="bg-white rounded-t-xl sm:rounded-t-2xl p-4 sm:p-6 border border-gray-200 overflow-hidden shadow-[0_-4px_20px_rgba(0,0,0,0.15)] w-full">
           {/* Header with toggle - Always visible */}
@@ -1057,7 +1058,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             </div>
           )}
         </div>
-      </div>
+      </div>,
+      document.body
     )}
     </>
   );
