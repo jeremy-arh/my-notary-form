@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { trackDeliveryMethodSelected } from '../../utils/analytics';
+import { pushGTMEvent } from '../../utils/gtm';
 
 const DELIVERY_POSTAL_PRICE_EUR = 29.95;
 
@@ -59,6 +60,17 @@ const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleCo
   };
 
   const handleContinue = () => {
+    // Envoyer l'événement GTM avec l'ID "delivery"
+    const deliveryPrice = deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0;
+    
+    pushGTMEvent('delivery', {
+      delivery_method: deliveryMethod || 'none',
+      delivery_price: deliveryPrice,
+      currency: currency || 'EUR',
+      has_delivery_cost: deliveryMethod === 'postal'
+    });
+
+    // Call original handleContinueClick or nextStep
     if (handleContinueClick) {
       handleContinueClick();
     } else {

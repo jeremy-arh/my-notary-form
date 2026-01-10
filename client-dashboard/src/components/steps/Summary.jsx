@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { trackBeginCheckout } from '../../utils/gtm';
+import { trackBeginCheckout, pushGTMEvent } from '../../utils/gtm';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -139,6 +139,54 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     };
     convertDeliveryPrice();
   }, [currency, formData.deliveryMethod, formatPriceAsync, formatPriceSync]);
+
+  // Track summary page view when component mounts
+  useEffect(() => {
+    // Attendre que les services soient chargés pour avoir des données complètes
+    if (loading || Object.keys(servicesMap).length === 0) {
+      return;
+    }
+
+    // Calculer les statistiques pour l'événement GTM "summary"
+    const totalDocuments = formData.selectedServices?.reduce((total, serviceId) => {
+      const documents = formData.serviceDocuments?.[serviceId] || [];
+      return total + documents.length;
+    }, 0) || 0;
+
+    const servicesWithDocs = formData.selectedServices?.filter(serviceId => {
+      const documents = formData.serviceDocuments?.[serviceId] || [];
+      return documents.length > 0;
+    }).length || 0;
+
+    const totalOptions = formData.selectedServices?.reduce((total, serviceId) => {
+      const documents = formData.serviceDocuments?.[serviceId] || [];
+      return total + documents.reduce((docTotal, doc) => {
+        return docTotal + (doc.selectedOptions?.length || 0);
+      }, 0);
+    }, 0) || 0;
+
+    const signatoriesCount = formData.signatories?.length || 0;
+    const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
+
+    // Calculer le total
+    const checkoutData = calculateCheckoutData();
+    const totalValue = checkoutData?.value || 0;
+
+    // Envoyer l'événement GTM avec l'ID "summary"
+    pushGTMEvent('summary', {
+      total_services: formData.selectedServices?.length || 0,
+      services_with_docs: servicesWithDocs,
+      total_documents: totalDocuments,
+      total_options: totalOptions,
+      signatories_count: signatoriesCount,
+      additional_signatories_count: additionalSignatoriesCount,
+      delivery_method: formData.deliveryMethod || 'none',
+      has_delivery_cost: formData.deliveryMethod === 'postal',
+      total_value: totalValue,
+      currency: formData.currency || 'EUR'
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]); // Se déclenche quand le composant est monté et que les services sont chargés
 
   // Helper function to replace price in delivery description text
   const getDeliveryDescription = () => {

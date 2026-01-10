@@ -5,6 +5,7 @@ import 'react-phone-number-input/style.css';
 import { supabase } from '../../lib/supabase';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { useTranslation } from '../../hooks/useTranslation';
+import { pushGTMEvent } from '../../utils/gtm';
 
 const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
@@ -468,6 +469,18 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       return;
     }
     if (validate()) {
+      // Envoyer l'événement GTM avec l'ID "personal_info"
+      pushGTMEvent('personal_info', {
+        is_authenticated: isAuthenticated || false,
+        is_signatory: formData.isSignatory || false,
+        has_address: !!(formData.address && formData.address.trim()),
+        has_city: !!(formData.city && formData.city.trim()),
+        has_postal_code: !!(formData.postalCode && formData.postalCode.trim()),
+        has_country: !!(formData.country && formData.country.trim()),
+        has_phone: !!(formData.phone && formData.phone.trim()),
+        address_auto_filled: formData._addressAutoFilled || false
+      });
+
       // Call original handleContinueClick or nextStep
       // L'envoi à Brevo est géré dans NotaryForm.handleContinueClick
       if (handleContinueClick) {

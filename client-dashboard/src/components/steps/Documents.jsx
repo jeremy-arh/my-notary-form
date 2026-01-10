@@ -6,6 +6,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { uploadDocument, deleteDocument } from '../../utils/formDraft';
+import { pushGTMEvent } from '../../utils/gtm';
 import Notification from '../Notification';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
@@ -27,6 +28,29 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   const fileInputRefs = useRef({});
 
   const handleContinue = () => {
+    // Calculer les statistiques des documents pour GTM
+    const serviceDocuments = formData.serviceDocuments || {};
+    let totalDocuments = 0;
+    const servicesWithDocs = [];
+    const documentsByService = {};
+
+    Object.entries(serviceDocuments).forEach(([serviceId, files]) => {
+      if (Array.isArray(files) && files.length > 0) {
+        const fileCount = files.length;
+        totalDocuments += fileCount;
+        servicesWithDocs.push(serviceId);
+        documentsByService[serviceId] = fileCount;
+      }
+    });
+
+    // Envoyer l'événement GTM avec l'ID "documents"
+    pushGTMEvent('documents', {
+      documents_count: totalDocuments,
+      services_with_docs: servicesWithDocs.length,
+      service_ids: servicesWithDocs.join(','),
+      documents_by_service: documentsByService
+    });
+
     // Call original handleContinueClick or nextStep
     if (handleContinueClick) {
       handleContinueClick();
