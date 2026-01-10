@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { trackBeginCheckout, pushGTMEvent } from '../../utils/gtm';
+import { pushGTMEvent } from '../../utils/gtm';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -315,12 +315,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   const onSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Track begin_checkout event before submitting
-      if (!loading && Object.keys(servicesMap).length > 0) {
-        const checkoutData = calculateCheckoutData();
-        trackBeginCheckout(checkoutData);
-      }
-      
       await handleSubmit();
     } finally {
       setIsSubmitting(false);

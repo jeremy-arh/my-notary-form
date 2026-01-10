@@ -4,7 +4,7 @@ import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
-import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart, pushGTMEvent } from '../utils/gtm';
+import { trackPageView, pushGTMEvent } from '../utils/gtm';
 import { 
   trackFormStart as trackPlausibleFormStart,
   trackServicesSelected,
@@ -222,14 +222,6 @@ const NotaryForm = () => {
     if (!formStartedTrackedRef.current && (requestedStep === 1 || requestedStep === 2)) {
       formStartedTrackedRef.current = true;
       console.log('📊 [PLAUSIBLE] Tracking form_started - Form opened at step', requestedStep);
-      
-      // Track GTM form start
-      trackFormStart({
-        formName: 'notarization_form',
-        serviceType: 'Document Notarization',
-        ctaLocation: 'homepage_hero',
-        ctaText: 'Commencer ma notarisation'
-      });
       
       // Track Plausible form start
       trackPlausibleFormStart();
@@ -995,11 +987,6 @@ const NotaryForm = () => {
     const stepIndex = stepId - 1;
     if (!completedSteps.includes(stepIndex)) {
       setCompletedSteps([...completedSteps, stepIndex]);
-      // Track step completion (GTM)
-      const step = steps.find(s => s.id === stepId);
-      if (step) {
-        trackFormStep(stepId, getStepNameForGTM(step.name));
-      }
       
       // Track Plausible funnel events
       switch (stepId) {
@@ -1031,9 +1018,14 @@ const NotaryForm = () => {
 
   const handleContinueClick = async () => {
     if (canProceedFromCurrentStep()) {
-      // Track GTM events based on current step
-      if (currentStep === 2) {
+      // Recalculer currentStep pour s'assurer d'avoir la bonne valeur
+      const stepFromPath = getCurrentStepFromPath();
+      console.log('📊 [GTM] handleContinueClick - currentStep:', currentStep, 'stepFromPath:', stepFromPath, 'pathname:', location.pathname);
+      
+      // Track GTM events based on current step (utiliser stepFromPath pour être sûr)
+      if (stepFromPath === 2) {
         // Étape Documents - Événement "documents"
+        console.log('📊 [GTM] Déclenchement événement "documents"');
         const serviceDocuments = formData.serviceDocuments || {};
         let totalDocuments = 0;
         const servicesWithDocs = [];
@@ -1054,8 +1046,10 @@ const NotaryForm = () => {
           service_ids: servicesWithDocs.join(','),
           documents_by_service: documentsByService
         });
-      } else if (currentStep === 3) {
+        console.log('✅ [GTM] Événement "documents" envoyé:', { documents_count: totalDocuments, services_with_docs: servicesWithDocs.length });
+      } else if (stepFromPath === 3) {
         // Étape Delivery Method - Événement "delivery"
+        console.log('📊 [GTM] Déclenchement événement "delivery"');
         const DELIVERY_POSTAL_PRICE_EUR = 29.95;
         const deliveryPrice = formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0;
         
@@ -1065,8 +1059,10 @@ const NotaryForm = () => {
           currency: formData.currency || 'EUR',
           has_delivery_cost: formData.deliveryMethod === 'postal'
         });
-      } else if (currentStep === 4) {
+        console.log('✅ [GTM] Événement "delivery" envoyé:', { delivery_method: formData.deliveryMethod, delivery_price: deliveryPrice });
+      } else if (stepFromPath === 4) {
         // Étape Personal Info - Événement "personal_info"
+        console.log('📊 [GTM] Déclenchement événement "personal_info"');
         pushGTMEvent('personal_info', {
           is_authenticated: isAuthenticated || false,
           is_signatory: formData.isSignatory || false,
@@ -1077,11 +1073,14 @@ const NotaryForm = () => {
           has_phone: !!(formData.phone && formData.phone.trim()),
           address_auto_filled: formData._addressAutoFilled || false
         });
+        console.log('✅ [GTM] Événement "personal_info" envoyé');
+      } else {
+        console.log('⚠️ [GTM] Aucun événement GTM pour stepFromPath:', stepFromPath);
       }
 
       // Envoyer les données à Brevo dans la liste "Form abandonné" quand l'utilisateur passe l'étape Personal Info
       // Faire l'appel en arrière-plan pour ne pas bloquer l'interface
-      if (currentStep === 4) {
+      if (stepFromPath === 4) {
         // Ne pas attendre la réponse, laisser tourner en arrière-plan
         (async () => {
           try {
@@ -1132,7 +1131,7 @@ const NotaryForm = () => {
       }
 
       // Update user information at Personal Info step if authenticated
-      if (currentStep === 4 && isAuthenticated) {
+      if (stepFromPath === 4 && isAuthenticated) {
         setIsCreatingUser(true);
         try {
           console.log('👤 [NOTARY-FORM] Updating authenticated user information');
@@ -1257,17 +1256,6 @@ const NotaryForm = () => {
       if (nextStepData) {
         navigate(nextStepData.path);
         
-        // Track summary viewed when reaching last step
-        if (nextStepData.id === steps.length) {
-          const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
-            (sum, docs) => sum + (docs?.length || 0), 0
-          );
-          trackSummaryViewed({
-            servicesCount: formData.selectedServices?.length || 0,
-            documentsCount: totalDocs,
-            signatoriesCount: formData.signatories?.length || 0
-          });
-        }
       }
     }
   };
@@ -1402,12 +1390,6 @@ const NotaryForm = () => {
     setIsSubmitting(true);
     try {
       console.log('Creating payment session for form data:', formData);
-
-      // Track form submission start (GTM)
-      trackFormSubmissionStart({
-        selectedOptions: formData.selectedServices || [],
-        documents: formData.serviceDocuments ? Object.values(formData.serviceDocuments).flat() : []
-      });
 
       // Upload documents to Supabase Storage, organized by service
       const uploadedServiceDocuments = {};
@@ -1633,12 +1615,6 @@ const NotaryForm = () => {
       console.log('💰 [CURRENCY] Devise finale envoyée à Stripe:', currency);
       console.log('💰 [CURRENCY] Devise dans submissionData:', submissionData.currency);
       
-      trackPaymentInitiated({
-        servicesCount: formData.selectedServices?.length || 0,
-        totalAmount: 0, // Will be calculated by backend
-        currency: currency // Utiliser la devise finale
-      });
-
       const requestBody = {
         formData: {
           ...submissionData,
