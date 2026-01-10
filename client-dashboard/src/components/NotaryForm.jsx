@@ -4,7 +4,7 @@ import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
-import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart } from '../utils/gtm';
+import { trackPageView, trackFormStep, trackFormSubmissionStart, trackFormSubmission, trackFormStart, pushGTMEvent } from '../utils/gtm';
 import { 
   trackFormStart as trackPlausibleFormStart,
   trackServicesSelected,
@@ -1031,6 +1031,54 @@ const NotaryForm = () => {
 
   const handleContinueClick = async () => {
     if (canProceedFromCurrentStep()) {
+      // Track GTM events based on current step
+      if (currentStep === 2) {
+        // Étape Documents - Événement "documents"
+        const serviceDocuments = formData.serviceDocuments || {};
+        let totalDocuments = 0;
+        const servicesWithDocs = [];
+        const documentsByService = {};
+
+        Object.entries(serviceDocuments).forEach(([serviceId, files]) => {
+          if (Array.isArray(files) && files.length > 0) {
+            const fileCount = files.length;
+            totalDocuments += fileCount;
+            servicesWithDocs.push(serviceId);
+            documentsByService[serviceId] = fileCount;
+          }
+        });
+
+        pushGTMEvent('documents', {
+          documents_count: totalDocuments,
+          services_with_docs: servicesWithDocs.length,
+          service_ids: servicesWithDocs.join(','),
+          documents_by_service: documentsByService
+        });
+      } else if (currentStep === 3) {
+        // Étape Delivery Method - Événement "delivery"
+        const DELIVERY_POSTAL_PRICE_EUR = 29.95;
+        const deliveryPrice = formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0;
+        
+        pushGTMEvent('delivery', {
+          delivery_method: formData.deliveryMethod || 'none',
+          delivery_price: deliveryPrice,
+          currency: formData.currency || 'EUR',
+          has_delivery_cost: formData.deliveryMethod === 'postal'
+        });
+      } else if (currentStep === 4) {
+        // Étape Personal Info - Événement "personal_info"
+        pushGTMEvent('personal_info', {
+          is_authenticated: isAuthenticated || false,
+          is_signatory: formData.isSignatory || false,
+          has_address: !!(formData.address && formData.address.trim()),
+          has_city: !!(formData.city && formData.city.trim()),
+          has_postal_code: !!(formData.postalCode && formData.postalCode.trim()),
+          has_country: !!(formData.country && formData.country.trim()),
+          has_phone: !!(formData.phone && formData.phone.trim()),
+          address_auto_filled: formData._addressAutoFilled || false
+        });
+      }
+
       // Envoyer les données à Brevo dans la liste "Form abandonné" quand l'utilisateur passe l'étape Personal Info
       // Faire l'appel en arrière-plan pour ne pas bloquer l'interface
       if (currentStep === 4) {
