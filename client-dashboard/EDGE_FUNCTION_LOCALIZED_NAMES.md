@@ -210,3 +210,7 @@ Pour vérifier que les libellés traduits sont bien utilisés :
 2. Vérifier les logs `localizedLineItems` et `localizedNames` dans la requête envoyée à l'Edge Function
 3. Vérifier que les noms dans le checkout Stripe correspondent aux noms traduits de l'interface
 
+
+
+
+

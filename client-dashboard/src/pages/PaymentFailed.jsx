@@ -1,63 +1,39 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import Logo from '../assets/Logo';
-import { supabase } from '../lib/supabase';
 
 const PaymentFailed = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleRetryPayment = async () => {
+  // Get error message from URL if present (from Stripe redirect)
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam));
+    }
+  }, [searchParams]);
+
+  const handleRetryPayment = () => {
     setRetrying(true);
     setError(null);
 
-    try {
-      // Get form data from localStorage
-      const savedFormData = localStorage.getItem('notaryFormData');
+    // Check if form data exists in localStorage
+    const savedFormData = localStorage.getItem('notaryFormData');
 
-      if (!savedFormData) {
-        setError('Form data not found. Please fill out the form again.');
-        setRetrying(false);
-        setTimeout(() => navigate('/form/documents'), 2000);
-        return;
-      }
-
-      const formData = JSON.parse(savedFormData);
-
-      // S'assurer que la devise est présente (fallback sur EUR si absente)
-      if (!formData.currency) {
-        formData.currency = 'EUR';
-        console.log('⚠️ [CURRENCY] Devise manquante dans formData, utilisation de EUR par défaut');
-      }
-      
-      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
-      const currency = (formData.currency || 'EUR').toUpperCase();
-      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
-
-      // Call Supabase Edge Function to create Stripe checkout session
-      // The Edge Function will fetch services from database and calculate the amount
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
-          formData,
-          currency: currency // Envoyer la devise comme paramètre séparé et explicite
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
-      } else {
-        throw new Error('No checkout URL received');
-      }
-    } catch (err) {
-      console.error('Retry payment error:', err);
-      setError(err.message || 'Failed to create payment session. Please try again.');
+    if (!savedFormData) {
+      setError('Form data not found. Please fill out the form again.');
       setRetrying(false);
+      setTimeout(() => navigate('/form/choose-services'), 2000);
+      return;
     }
+
+    // Redirect to Summary page with autoRetry parameter
+    // The Summary page will handle the payment submission with all the proper context
+    navigate('/form/summary?retry=true');
   };
 
   const handleBackToForm = () => {

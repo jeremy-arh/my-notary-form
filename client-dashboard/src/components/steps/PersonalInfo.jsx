@@ -720,7 +720,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           )}
         </div>
 
-        {/* Is Signatory Checkbox */}
+        {/* Is Signatory Checkbox - Temporarily hidden
         <label htmlFor="isSignatory" className="flex items-start space-x-3 cursor-pointer group">
           <div className="relative flex-shrink-0 mt-0.5">
             <input
@@ -780,6 +780,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
             {t('form.steps.personalInfo.isSignatory')}
           </span>
         </label>
+        */}
           </div>
         </div>
       </div>

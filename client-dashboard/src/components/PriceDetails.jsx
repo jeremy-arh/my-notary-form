@@ -85,10 +85,10 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
         });
       }
       
-      // Add signatory price
-      if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-        pricesToConvert.add((formData.signatories.length - 1) * 45);
-      }
+      // Add signatory price - Temporarily disabled
+      // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+      //   pricesToConvert.add((formData.signatories.length - 1) * 45);
+      // }
       
       // Convert all prices
       const conversions = await Promise.all(
@@ -143,9 +143,10 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
         }
       });
     }
-    if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-      total += (formData.signatories.length - 1) * 45;
-    }
+    // Signatories pricing - Temporarily disabled
+    // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+    //   total += (formData.signatories.length - 1) * 45;
+    // }
     return total;
   };
 
@@ -294,7 +295,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                   </div>
                 )}
 
-                {/* Show signatories breakdown - global for all services */}
+                {/* Show signatories breakdown - global for all services - Temporarily hidden
                 {formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1 && (
                   <div className="pt-1.5 sm:pt-2 border-t border-gray-200">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5">
@@ -307,6 +308,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                     </div>
                   </div>
                 )}
+                */}
 
                 {/* Total - Always show even if 0 */}
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-1.5 sm:pt-2 border-t-2 border-gray-300 gap-0.5 sm:gap-1">

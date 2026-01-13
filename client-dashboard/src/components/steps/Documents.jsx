@@ -11,7 +11,7 @@ import Notification from '../Notification';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
-const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
+const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen, setIsUploading }) => {
   const { t } = useTranslation();
   const { getServicesByIds, options, loading: servicesLoading, getServiceName } = useServices();
   const { formatPriceSync, currency, cacheVersion } = useCurrency();
@@ -27,7 +27,26 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   const savedScrollPositionRef = useRef(null);
   const fileInputRefs = useRef({});
 
+  // Check if any upload is in progress
+  const isAnyUploadInProgress = Object.values(uploadingServices).some(Boolean);
+
+  // Sync upload state with parent component (NotaryForm)
+  useEffect(() => {
+    if (setIsUploading) {
+      setIsUploading(isAnyUploadInProgress);
+    }
+  }, [isAnyUploadInProgress, setIsUploading]);
+
   const handleContinue = () => {
+    // SECURITY: Prevent navigation if upload is in progress
+    if (isAnyUploadInProgress) {
+      setNotification({
+        type: 'warning',
+        message: t('form.steps.documents.uploadInProgress') || 'Veuillez attendre la fin du téléchargement avant de continuer.'
+      });
+      return;
+    }
+
     // Calculer les statistiques des documents pour GTM
     const serviceDocuments = formData.serviceDocuments || {};
     let totalDocuments = 0;
@@ -231,32 +250,41 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       const sessionId = localStorage.getItem('formSessionId') || 
                        `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Upload files to Supabase Storage and create dataUrl for localStorage
+      // Upload files to Supabase Storage (NO base64/dataUrl - localStorage can't handle large files)
       const uploadedFiles = await Promise.all(
         files.map(async (file) => {
           try {
-            // Create dataUrl from file for localStorage (to avoid Supabase bucket errors)
-            const dataUrl = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
+            // Check file size - warn if > 50MB
+            const maxSize = 50 * 1024 * 1024; // 50 MB
+            if (file.size > maxSize) {
+              console.warn(`⚠️ File ${file.name} is larger than 50MB`);
+              setNotification({
+                type: 'error',
+                message: t('form.steps.documents.fileTooLarge') || `Le fichier ${file.name} dépasse la limite de 50 MB.`
+              });
+              return {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                error: 'File too large',
+                selectedOptions: [],
+              };
+            }
 
             const uploadedFile = await uploadDocument(file, serviceId, sessionId);
+            
+            // Only store metadata + Supabase URL (NO base64 dataUrl)
             return {
               name: uploadedFile.name,
               size: uploadedFile.size,
               type: uploadedFile.type,
               path: uploadedFile.path,
-              url: uploadedFile.url,
-              dataUrl: dataUrl, // Ajout du dataUrl pour affichage depuis localStorage
+              url: uploadedFile.url, // Supabase URL for display
               uploadedAt: uploadedFile.uploadedAt,
               selectedOptions: [],
             };
           } catch (error) {
             console.error('Error uploading file:', error);
-            // Return a placeholder on error
             return {
               name: file.name,
               size: file.size,
@@ -268,11 +296,41 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
         })
       );
 
-      const serviceDocuments = { ...(formData.serviceDocuments || {}) };
-      const existingFiles = serviceDocuments[serviceId] || [];
-      serviceDocuments[serviceId] = [...existingFiles, ...uploadedFiles];
-
-      updateFormData({ serviceDocuments });
+      // Filter out failed uploads
+      const successfulUploads = uploadedFiles.filter(file => !file.error);
+      const failedUploads = uploadedFiles.filter(file => file.error);
+      
+      // Show notification for failed uploads
+      if (failedUploads.length > 0) {
+        setNotification({
+          type: 'error',
+          message: t('form.steps.documents.uploadError') || `Échec de l'upload de ${failedUploads.length} fichier(s): ${failedUploads.map(f => f.name).join(', ')}`
+        });
+      }
+      
+      // Only add successful uploads
+      if (successfulUploads.length > 0) {
+        console.log('📤 [Documents] Adding successful uploads:', successfulUploads.length, 'files for service:', serviceId);
+        console.log('📤 [Documents] File names:', successfulUploads.map(f => f.name).join(', '));
+        
+        // IMPORTANT: Use functional update to avoid race conditions with multiple simultaneous uploads
+        // This ensures we always work with the latest state, not a stale copy
+        updateFormData((prevData) => {
+          console.log('📤 [Documents] Previous serviceDocuments:', JSON.stringify(Object.keys(prevData?.serviceDocuments || {})));
+          const currentServiceDocuments = { ...(prevData?.serviceDocuments || {}) };
+          const existingFiles = currentServiceDocuments[serviceId] || [];
+          console.log('📤 [Documents] Existing files for service', serviceId, ':', existingFiles.length);
+          currentServiceDocuments[serviceId] = [...existingFiles, ...successfulUploads];
+          console.log('📤 [Documents] New total for service', serviceId, ':', currentServiceDocuments[serviceId].length);
+          return { serviceDocuments: currentServiceDocuments };
+        });
+        
+        // Show success notification
+        setNotification({
+          type: 'success',
+          message: t('form.steps.documents.uploadSuccess') || `${successfulUploads.length} fichier(s) uploadé(s) avec succès`
+        });
+      }
     } finally {
       // Set uploading state to false when done
       setUploadingServices(prev => ({ ...prev, [serviceId]: false }));
@@ -280,8 +338,8 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   };
 
   const removeFile = async (serviceId, fileIndex) => {
-    const serviceDocuments = { ...formData.serviceDocuments };
-    const fileToRemove = serviceDocuments[serviceId][fileIndex];
+    // Get file to remove first (before state update)
+    const fileToRemove = formData.serviceDocuments?.[serviceId]?.[fileIndex];
     
     // Delete from Supabase Storage if it has a path
     if (fileToRemove && fileToRemove.path) {
@@ -292,13 +350,18 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
       }
     }
     
-    serviceDocuments[serviceId] = serviceDocuments[serviceId].filter((_, index) => index !== fileIndex);
-
-    if (serviceDocuments[serviceId].length === 0) {
-      delete serviceDocuments[serviceId];
-    }
-
-    updateFormData({ serviceDocuments });
+    // Use functional update to avoid race conditions
+    updateFormData((prevData) => {
+      const serviceDocuments = { ...(prevData?.serviceDocuments || {}) };
+      if (serviceDocuments[serviceId]) {
+        serviceDocuments[serviceId] = serviceDocuments[serviceId].filter((_, index) => index !== fileIndex);
+        
+        if (serviceDocuments[serviceId].length === 0) {
+          delete serviceDocuments[serviceId];
+        }
+      }
+      return { serviceDocuments };
+    });
   };
 
   // Helper function to truncate file name on mobile
@@ -313,20 +376,30 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
   };
 
   const toggleOption = (serviceId, fileIndex, optionId) => {
-    const serviceDocuments = { ...formData.serviceDocuments };
-    const file = serviceDocuments[serviceId][fileIndex];
+    // Use functional update to avoid race conditions
+    updateFormData((prevData) => {
+      const serviceDocuments = { ...(prevData?.serviceDocuments || {}) };
+      
+      if (serviceDocuments[serviceId] && serviceDocuments[serviceId][fileIndex]) {
+        const file = { ...serviceDocuments[serviceId][fileIndex] };
+        
+        if (!file.selectedOptions) {
+          file.selectedOptions = [];
+        }
 
-    if (!file.selectedOptions) {
-      file.selectedOptions = [];
-    }
-
-    if (file.selectedOptions.includes(optionId)) {
-      file.selectedOptions = file.selectedOptions.filter(id => id !== optionId);
-    } else {
-      file.selectedOptions = [...file.selectedOptions, optionId];
-    }
-
-    updateFormData({ serviceDocuments });
+        if (file.selectedOptions.includes(optionId)) {
+          file.selectedOptions = file.selectedOptions.filter(id => id !== optionId);
+        } else {
+          file.selectedOptions = [...file.selectedOptions, optionId];
+        }
+        
+        // Create new array with updated file
+        serviceDocuments[serviceId] = [...serviceDocuments[serviceId]];
+        serviceDocuments[serviceId][fileIndex] = file;
+      }
+      
+      return { serviceDocuments };
+    });
   };
 
   const getFileCount = (serviceId) => {

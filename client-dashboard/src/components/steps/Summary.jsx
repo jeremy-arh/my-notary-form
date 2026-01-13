@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { pushGTMEvent } from '../../utils/gtm';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import PriceDetails from '../PriceDetails';
+import Notification from '../Notification';
 
 const DELIVERY_POSTAL_PRICE_EUR = 29.95;
 
 const Summary = ({ formData, prevStep, handleSubmit }) => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { t, language } = useTranslation();
   const { servicesMap, optionsMap, loading, getServiceName, getOptionName } = useServices();
   const { formatPrice: formatPriceAsync, formatPriceSync, currency } = useCurrency();
@@ -21,6 +23,95 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   const [convertedDeliveryPrice, setConvertedDeliveryPrice] = useState('');
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(true);
   const [viewingFile, setViewingFile] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const retryTriggered = useRef(false);
+
+  // Check if form is complete (all required info filled)
+  const totalDocuments = formData.selectedServices?.reduce((total, serviceId) => {
+    const docs = formData.serviceDocuments?.[serviceId] || [];
+    return total + docs.length;
+  }, 0) || 0;
+  
+  const isFormComplete = 
+    formData.selectedServices?.length > 0 &&
+    totalDocuments > 0 &&
+    formData.firstName?.trim() &&
+    formData.lastName?.trim() &&
+    formData.email?.trim() &&
+    formData.deliveryMethod;
+
+  // Get list of missing required information
+  const getMissingInfo = () => {
+    const missing = [];
+    
+    if (!formData.selectedServices || formData.selectedServices.length === 0) {
+      missing.push({
+        key: 'services',
+        label: t('form.steps.summary.missingServices') || 'Aucun service sélectionné',
+        action: handleEditServices
+      });
+    }
+    
+    if (totalDocuments === 0) {
+      missing.push({
+        key: 'documents',
+        label: t('form.steps.summary.missingDocuments') || 'Aucun document uploadé',
+        action: handleEditDocuments
+      });
+    }
+    
+    if (!formData.firstName?.trim() || !formData.lastName?.trim() || !formData.email?.trim()) {
+      const missingFields = [];
+      if (!formData.firstName?.trim()) missingFields.push(t('form.steps.personalInfo.firstName') || 'Prénom');
+      if (!formData.lastName?.trim()) missingFields.push(t('form.steps.personalInfo.lastName') || 'Nom');
+      if (!formData.email?.trim()) missingFields.push(t('form.steps.personalInfo.email') || 'Email');
+      
+      missing.push({
+        key: 'personalInfo',
+        label: `${t('form.steps.summary.missingPersonalInfo') || 'Informations personnelles manquantes'}: ${missingFields.join(', ')}`,
+        action: handleEditPersonalInfo
+      });
+    }
+    
+    if (!formData.deliveryMethod) {
+      missing.push({
+        key: 'delivery',
+        label: t('form.steps.summary.missingDelivery') || 'Méthode de livraison non sélectionnée',
+        action: handleEditDelivery
+      });
+    }
+    
+    return missing;
+  };
+
+  // Handle pay button click - show alert if info missing
+  const handlePayClick = () => {
+    const missing = getMissingInfo();
+    
+    if (missing.length > 0) {
+      // Build error message with list of missing items
+      const missingLabels = missing.map(item => `• ${item.label}`).join('\n');
+      const title = t('form.steps.summary.missingInfoTitle') || 'Informations manquantes';
+      const message = `${title}\n\n${missingLabels}`;
+      
+      setNotification({
+        type: 'error',
+        message: message
+      });
+      
+      // Redirect to the first missing step after a short delay
+      setTimeout(() => {
+        if (missing[0]?.action) {
+          missing[0].action();
+        }
+      }, 2000);
+      
+      return;
+    }
+    
+    // All info complete, proceed with payment
+    onSubmit();
+  };
 
   // Navigation functions for editing each section
   const handleEditServices = () => navigate('/form/choose-services');
@@ -29,15 +120,40 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
   const handleEditPersonalInfo = () => navigate('/form/personal-info');
   const handleEditSignatories = () => navigate('/form/signatories');
 
-  // Detect mobile screen size
+  // Detect mobile screen size (matches 2xl breakpoint at 1536px for Price Details visibility)
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 640); // sm breakpoint
+      setIsMobile(window.innerWidth < 1536); // 2xl breakpoint - matches CSS 2xl:block/hidden
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Handle automatic retry from PaymentFailed page
+  useEffect(() => {
+    const retryParam = searchParams.get('retry');
+    
+    if (retryParam === 'true' && !loading && !retryTriggered.current && isFormComplete) {
+      retryTriggered.current = true;
+      
+      // Clear the retry parameter from URL
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('retry');
+      setSearchParams(newParams, { replace: true });
+      
+      // Show notification and trigger payment
+      setNotification({
+        type: 'info',
+        message: t('form.steps.summary.retryingPayment') || 'Retrying payment...'
+      });
+      
+      // Small delay to let the component render, then trigger payment
+      setTimeout(() => {
+        onSubmit();
+      }, 500);
+    }
+  }, [searchParams, loading, isFormComplete]);
 
   // Calculate footer height and set padding dynamically to maintain 20px gap
   useEffect(() => {
@@ -290,20 +406,20 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       });
     }
 
-    // Add cost for additional signatories (45€ per additional signatory, first one is free)
-    if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-      const additionalSignatories = formData.signatories.length - 1;
-      total += additionalSignatories * 45;
-      
-      // Add signatories as items for GTM
-      items.push({
-        item_id: 'additional_signatories',
-        item_name: `Additional Signatories (${additionalSignatories})`,
-        item_category: 'Additional Service',
-        price: 45,
-        quantity: additionalSignatories
-      });
-    }
+    // Add cost for additional signatories - Temporarily disabled
+    // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+    //   const additionalSignatories = formData.signatories.length - 1;
+    //   total += additionalSignatories * 45;
+    //   
+    //   // Add signatories as items for GTM
+    //   items.push({
+    //     item_id: 'additional_signatories',
+    //     item_name: `Additional Signatories (${additionalSignatories})`,
+    //     item_category: 'Additional Service',
+    //     price: 45,
+    //     quantity: additionalSignatories
+    //   });
+    // }
 
     return {
       currency: formData.currency || 'EUR',
@@ -352,6 +468,15 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
   return (
     <>
+    {/* Toast Notification */}
+    {notification && (
+      <Notification
+        type={notification.type}
+        message={notification.message}
+        onClose={() => setNotification(null)}
+      />
+    )}
+    
     <div 
       className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 w-full max-w-full" 
       style={{ 
@@ -373,9 +498,9 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </div>
 
         {/* Two Column Layout on Desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+        <div className="grid grid-cols-1 2xl:grid-cols-12 gap-4 2xl:gap-6">
           {/* Left Column - Main Content */}
-          <div className="lg:col-span-7 space-y-3 sm:space-y-4 lg:space-y-6 pb-20 lg:pb-0">
+          <div className="2xl:col-span-7 space-y-3 sm:space-y-4 2xl:space-y-6 pb-20 2xl:pb-0">
             {/* What happens next */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-3 sm:p-4 flex items-start gap-3">
               <div className="flex-shrink-0 mt-0.5">
@@ -425,6 +550,37 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               </button>
             </div>
           </div>
+          {/* Alert when no documents uploaded */}
+          {(() => {
+            const totalDocs = formData.selectedServices?.reduce((total, serviceId) => {
+              const docs = formData.serviceDocuments?.[serviceId] || [];
+              return total + docs.length;
+            }, 0) || 0;
+            
+            if (totalDocs === 0) {
+              return (
+                <button
+                  onClick={handleEditDocuments}
+                  className="w-full mb-3 sm:mb-4 p-3 sm:p-4 bg-red-50 border-2 border-red-300 rounded-xl flex items-center gap-3 hover:bg-red-100 hover:border-red-400 transition-all group"
+                >
+                  <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-full flex items-center justify-center group-hover:bg-red-200 transition-colors">
+                    <Icon icon="heroicons:exclamation-triangle" className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm sm:text-base font-semibold text-red-700">
+                      {t('form.steps.summary.noDocumentsAlert') || 'Aucun document uploadé'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-red-600 mt-0.5">
+                      {t('form.steps.summary.noDocumentsAlertDescription') || 'Cliquez ici pour uploader vos documents'}
+                    </p>
+                  </div>
+                  <Icon icon="heroicons:arrow-right" className="w-5 h-5 text-red-500 flex-shrink-0 group-hover:translate-x-1 transition-transform" />
+                </button>
+              );
+            }
+            return null;
+          })()}
+          
           {loading ? (
             <div className="flex items-center justify-center py-4">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
@@ -578,7 +734,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </div>
       </div>
 
-      {/* Signatories */}
+      {/* Signatories - Temporarily hidden
       {formData.signatories && formData.signatories.length > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
           <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -638,10 +794,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           </div>
         </div>
       )}
+      */}
           </div>
 
-          {/* Right Column - Price Details Sticky (Desktop only) */}
-          <div className="lg:col-span-5 hidden lg:block">
+          {/* Right Column - Price Details Sticky (Desktop only - visible from 1536px) */}
+          <div className="2xl:col-span-5 hidden 2xl:block">
             {/* Desktop: Sticky at top */}
             <div className="sticky top-4">
               
@@ -745,7 +902,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               </div>
             )}
 
-            {/* Additional Signatories */}
+            {/* Additional Signatories - Temporarily hidden
             {formData.signatories && formData.signatories.length > 1 && (
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                 <span className="text-xs sm:text-sm text-gray-700">
@@ -756,6 +913,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 </span>
               </div>
             )}
+            */}
 
             {/* Total */}
             <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
@@ -781,8 +939,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     }
                     return total;
                   }, 0) || 0) + 
-                  (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0) +
-                  (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
+                  (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0)
+                  // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
                 )}
               </span>
             </div>
@@ -795,7 +953,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 {formData.selectedServices && formData.selectedServices.length > 0 && (
                   <div className="pt-4 mt-4 border-t border-gray-200">
                     <button
-                      onClick={onSubmit}
+                      onClick={handlePayClick}
                       disabled={isSubmitting || loading}
                       className="w-full bg-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3] text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#3971ed] disabled:hover:shadow-lg flex items-center justify-center gap-2.5 text-base border border-[#3971ed]"
                     >
@@ -919,8 +1077,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       }
                       return total;
                     }, 0) || 0) + 
-                    (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0) +
-                    (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
+                    (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0)
+                    // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
                   )}
                 </span>
               )}
@@ -1013,7 +1171,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   </div>
                 )}
 
-                {/* Additional Signatories */}
+                {/* Additional Signatories - Temporarily hidden
                 {formData.signatories && formData.signatories.length > 1 && (
                   <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                     <span className="text-xs sm:text-sm text-gray-700">
@@ -1024,6 +1182,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     </span>
                   </div>
                 )}
+                */}
 
                 {/* Total */}
                 <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
@@ -1049,8 +1208,8 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                         }
                         return total;
                       }, 0) || 0) + 
-                      (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0) +
-                      (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
+                      (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0)
+                      // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
                     )}
                   </span>
                 </div>
@@ -1090,7 +1249,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
           {formData.selectedServices && formData.selectedServices.length > 0 && (
             <div className="pt-4 mt-4 border-t border-gray-200">
               <button
-                onClick={onSubmit}
+                onClick={handlePayClick}
                 disabled={isSubmitting || loading}
                 className="w-full bg-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3] text-white font-semibold py-3.5 sm:py-4 px-4 sm:px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#3971ed] disabled:hover:shadow-lg flex items-center justify-center gap-2.5 text-sm sm:text-base border border-[#3971ed]"
               >

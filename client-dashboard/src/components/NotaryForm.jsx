@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../lib/supabase';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useLocalStorage, onStorageError } from '../hooks/useLocalStorage';
 import Logo from '../assets/Logo';
 import { trackPageView, pushGTMEvent } from '../utils/gtm';
 import { 
@@ -42,9 +42,27 @@ const NotaryForm = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [isUploading, setIsUploading] = useState(false); // Track if any document upload is in progress
   const [countdown, setCountdown] = useState(5);
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(false);
-  const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(false);
+  // Initialize hasAppliedServiceParam based on existing form data to prevent reset on page refresh
+  const [hasAppliedServiceParam, setHasAppliedServiceParam] = useState(() => {
+    // If there are already services selected and documents uploaded, consider param as already applied
+    try {
+      const savedData = window.localStorage.getItem('notaryFormData');
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        const hasServices = parsed.selectedServices && parsed.selectedServices.length > 0;
+        const hasDocs = parsed.serviceDocuments && Object.keys(parsed.serviceDocuments).length > 0 &&
+          Object.values(parsed.serviceDocuments).some(docs => docs && docs.length > 0);
+        // If user has both services and documents, treat as already applied to prevent reset
+        return hasServices && hasDocs;
+      }
+    } catch (e) {
+      console.error('Error checking localStorage for hasAppliedServiceParam:', e);
+    }
+    return false;
+  });
   const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
   const [showInactivityModal, setShowInactivityModal] = useState(false);
   const [hasShownInactivityModal, setHasShownInactivityModal] = useState(() => {
@@ -115,31 +133,53 @@ const NotaryForm = () => {
   // Load completed steps from localStorage
   const [completedSteps, setCompletedSteps] = useLocalStorage('notaryCompletedSteps', []);
 
-  // Restore form data from localStorage when returning from external pages (like Stripe checkout)
+  // Restore form data from localStorage ONLY when returning from Stripe checkout
+  // This is critical: we must NOT restore data during normal navigation as it can
+  // overwrite freshly uploaded documents due to race conditions
   useEffect(() => {
+    // Only restore if coming back from payment pages (Stripe redirect)
+    const isReturningFromPayment = location.pathname.includes('/payment/') || 
+      location.pathname.includes('/success') ||
+      location.search.includes('session_id=');
+    
+    if (!isReturningFromPayment) {
+      return; // Don't restore during normal navigation
+    }
+    
     const restoreFormData = () => {
       try {
         const savedFormData = localStorage.getItem('notaryFormData');
         if (savedFormData) {
           const parsedData = JSON.parse(savedFormData);
-          // Only restore if the saved data is different from current formData
-          // This prevents unnecessary updates but ensures data is restored when returning
-          const currentDataStr = JSON.stringify(formData);
-          const savedDataStr = JSON.stringify(parsedData);
-          
-          if (currentDataStr !== savedDataStr) {
-            console.log('🔄 [RESTORE] Restauration des données depuis localStorage');
-            setFormData(parsedData);
-          }
+          console.log('🔄 [RESTORE] Restauration des données depuis localStorage (retour Stripe)');
+          setFormData(parsedData);
         }
       } catch (error) {
         console.error('❌ [RESTORE] Erreur lors de la restauration:', error);
       }
     };
 
-    // Restore on mount and when location changes (especially when returning from payment)
     restoreFormData();
-  }, [location.pathname]); // Restore when pathname changes (e.g., returning from /payment/failed)
+  }, [location.pathname, location.search]); // Only check on pathname/search changes
+
+  // Listen for localStorage errors (quota exceeded, save failed, etc.)
+  useEffect(() => {
+    const unsubscribe = onStorageError((error) => {
+      console.error('❌ [NotaryForm] Storage error:', error);
+      if (error.type === 'quota_exceeded') {
+        setNotification({
+          type: 'error',
+          message: t('form.errors.storageFull') || 'Les fichiers sont trop volumineux. Essayez de télécharger des fichiers plus petits ou supprimez des fichiers existants.'
+        });
+      } else if (error.type === 'save_failed') {
+        setNotification({
+          type: 'error',
+          message: t('form.errors.saveFailed') || 'Impossible de sauvegarder les données. Veuillez réessayer.'
+        });
+      }
+    });
+    return unsubscribe;
+  }, [t]);
 
   // Clean up obsolete localStorage data on mount - Remove ALL old form data
   useEffect(() => {
@@ -238,8 +278,8 @@ const NotaryForm = () => {
     { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
     { id: 3, name: 'Delivery method', icon: 'heroicons:envelope', path: '/form/delivery' },
     { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
-    { id: 5, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' },
-    { id: 6, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
+    // { id: 5, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' }, // Temporarily hidden
+    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
 
   // Function to get validation error message for current step
@@ -253,8 +293,8 @@ const NotaryForm = () => {
         return 'Please select a delivery method';
       case 4: // Personal informations
         return 'Please complete all required personal information fields';
-      case 5: // Add Signatories
-        return 'Please add at least one signatory';
+      // case 5: // Add Signatories - Temporarily hidden
+      //   return 'Please add at least one signatory';
       default:
         return 'Please complete all required fields';
     }
@@ -286,38 +326,38 @@ const NotaryForm = () => {
         if (!formData.address?.trim()) return false;
         return true;
 
-      case 5: // Add Signatories
-        // Check that there is at least one signatory
-        if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
-          return false;
-        }
-        // Check that all signatories have required fields filled (only firstName, lastName, email, phone)
-        return formData.signatories.every(sig => {
-          const firstName = sig.firstName?.trim();
-          const lastName = sig.lastName?.trim();
-          const email = sig.email?.trim();
-          const phone = sig.phone?.trim();
-          
-          // Check all required fields are filled
-          if (!firstName || !lastName || !email || !phone) {
-            return false;
-          }
-          
-          // Basic email validation
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(email)) {
-            return false;
-          }
-          
-          // Basic phone validation (at least 5 characters for a valid phone number)
-          if (phone.length < 5) {
-            return false;
-          }
-          
-          return true;
-        });
+      // case 5: // Add Signatories - Temporarily hidden
+      //   // Check that there is at least one signatory
+      //   if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
+      //     return false;
+      //   }
+      //   // Check that all signatories have required fields filled (only firstName, lastName, email, phone)
+      //   return formData.signatories.every(sig => {
+      //     const firstName = sig.firstName?.trim();
+      //     const lastName = sig.lastName?.trim();
+      //     const email = sig.email?.trim();
+      //     const phone = sig.phone?.trim();
+      //     
+      //     // Check all required fields are filled
+      //     if (!firstName || !lastName || !email || !phone) {
+      //       return false;
+      //     }
+      //     
+      //     // Basic email validation
+      //     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      //     if (!emailRegex.test(email)) {
+      //       return false;
+      //     }
+      //     
+      //     // Basic phone validation (at least 5 characters for a valid phone number)
+      //     if (phone.length < 5) {
+      //       return false;
+      //     }
+      //     
+      //     return true;
+      //   });
 
-      case 6: // Summary
+      case 5: // Summary
 
         // Check all required fields are filled
         return requiredFields.every(field => field && field.trim() !== '');
@@ -374,11 +414,8 @@ const NotaryForm = () => {
       let targetPath = '/form/choose-services';
       
       if (completedSteps.length >= steps.length - 1) {
-        // User has completed all steps, redirect to summary (likely returning from payment)
+        // User has completed all steps (4 steps), redirect to summary (step 5)
         targetPath = '/form/summary';
-      } else if (completedSteps.length >= 4) {
-        // User has completed steps 1-4, redirect to signatories (step 5)
-        targetPath = '/form/signatories';
       } else if (completedSteps.length >= 3) {
         // User has completed steps 1-3, redirect to personal-info (step 4)
         targetPath = '/form/personal-info';
@@ -386,7 +423,7 @@ const NotaryForm = () => {
         // User has completed steps 1-2, redirect to delivery (step 3)
         targetPath = '/form/delivery';
       } else if (completedSteps.length >= 1) {
-        // User has completed step 1, redirect to documents
+        // User has completed step 1, redirect to documents (step 2)
         targetPath = '/form/documents';
       }
       
@@ -442,13 +479,51 @@ const NotaryForm = () => {
     });
 
     if (!canAccess) {
-      // If trying to access Summary, always allow it (user likely coming back from payment)
+      // If trying to access Summary, check if form data is actually filled
       if (isSummaryStep) {
-        // Mark all previous steps as completed to allow access
-        const stepsToComplete = steps.filter(s => s.id !== steps.length).map(s => s.id);
-        const updatedCompletedSteps = [...new Set([...completedSteps, ...stepsToComplete.map(s => s - 1)])].sort();
-        setCompletedSteps(updatedCompletedSteps);
-        return; // Allow access to Summary
+        // Verify that essential form data exists before allowing access to Summary
+        const hasServices = formData.selectedServices && formData.selectedServices.length > 0;
+        const hasDocuments = formData.serviceDocuments && 
+          Object.keys(formData.serviceDocuments).length > 0 &&
+          Object.values(formData.serviceDocuments).some(docs => docs && docs.length > 0);
+        const hasPersonalInfo = formData.firstName && formData.lastName && formData.email;
+        const hasDelivery = formData.deliveryMethod;
+        
+        console.log('🔍 [GUARD] Vérification données Summary:', {
+          hasServices,
+          hasDocuments,
+          hasPersonalInfo,
+          hasDelivery
+        });
+        
+        // Only allow access to Summary if all essential data is filled
+        if (hasServices && hasDocuments && hasPersonalInfo && hasDelivery) {
+          // Mark all previous steps as completed to allow access
+          const stepsToComplete = steps.filter(s => s.id !== steps.length).map(s => s.id);
+          const updatedCompletedSteps = [...new Set([...completedSteps, ...stepsToComplete.map(s => s - 1)])].sort();
+          setCompletedSteps(updatedCompletedSteps);
+          console.log('✅ [GUARD] Données complètes, accès au Summary autorisé');
+          return; // Allow access to Summary
+        } else {
+          // Data is incomplete, redirect to appropriate step
+          console.log('❌ [GUARD] Données incomplètes, redirection nécessaire');
+          if (!hasServices) {
+            navigate('/form/choose-services', { replace: true });
+            return;
+          }
+          if (!hasDocuments) {
+            navigate('/form/documents', { replace: true });
+            return;
+          }
+          if (!hasDelivery) {
+            navigate('/form/delivery', { replace: true });
+            return;
+          }
+          if (!hasPersonalInfo) {
+            navigate('/form/personal-info', { replace: true });
+            return;
+          }
+        }
       }
       
       const lastCompletedStep = completedSteps.length > 0
@@ -460,7 +535,7 @@ const NotaryForm = () => {
         navigate(redirectStep.path, { replace: true });
       }
     }
-  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam]);
+  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam, formData.selectedServices, formData.serviceDocuments, formData.firstName, formData.lastName, formData.email, formData.deliveryMethod]);
 
   // Load user data if authenticated
   useEffect(() => {
@@ -871,19 +946,37 @@ const NotaryForm = () => {
     }
 
     // Appliquer uniquement les nouveaux services (remplacer complètement, pas d'ajout)
-    // Toujours réinitialiser les documents pour éviter les conflits
+    // IMPORTANT: Ne réinitialiser les documents QUE si les services ont vraiment changé
     console.log('✅ [SERVICE-PARAM] Application des services:', servicesToApply);
     console.log('   Nombre de services à appliquer:', servicesToApply.length);
     setFormData((prev) => {
+      // Vérifier si les services sont les mêmes (même IDs, même ordre non important)
+      const prevServices = prev.selectedServices || [];
+      const sameServices = servicesToApply.length === prevServices.length && 
+        servicesToApply.every(id => prevServices.includes(id));
+      
+      // Si les services sont identiques ET qu'il y a déjà des documents, ne pas réinitialiser
+      const hasExistingDocuments = prev.serviceDocuments && 
+        Object.keys(prev.serviceDocuments).length > 0 &&
+        Object.values(prev.serviceDocuments).some(docs => docs && docs.length > 0);
+      
+      const shouldKeepDocuments = sameServices && hasExistingDocuments;
+      
+      console.log('   Données avant mise à jour:', {
+        selectedServices: prev.selectedServices,
+        serviceDocumentsKeys: Object.keys(prev.serviceDocuments || {}),
+        hasExistingDocuments,
+        sameServices,
+        shouldKeepDocuments
+      });
+      
       const newData = {
         ...prev,
         selectedServices: servicesToApply, // Remplacer complètement (pas d'ajout)
-        serviceDocuments: {} // Toujours réinitialiser les documents pour éviter les conflits
+        // Ne réinitialiser les documents que si les services ont changé OU s'il n'y a pas de documents existants
+        serviceDocuments: shouldKeepDocuments ? prev.serviceDocuments : {}
       };
-      console.log('   Données avant mise à jour:', {
-        selectedServices: prev.selectedServices,
-        serviceDocumentsKeys: Object.keys(prev.serviceDocuments || {})
-      });
+      
       console.log('   Données après mise à jour:', {
         selectedServices: newData.selectedServices,
         serviceDocumentsKeys: Object.keys(newData.serviceDocuments)
@@ -978,8 +1071,24 @@ const NotaryForm = () => {
     return () => clearTimeout(timer);
   }, [formData, currentStep, completedSteps, servicesMap, optionsMap, servicesLoading]);
 
-  const updateFormData = (data) => {
-    setFormData(prev => ({ ...prev, ...data }));
+  const updateFormData = (dataOrUpdater) => {
+    // Support both object and function updater for avoiding race conditions
+    if (typeof dataOrUpdater === 'function') {
+      setFormData(prev => {
+        const result = dataOrUpdater(prev);
+        console.log('🔄 [NotaryForm] updateFormData (function) - updating:', Object.keys(result).join(', '));
+        if (result.serviceDocuments) {
+          const docCount = Object.values(result.serviceDocuments).reduce((sum, docs) => sum + (docs?.length || 0), 0);
+          console.log('🔄 [NotaryForm] Total documents after update:', docCount);
+        }
+        return { ...prev, ...result };
+      });
+    } else {
+      setFormData(prev => {
+        console.log('🔄 [NotaryForm] updateFormData (object) - updating:', Object.keys(dataOrUpdater).join(', '));
+        return { ...prev, ...dataOrUpdater };
+      });
+    }
   };
 
   const markStepCompleted = (stepId) => {
@@ -1157,7 +1266,7 @@ const NotaryForm = () => {
               console.error('❌ [NOTARY-FORM] Error updating email:', updateEmailError);
               setNotification({
                 type: 'error',
-                message: updateEmailError.message || 'Error updating email. Please try again.'
+                message: updateEmailError.message || t('form.errors.errorUpdatingEmail') || 'Error updating email. Please try again.'
               });
               setIsCreatingUser(false);
               return;
@@ -1228,7 +1337,7 @@ const NotaryForm = () => {
           console.error('❌ [NOTARY-FORM] Unexpected error updating user:', error);
           setNotification({
             type: 'error',
-            message: 'An error occurred while updating your information. Please try again.'
+            message: t('form.errors.errorUpdatingInfo') || 'An error occurred while updating your information. Please try again.'
           });
           setIsCreatingUser(false);
           return;
@@ -1241,7 +1350,7 @@ const NotaryForm = () => {
     } else {
       setNotification({
         type: 'error',
-        message: 'Please complete all required fields before continuing.'
+        message: t('form.errors.completeRequiredFields') || 'Please complete all required fields before continuing.'
       });
     }
   };
@@ -1287,8 +1396,12 @@ const NotaryForm = () => {
   // Prevent page close/refresh with confirmation modal
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      // Only prevent if user has started the form (completed at least step 1)
-      if (completedSteps.length > 0 && currentStep < 6) {
+      // Don't show warning if payment is in progress (user clicked Pay button)
+      if (isSubmitting) {
+        return;
+      }
+      // Only prevent if user has started the form (completed at least step 1) and is not on Summary
+      if (completedSteps.length > 0 && currentStep < 5) {
         // Show browser's default confirmation dialog
         e.preventDefault();
         e.returnValue = ''; // Required for Chrome
@@ -1301,12 +1414,12 @@ const NotaryForm = () => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [currentStep, completedSteps]);
+  }, [currentStep, completedSteps, isSubmitting]);
 
   // Detect user inactivity and show modal after 15 seconds (only once)
   useEffect(() => {
     // Only show modal if user has started the form (completed at least step 1)
-    if (completedSteps.length === 0 || currentStep === 6 || isSubmitting) {
+    if (completedSteps.length === 0 || currentStep === 5 || isSubmitting) {
       setShowInactivityModal(false);
       return;
     }
@@ -1462,10 +1575,13 @@ const NotaryForm = () => {
       const defaultAppointmentTime = formData.appointmentTime || '09:00';
       const defaultTimezone = formData.timezone || 'UTC';
       
-      // Calculate additional signatories cost (45€ per additional signatory, first one is free)
-      const signatoriesCount = formData.signatories?.length || 0;
-      const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
-      const additionalSignatoriesCost = additionalSignatoriesCount * 45;
+      // Calculate additional signatories cost - Temporarily disabled
+      // const signatoriesCount = formData.signatories?.length || 0;
+      // const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
+      // const additionalSignatoriesCost = additionalSignatoriesCount * 45;
+      const signatoriesCount = 0;
+      const additionalSignatoriesCount = 0;
+      const additionalSignatoriesCost = 0;
 
       // Delivery postal cost (29.95€) if selected
       const deliveryPostalCostEUR = formData.deliveryMethod === 'postal' ? 29.95 : 0;
@@ -1539,16 +1655,17 @@ const NotaryForm = () => {
         });
       }
 
-      if (additionalSignatoriesCount > 0) {
-        const signatoriesName = t('form.priceDetails.additionalSignatories', 'Additional signatories');
-        localizedNames['additional_signatories'] = signatoriesName;
-        localizedLineItems.push({
-          type: 'additional_signatories',
-          id: 'additional_signatories',
-          name: signatoriesName,
-          quantity: additionalSignatoriesCount,
-        });
-      }
+      // Additional signatories line item - Temporarily disabled
+      // if (additionalSignatoriesCount > 0) {
+      //   const signatoriesName = t('form.priceDetails.additionalSignatories', 'Additional signatories');
+      //   localizedNames['additional_signatories'] = signatoriesName;
+      //   localizedLineItems.push({
+      //     type: 'additional_signatories',
+      //     id: 'additional_signatories',
+      //     name: signatoriesName,
+      //     quantity: additionalSignatoriesCount,
+      //   });
+      // }
       
       const submissionData = {
         ...formData,
@@ -1574,10 +1691,11 @@ const NotaryForm = () => {
       console.log('📤 Calling Edge Function with full data:');
       console.log('   selectedServices:', submissionData.selectedServices);
       console.log('   serviceDocuments:', submissionData.serviceDocuments);
-      console.log('   signatories:', submissionData.signatories);
-      console.log('   signatories count:', submissionData.signatoriesCount);
-      console.log('   additional signatories:', submissionData.additionalSignatoriesCount);
-      console.log('   additional signatories cost:', submissionData.additionalSignatoriesCost, 'EUR');
+      // Signatories logs - Temporarily disabled
+      // console.log('   signatories:', submissionData.signatories);
+      // console.log('   signatories count:', submissionData.signatoriesCount);
+      // console.log('   additional signatories:', submissionData.additionalSignatoriesCount);
+      // console.log('   additional signatories cost:', submissionData.additionalSignatoriesCost, 'EUR');
       console.log('   currency:', submissionData.currency || 'EUR (default)');
       console.log('   language:', submissionData.language);
       console.log('   localizedNames:', submissionData.localizedNames);
@@ -1885,6 +2003,7 @@ const NotaryForm = () => {
                   getValidationErrorMessage={getValidationErrorMessage}
                   isPriceDetailsOpen={isPriceDetailsOpen}
                   setIsPriceDetailsOpen={setIsPriceDetailsOpen}
+                  setIsUploading={setIsUploading}
                 />
               }
             />
@@ -1917,6 +2036,7 @@ const NotaryForm = () => {
                 />
               }
             />
+            {/* Signatories step temporarily hidden
             <Route
               path="signatories"
               element={
@@ -1930,6 +2050,7 @@ const NotaryForm = () => {
                 />
               }
             />
+            */}
             <Route
               path="summary"
               element={
@@ -1945,8 +2066,8 @@ const NotaryForm = () => {
       </main>
 
       {/* Footer - Progress Bar as top border + Navigation Buttons + Price Details - Fixed at bottom */}
-      {/* Hide footer on mobile when on Summary step (step 6) */}
-      <div data-footer="notary-form" className={`fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden ${currentStep === 6 ? 'lg:block hidden' : ''}`}>
+      {/* Hide footer on mobile when on Summary step (step 5) - visible from 1536px (2xl breakpoint) */}
+      <div data-footer="notary-form" className={`fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden ${currentStep === 5 ? '2xl:block hidden' : ''}`}>
         {/* Progress Bar as top border */}
         <div className="relative w-full">
           <div className="h-1 bg-gray-300 w-full">
@@ -1981,9 +2102,9 @@ const NotaryForm = () => {
             <button
               type="button"
               onClick={handleContinueClick}
-              disabled={isCreatingUser}
+              disabled={isCreatingUser || isUploading}
               className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 ${
-                canProceedFromCurrentStep() && !isCreatingUser
+                canProceedFromCurrentStep() && !isCreatingUser && !isUploading
                   ? 'bg-[#3971ed] text-white border-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3]'
                   : 'bg-[#3971ed]/50 text-white/60 border-[#3971ed]/30 opacity-60 cursor-not-allowed'
               }`}
@@ -1996,6 +2117,14 @@ const NotaryForm = () => {
                   </svg>
                   <span className="truncate">{t('form.navigation.creatingAccount')}</span>
                 </>
+              ) : isUploading ? (
+                <>
+                  <svg className="animate-spin -ml-1 h-4 w-4 text-white flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="truncate">{t('form.navigation.uploading') || 'Uploading...'}</span>
+                </>
               ) : (
                 <>
                   <span className="truncate">{t('form.navigation.continue')}</span>
@@ -2005,7 +2134,7 @@ const NotaryForm = () => {
             </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 sm:gap-3 lg:hidden">
+            <div className="flex items-center gap-2 sm:gap-3 2xl:hidden">
               <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
                 Step {currentStep}/{steps.length}
               </span>

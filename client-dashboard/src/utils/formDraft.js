@@ -27,7 +27,7 @@ export const uploadDocument = async (file, serviceId, sessionId) => {
     const timestamp = Date.now();
     const fileName = `${sessionId}/${serviceId}/${timestamp}_${file.name}`;
     
-    console.log('📤 [FormDraft] Uploading document:', fileName);
+    console.log('📤 [FormDraft] Uploading document:', fileName, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     
     const { data, error } = await supabase.storage
       .from('form-documents')
@@ -43,14 +43,29 @@ export const uploadDocument = async (file, serviceId, sessionId) => {
 
     console.log('✅ [FormDraft] Document uploaded:', data.path);
 
-    // Get public URL (signed URL for private bucket)
-    const { data: urlData } = supabase.storage
+    // Try to get a signed URL first (works for private buckets)
+    // Valid for 7 days (604800 seconds) - enough for form completion
+    let fileUrl = null;
+    
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('form-documents')
-      .getPublicUrl(data.path);
+      .createSignedUrl(data.path, 604800); // 7 days
+    
+    if (signedUrlData?.signedUrl) {
+      fileUrl = signedUrlData.signedUrl;
+      console.log('✅ [FormDraft] Got signed URL');
+    } else {
+      // Fallback to public URL (works for public buckets)
+      console.log('⚠️ [FormDraft] Signed URL failed, trying public URL:', signedUrlError?.message);
+      const { data: urlData } = supabase.storage
+        .from('form-documents')
+        .getPublicUrl(data.path);
+      fileUrl = urlData.publicUrl;
+    }
 
     return {
       path: data.path,
-      url: urlData.publicUrl,
+      url: fileUrl,
       name: file.name,
       size: file.size,
       type: file.type,

@@ -688,8 +688,11 @@ serve(async (req) => {
     console.log('🔍 [STRIPE DEBUG] Total line items:', lineItems.length)
 
     // Create Stripe Checkout Session with minimal metadata
+    // NOTE: Apple Pay and Google Pay are automatically available in Stripe Checkout
+    // if your domain is verified in Stripe Dashboard (Settings > Payment methods > Apple Pay/Google Pay)
+    // They don't need to be added to payment_method_types - Stripe detects them automatically
     const sessionParams: any = {
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'paypal'],
       line_items: lineItems,
       mode: 'payment',
       success_url: `${req.headers.get('origin')}/payment/success?session_id={CHECKOUT_SESSION_ID}`,

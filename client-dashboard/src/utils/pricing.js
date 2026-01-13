@@ -46,11 +46,11 @@ export const calculateTotalAmount = (formData, servicesMap = {}, optionsMap = {}
     total += DELIVERY_POSTAL_PRICE_EUR;
   }
 
-  // Add cost for additional signatories (first one is free)
-  if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-    const additionalSignatories = formData.signatories.length - 1;
-    total += additionalSignatories * ADDITIONAL_SIGNATORY_PRICE_EUR;
-  }
+  // Add cost for additional signatories (first one is free) - Temporarily disabled
+  // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+  //   const additionalSignatories = formData.signatories.length - 1;
+  //   total += additionalSignatories * ADDITIONAL_SIGNATORY_PRICE_EUR;
+  // }
 
   return total;
 };
