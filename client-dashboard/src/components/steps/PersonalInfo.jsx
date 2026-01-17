@@ -469,8 +469,8 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       return;
     }
     if (validate()) {
-      // Envoyer l'événement GTM avec l'ID "personal_info"
-      pushGTMEvent('personal_info', {
+      // Envoyer l'événement GTM avec l'ID "personnal_info"
+      pushGTMEvent('personnal_info', {
         is_authenticated: isAuthenticated || false,
         is_signatory: formData.isSignatory || false,
         has_address: !!(formData.address && formData.address.trim()),

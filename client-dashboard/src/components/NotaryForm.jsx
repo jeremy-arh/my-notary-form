@@ -385,7 +385,7 @@ const NotaryForm = () => {
       'Choose Services': 'service_selection',
       'Upload Documents': 'document_upload',
       'Delivery method': 'delivery_method',
-      'Your personal informations': 'personal_info',
+      'Your personal informations': 'personnal_info',
       'Add Signatories': 'signatories',
       'Summary': 'review_summary'
     };
@@ -1170,9 +1170,9 @@ const NotaryForm = () => {
         });
         console.log('✅ [GTM] Événement "delivery" envoyé:', { delivery_method: formData.deliveryMethod, delivery_price: deliveryPrice });
       } else if (stepFromPath === 4) {
-        // Étape Personal Info - Événement "personal_info"
-        console.log('📊 [GTM] Déclenchement événement "personal_info"');
-        pushGTMEvent('personal_info', {
+        // Étape Personal Info - Événement "personnal_info"
+        console.log('📊 [GTM] Déclenchement événement "personnal_info"');
+        pushGTMEvent('personnal_info', {
           is_authenticated: isAuthenticated || false,
           is_signatory: formData.isSignatory || false,
           has_address: !!(formData.address && formData.address.trim()),
@@ -1182,7 +1182,7 @@ const NotaryForm = () => {
           has_phone: !!(formData.phone && formData.phone.trim()),
           address_auto_filled: formData._addressAutoFilled || false
         });
-        console.log('✅ [GTM] Événement "personal_info" envoyé');
+        console.log('✅ [GTM] Événement "personnal_info" envoyé');
       } else {
         console.log('⚠️ [GTM] Aucun événement GTM pour stepFromPath:', stepFromPath);
       }

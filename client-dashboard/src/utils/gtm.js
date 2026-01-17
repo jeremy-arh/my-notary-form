@@ -33,6 +33,11 @@ export const pushGTMEvent = (eventName, eventData = {}) => {
 
   // Push to dataLayer
   window.dataLayer.push(eventPayload);
+  
+  // Log pour débogage (visible dans la console du navigateur)
+  if (process.env.NODE_ENV === 'development' || window.location.search.includes('gtm_debug=true')) {
+    console.log('📊 [GTM] Event pushed to dataLayer:', eventPayload);
+  }
 };
 
 /**
