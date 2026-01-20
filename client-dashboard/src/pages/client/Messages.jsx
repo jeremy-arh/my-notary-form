@@ -236,7 +236,15 @@ const Messages = () => {
         {/* Conversations List */}
         <div className={`w-full lg:w-80 h-full bg-[#F3F4F6] border-r border-gray-200 flex flex-col flex-shrink-0 overflow-hidden ${showChatFullscreen ? 'hidden lg:flex' : ''}`}>
           <div className="p-4 border-b border-gray-300 flex-shrink-0 space-y-3">
-            <h2 className="font-semibold text-base text-gray-900">Conversations ({filteredConversations.length})</h2>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="lg:hidden p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+              >
+                <Icon icon="heroicons:arrow-left" className="w-5 h-5 text-gray-900" />
+              </button>
+              <h2 className="font-semibold text-base text-gray-900">Conversations ({filteredConversations.length})</h2>
+            </div>
             {/* Search Bar */}
             <div className="relative">
               <Icon icon="heroicons:magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />

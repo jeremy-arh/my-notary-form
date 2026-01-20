@@ -464,11 +464,23 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
   }, [formData.isSignatory, formData.firstName, formData.lastName, formData.email, formData.phone, formData.address]);
 
   const handleNext = () => {
+    console.log('%c🔵🔵🔵 HANDLE NEXT CALLED IN PERSONAL INFO 🔵🔵🔵', 'background: blue; color: white; font-size: 20px; padding: 10px;');
+    console.log('🔵 [PERSONAL-INFO] emailExists:', emailExists);
+    console.log('🔵 [PERSONAL-INFO] isAuthenticated:', isAuthenticated);
+    console.log('🔵 [PERSONAL-INFO] handleContinueClick exists:', !!handleContinueClick);
+    
     if (emailExists && !isAuthenticated) {
+      console.log('⛔ [PERSONAL-INFO] Email exists but user not authenticated - blocking');
       // Don't allow submission if email exists and user is not authenticated
       return;
     }
-    if (validate()) {
+    
+    const isValid = validate();
+    console.log('🔵 [PERSONAL-INFO] Validation result:', isValid);
+    console.log('🔵 [PERSONAL-INFO] Errors:', errors);
+    
+    if (isValid) {
+      console.log('✅ [PERSONAL-INFO] Validation passed - proceeding');
       // Envoyer l'événement GTM avec l'ID "personnal_info"
       pushGTMEvent('personnal_info', {
         is_authenticated: isAuthenticated || false,
@@ -484,12 +496,20 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       // Call original handleContinueClick or nextStep
       // L'envoi à Brevo est géré dans NotaryForm.handleContinueClick
       if (handleContinueClick) {
+        console.log('📞 [PERSONAL-INFO] Calling handleContinueClick()');
         handleContinueClick();
       } else {
+        console.log('📞 [PERSONAL-INFO] handleContinueClick not available, calling nextStep()');
         nextStep();
       }
-    } else if (handleContinueClick) {
-      handleContinueClick();
+    } else {
+      console.log('❌ [PERSONAL-INFO] Validation failed');
+      if (handleContinueClick) {
+        console.log('📞 [PERSONAL-INFO] Validation failed but calling handleContinueClick anyway');
+        handleContinueClick();
+      } else {
+        console.log('⚠️ [PERSONAL-INFO] Validation failed and no handleContinueClick available');
+      }
     }
   };
 
@@ -557,8 +577,8 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           </div>
         </div>
 
-        {/* Email - Always show, editable even if authenticated */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
+        {/* Email - Full width, disabled and grayed out if authenticated */}
+        <div>
           {/* Email */}
           <div>
               <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
@@ -569,12 +589,17 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 type="email"
                 id="email"
                 value={formData.email || ''}
-                onChange={(e) => handleChange('email', e.target.value)}
-                onBlur={(e) => checkEmailExists(e.target.value)}
-                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
+                onChange={(e) => !isAuthenticated && handleChange('email', e.target.value)}
+                onBlur={(e) => !isAuthenticated && checkEmailExists(e.target.value)}
+                disabled={isAuthenticated}
+                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base ${
+                  isAuthenticated 
+                    ? 'bg-white text-gray-900 border-gray-300 cursor-not-allowed opacity-75' 
+                    : 'bg-white'
+                } ${
                   errors.email || emailExists ? 'border-red-500' : 'border-gray-200'
-                }`}
-                placeholder={t('form.steps.personalInfo.placeholderEmail')}
+                } ${isAuthenticated ? '' : 'placeholder:text-gray-400 placeholder:italic'}`}
+                placeholder={isAuthenticated ? '' : t('form.steps.personalInfo.placeholderEmail')}
               />
               {errors.email && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
@@ -589,10 +614,11 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
                 </p>
               )}
           </div>
+        </div>
 
-          {/* Password - Only show for non-authenticated users */}
-          {!isAuthenticated && (
-            <div>
+        {/* Password - Only show for non-authenticated users */}
+        {!isAuthenticated && (
+          <div>
               <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
                 <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
                 <span>{t('form.steps.personalInfo.password')} <span className="text-red-500 ml-1">*</span></span>
@@ -628,7 +654,6 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
               )}
             </div>
           )}
-        </div>
 
         {/* Phone */}
         <div>

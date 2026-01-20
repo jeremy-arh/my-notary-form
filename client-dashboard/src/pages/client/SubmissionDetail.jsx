@@ -597,7 +597,7 @@ const SubmissionDetail = () => {
 
   return (
     <ClientLayout>
-      <div className="w-full px-4 sm:px-6 lg:px-8 overflow-x-hidden">
+      <div className="w-full px-4 sm:px-6 lg:px-8 overflow-x-hidden pt-6 sm:pt-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <button
@@ -626,52 +626,42 @@ const SubmissionDetail = () => {
             <div className="flex space-x-4 sm:space-x-6 mb-4 sm:mb-6 border-b border-gray-200 overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0" style={{ WebkitOverflowScrolling: 'touch' }}>
               <button
                 onClick={() => setActiveTab('services')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
                   activeTab === 'services'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Services & Documents
+                <Icon icon="heroicons:document-text" className="w-4 h-4" />
+                <span>Services & Documents</span>
                 {activeTab === 'services' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
               <button
                 onClick={() => setActiveTab('signatories')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
                   activeTab === 'signatories'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Signatories
+                <Icon icon="heroicons:users" className="w-4 h-4" />
+                <span>Signatories</span>
                 {activeTab === 'signatories' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
               <button
-                onClick={() => setActiveTab('appointment')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
-                  activeTab === 'appointment'
-                    ? 'text-black'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Appointment Details
-                {activeTab === 'appointment' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                )}
-              </button>
-              <button
                 onClick={() => setActiveTab('transactions')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
                   activeTab === 'transactions'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Transactions
+                <Icon icon="heroicons:credit-card" className="w-4 h-4" />
+                <span>Transactions</span>
                 {transactions.length > 0 && (
                   <span className="ml-2 px-2 py-0.5 bg-gray-200 rounded-full text-xs">
                     {transactions.length}
@@ -683,13 +673,14 @@ const SubmissionDetail = () => {
               </button>
               <button
                 onClick={() => setActiveTab('notarized')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${
+                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
                   activeTab === 'notarized'
                     ? 'text-black'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Notarized Documents
+                <Icon icon="heroicons:document-check" className="w-4 h-4" />
+                <span>Notarized Documents</span>
                 {notarizedFiles.length > 0 && (
                   <span className="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
                     {notarizedFiles.length}
@@ -1077,34 +1068,6 @@ const SubmissionDetail = () => {
                   </div>
                 );
               })()}
-
-              {/* Appointment Details Tab */}
-              {activeTab === 'appointment' && (
-              <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
-                  <Icon icon="heroicons:calendar-days" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                </div>
-                <span className="text-base sm:text-xl">Appointment Details</span>
-              </h2>
-              <div className="space-y-2 sm:space-y-3">
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                  <span className="text-sm sm:text-base text-gray-600">Date:</span>
-                  <span className="text-sm sm:text-base font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                  <span className="text-sm sm:text-base text-gray-600">Time:</span>
-                  <span className="text-sm sm:text-base font-semibold text-gray-900">
-                    {formatAppointmentTime(submission.appointment_time, submission.appointment_date, submission.timezone)}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
-                  <span className="text-sm sm:text-base text-gray-600">Timezone:</span>
-                  <span className="text-sm sm:text-base font-semibold text-gray-900">{submission.timezone}</span>
-                </div>
-              </div>
-              </div>
-              )}
 
               {/* Transactions Tab */}
               {activeTab === 'transactions' && (

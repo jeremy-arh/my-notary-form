@@ -18,7 +18,8 @@ import {
 import { openCrisp } from '../utils/crisp';
 import { useServices } from '../contexts/ServicesContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { saveFormDraft } from '../utils/formDraft';
+import { saveSubmission } from '../utils/submissionSave';
+import { updateFunnelStatus } from '../utils/updateFunnelStatus';
 import { calculateTotalAmount } from '../utils/pricing';
 import Documents from './steps/Documents';
 import ChooseOption from './steps/ChooseOption';
@@ -138,12 +139,26 @@ const NotaryForm = () => {
   // overwrite freshly uploaded documents due to race conditions
   useEffect(() => {
     // Only restore if coming back from payment pages (Stripe redirect)
+    // BUT NOT from payment success page (which clears localStorage)
     const isReturningFromPayment = location.pathname.includes('/payment/') || 
-      location.pathname.includes('/success') ||
       location.search.includes('session_id=');
     
-    if (!isReturningFromPayment) {
-      return; // Don't restore during normal navigation
+    // Don't restore if coming from payment success page
+    const isFromPaymentSuccess = location.pathname.includes('/payment/success');
+    
+    if (!isReturningFromPayment || isFromPaymentSuccess) {
+      // If coming from payment success, ensure localStorage is cleared
+      if (isFromPaymentSuccess) {
+        console.log('🧹 [RESTORE] Coming from payment success - ensuring localStorage is cleared');
+        try {
+          localStorage.removeItem('notaryFormData');
+          localStorage.removeItem('notaryCompletedSteps');
+          localStorage.removeItem('formSessionId');
+        } catch (error) {
+          console.error('❌ [RESTORE] Error clearing localStorage:', error);
+        }
+      }
+      return; // Don't restore during normal navigation or from success page
     }
     
     const restoreFormData = () => {
@@ -1047,7 +1062,7 @@ const NotaryForm = () => {
     navigate
   ]);
 
-  // Auto-save form draft to Supabase
+  // Auto-save submission to Supabase
   useEffect(() => {
     // Debounce the save operation
     const timer = setTimeout(() => {
@@ -1058,13 +1073,47 @@ const NotaryForm = () => {
                          formData.lastName ||
                          formData.email;
       
-      if (hasProgress && !servicesLoading) {
-        console.log('💾 [NotaryForm] Auto-saving draft...');
+      console.log('🔍 [NotaryForm] Auto-save check:', {
+        hasProgress,
+        servicesLoading,
+        currentStep,
+        selectedServices: formData.selectedServices?.length || 0,
+        documentsCount: Object.keys(formData.serviceDocuments || {}).length,
+        hasEmail: !!formData.email
+      });
+      
+      if (hasProgress) {
+        // Don't wait for servicesLoading - save even if services are still loading
+        // The submission can be created/updated without the total amount
+        console.log('💾💾💾 [NotaryForm] AUTO-SAVE TRIGGERED 💾💾💾');
+        console.log('💾 [NotaryForm] Current step:', currentStep);
+        console.log('💾 [NotaryForm] Form data keys:', Object.keys(formData));
         
-        // Calculate total amount
-        const totalAmount = calculateTotalAmount(formData, servicesMap, optionsMap);
+        // Calculate total amount (may be 0 if services not loaded yet)
+        const totalAmount = calculateTotalAmount(formData, servicesMap || {}, optionsMap || {});
         
-        saveFormDraft(formData, currentStep, completedSteps, totalAmount);
+        console.log('💰 [NotaryForm] Total amount calculated:', totalAmount);
+        console.log('💰 [NotaryForm] Calling saveSubmission NOW...');
+        
+        // Save submission directly
+        saveSubmission(formData, currentStep, completedSteps, totalAmount)
+          .then(result => {
+            console.log('📥 [NotaryForm] saveSubmission promise resolved');
+            if (result) {
+              console.log('✅✅✅ [NotaryForm] Submission saved successfully ✅✅✅');
+              console.log('✅ [NotaryForm] Submission ID:', result.id);
+            } else {
+              console.warn('⚠️⚠️⚠️ [NotaryForm] Submission save returned NULL ⚠️⚠️⚠️');
+            }
+          })
+          .catch(error => {
+            console.error('❌❌❌ [NotaryForm] PROMISE REJECTED ❌❌❌');
+            console.error('❌ [NotaryForm] Error:', error);
+            console.error('❌ [NotaryForm] Error message:', error?.message);
+            console.error('❌ [NotaryForm] Error stack:', error?.stack);
+          });
+      } else {
+        console.log('⏭️ [NotaryForm] Skipping save - no progress yet');
       }
     }, 2000); // Save 2 seconds after last change
 
@@ -1097,6 +1146,13 @@ const NotaryForm = () => {
     if (!completedSteps.includes(stepIndex)) {
       setCompletedSteps([...completedSteps, stepIndex]);
       
+      // Update funnel_status in submission when step is completed
+      // This ensures funnel_status is always up-to-date
+      updateFunnelStatus(stepId).catch(error => {
+        console.error('❌ [FUNNEL] Error updating funnel_status:', error);
+        // Don't block step completion if funnel update fails
+      });
+      
       // Track Plausible funnel events
       switch (stepId) {
         case 1: // Services Selected
@@ -1112,24 +1168,55 @@ const NotaryForm = () => {
           const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).length;
           trackDocumentsUploaded(totalDocs, servicesWithDocs);
           break;
-        case 3: // Personal Info Completed
-          trackPersonalInfoCompleted(isAuthenticated);
+        case 3: // Delivery Method Selected
+          // Track delivery method selection if needed
           break;
-        case 4: // Signatories Added
-          // Track signatories added if available
-          if (formData.signatories && formData.signatories.length > 0) {
-            // trackSignatoriesAdded(formData.signatories.length);
-          }
+        case 4: // Personal Info Completed
+          trackPersonalInfoCompleted(isAuthenticated);
           break;
       }
     }
   };
 
   const handleContinueClick = async () => {
-    if (canProceedFromCurrentStep()) {
+    // FORCE LOGS AT START - THESE MUST APPEAR
+    console.log('%c🚀🚀🚀 HANDLE CONTINUE CLICK CALLED 🚀🚀🚀', 'background: blue; color: white; font-size: 24px; padding: 15px; font-weight: bold;');
+    console.warn('⚠️⚠️⚠️ HANDLE CONTINUE CLICK - WARNING LOG ⚠️⚠️⚠️');
+    console.error('🔴🔴🔴 HANDLE CONTINUE CLICK - ERROR LOG 🔴🔴🔴');
+    
+    const canProceed = canProceedFromCurrentStep();
+    console.log('%c🔍 CAN PROCEED CHECK: ' + canProceed, 'background: yellow; color: black; font-size: 18px; padding: 10px;');
+    console.log('🔍 [NOTARY-FORM] canProceedFromCurrentStep():', canProceed);
+    console.log('🔍 [NOTARY-FORM] currentStep:', currentStep);
+    console.log('🔍 [NOTARY-FORM] location.pathname:', location.pathname);
+    
+    if (canProceed) {
       // Recalculer currentStep pour s'assurer d'avoir la bonne valeur
       const stepFromPath = getCurrentStepFromPath();
+      console.log('%c📊 STEP FROM PATH: ' + stepFromPath, 'background: green; color: white; font-size: 20px; padding: 10px; font-weight: bold;');
       console.log('📊 [GTM] handleContinueClick - currentStep:', currentStep, 'stepFromPath:', stepFromPath, 'pathname:', location.pathname);
+      
+      // FORCE SAVE submission before proceeding to next step
+      // This ensures submission is always saved, even if auto-save didn't trigger
+      try {
+        console.log('💾 [NotaryForm] Force saving submission before step change...');
+        const totalAmount = calculateTotalAmount(formData, servicesMap || {}, optionsMap || {});
+        const result = await saveSubmission(formData, currentStep, completedSteps, totalAmount);
+        if (result) {
+          console.log('✅ [NotaryForm] Submission force-saved:', result.id);
+          
+          // Update funnel_status for the current step that was just completed
+          // This ensures funnel_status is always synchronized with step completion
+          updateFunnelStatus(currentStep, result.id).catch(error => {
+            console.error('❌ [FUNNEL] Error updating funnel_status after save:', error);
+          });
+        } else {
+          console.warn('⚠️ [NotaryForm] Force save returned null - submission may not have been saved');
+        }
+      } catch (error) {
+        console.error('❌ [NotaryForm] Error force-saving submission:', error);
+        // Don't block navigation, but log the error
+      }
       
       // Track GTM events based on current step (utiliser stepFromPath pour être sûr)
       if (stepFromPath === 2) {
@@ -1239,115 +1326,198 @@ const NotaryForm = () => {
         })();
       }
 
-      // Update user information at Personal Info step if authenticated
-      if (stepFromPath === 4 && isAuthenticated) {
+      // Create client/user and link to submission at Personal Info step (step 4)
+      // This MUST happen before nextStep() to ensure client/user exist
+      if (stepFromPath === 4) {
+        // FORCE LOGS TO APPEAR IN CONSOLE
+        console.log('%c🚨🚨🚨 STEP 4 DETECTED - STARTING CLIENT CREATION 🚨🚨🚨', 'background: red; color: white; font-size: 24px; padding: 15px; font-weight: bold;');
+        console.warn('🚨🚨🚨 STEP 4 - CLIENT CREATION STARTING 🚨🚨🚨');
+        console.error('🔴🔴🔴 STEP 4 - ERROR LOG TO MAKE IT VISIBLE 🔴🔴🔴');
+        
+        // Always show loader during processing (but message will differ based on auth status)
         setIsCreatingUser(true);
         try {
-          console.log('👤 [NOTARY-FORM] Updating authenticated user information');
+          console.log('%c👤👤👤 STEP 4: Creating/updating client/user 👤👤👤', 'background: orange; color: white; font-size: 20px; padding: 10px;');
+          console.log('👤 [NOTARY-FORM] Email:', formData.email);
+          console.log('👤 [NOTARY-FORM] First name:', formData.firstName);
+          console.log('👤 [NOTARY-FORM] Last name:', formData.lastName);
           
-          // Get current user
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          // FORCE LOGS TO APPEAR
+          console.warn('⚠️⚠️⚠️ [NOTARY-FORM] STEP 4 - Creating client/user ⚠️⚠️⚠️');
+          console.error('🔴🔴🔴 [NOTARY-FORM] STEP 4 - ERROR LOG 🔴🔴🔴');
           
-          if (userError || !user) {
-            console.error('❌ [NOTARY-FORM] Error getting user:', userError);
-            setIsCreatingUser(false);
-            return;
-          }
-          
-          // Update email if it has changed
-          if (formData.email && formData.email !== user.email) {
-            console.log('📧 [NOTARY-FORM] Updating email from', user.email, 'to', formData.email);
-            
-            const { error: updateEmailError } = await supabase.auth.updateUser({
-              email: formData.email
+          // Validate required fields
+          if (!formData.email || !formData.firstName || !formData.lastName) {
+            console.error('❌ [NOTARY-FORM] Missing required fields for client creation');
+            setNotification({
+              type: 'error',
+              message: 'Email, prénom et nom sont requis pour créer le compte'
             });
-            
-            if (updateEmailError) {
-              console.error('❌ [NOTARY-FORM] Error updating email:', updateEmailError);
-              setNotification({
-                type: 'error',
-                message: updateEmailError.message || t('form.errors.errorUpdatingEmail') || 'Error updating email. Please try again.'
-              });
-              setIsCreatingUser(false);
-              return;
-            } else {
-              console.log('✅ [NOTARY-FORM] Email updated successfully');
-            }
+            setIsCreatingUser(false);
+            return; // Don't proceed if required fields are missing
           }
           
-          // Update client record
-          try {
-            const { data: existingClient, error: fetchError } = await supabase
-              .from('client')
-              .select('id')
-              .eq('user_id', user.id)
-              .maybeSingle();
-            
-            if (existingClient) {
-              // Update existing client record
-              const { data: updatedClient, error: updateClientError } = await supabase
-                .from('client')
-                .update({
-                  first_name: formData.firstName,
-                  last_name: formData.lastName,
-                  email: formData.email,
-                  phone: formData.phone || '',
-                  address: formData.address || '',
-                  city: formData.city || '',
-                  postal_code: formData.postalCode || '',
-                  country: formData.country || '',
-                })
-                .eq('user_id', user.id)
-                .select('id')
-                .single();
-              
-              if (updateClientError) {
-                console.error('❌ [NOTARY-FORM] Error updating client record:', updateClientError);
-              } else {
-                console.log('✅ [NOTARY-FORM] Client record updated:', updatedClient.id);
-              }
+          // Get session ID
+          const sessionId = localStorage.getItem('formSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          if (!localStorage.getItem('formSessionId')) {
+            localStorage.setItem('formSessionId', sessionId);
+          }
+
+          // Find existing submission by session_id
+          console.log('🔍 [NOTARY-FORM] Looking for existing submission with session_id:', sessionId);
+          const { data: submissions } = await supabase
+            .from('submission')
+            .select('id, data')
+            .eq('status', 'pending_payment')
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          let submissionId = null;
+          if (submissions && submissions.length > 0) {
+            const foundSubmission = submissions.find(sub => 
+              sub.data?.session_id === sessionId
+            );
+            if (foundSubmission) {
+              submissionId = foundSubmission.id;
+              console.log('✅ [NOTARY-FORM] Found existing submission:', submissionId);
             } else {
-              // Create client record if it doesn't exist
-              const { data: newClient, error: createClientError } = await supabase
-                .from('client')
-                .insert({
-                  user_id: user.id,
-                  first_name: formData.firstName,
-                  last_name: formData.lastName,
-                  email: formData.email,
-                  phone: formData.phone || '',
-                  address: formData.address || '',
-                  city: formData.city || '',
-                  postal_code: formData.postalCode || '',
-                  country: formData.country || '',
-                })
-                .select('id')
-                .single();
-              
-              if (createClientError) {
-                console.error('❌ [NOTARY-FORM] Error creating client record:', createClientError);
-              } else {
-                console.log('✅ [NOTARY-FORM] Client record created:', newClient.id);
+              console.log('ℹ️ [NOTARY-FORM] No submission found with matching session_id');
+            }
+          }
+
+          // Call Edge Function to create client/user and link to submission
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          // Use session token if available, otherwise use anon key for unauthenticated requests
+          const authToken = session?.access_token || supabaseAnonKey;
+          
+          console.log('🔑 [NOTARY-FORM] Auth token type:', session?.access_token ? 'session token' : 'anon key');
+          console.log('🔑 [NOTARY-FORM] Has session:', !!session);
+          
+          const requestBody = {
+            email: formData.email.trim().toLowerCase(), // Normalize email
+            firstName: formData.firstName.trim(),
+            lastName: formData.lastName.trim(),
+            phone: formData.phone || null,
+            address: formData.address || null,
+            city: formData.city || null,
+            postalCode: formData.postalCode || null,
+            country: formData.country || null,
+            selectedServices: formData.selectedServices || [],
+            documents: formData.serviceDocuments || {},
+            deliveryMethod: formData.deliveryMethod || null,
+            signatories: formData.signatories || [],
+            currentStep: stepFromPath,
+            sessionId: sessionId,
+            submissionId: submissionId,
+            password: formData.password || null // Include password for new user creation
+          };
+          
+          console.log('%c📤 CALLING EDGE FUNCTION', 'background: purple; color: white; font-size: 18px; padding: 8px;');
+          console.log('📤 [NOTARY-FORM] Calling create-client-and-submission with:', requestBody);
+          console.log('📤 [NOTARY-FORM] Using auth token:', authToken ? 'YES (length: ' + authToken.length + ')' : 'NO');
+          console.warn('⚠️ [NOTARY-FORM] About to call Edge Function');
+          console.error('🔴 [NOTARY-FORM] Edge Function call starting');
+          
+          const response = await fetch(`${supabaseUrl}/functions/v1/create-client-and-submission`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+              'apikey': supabaseAnonKey, // Add apikey header as required by Supabase
+            },
+            body: JSON.stringify(requestBody)
+          });
+
+          console.log('%c📥 RESPONSE RECEIVED', 'background: cyan; color: black; font-size: 18px; padding: 8px;');
+          const result = await response.json();
+          console.log('📥 [NOTARY-FORM] Response status:', response.status);
+          console.log('📥 [NOTARY-FORM] Response OK?', response.ok);
+          console.warn('⚠️ [NOTARY-FORM] Response status:', response.status);
+          console.error('🔴 [NOTARY-FORM] Response OK:', response.ok);
+          console.log('📥 [NOTARY-FORM] Response data:', JSON.stringify(result, null, 2));
+
+          if (!response.ok) {
+            console.error('❌❌❌ [NOTARY-FORM] Error creating client/user ❌❌❌');
+            console.error('❌ [NOTARY-FORM] Status:', response.status);
+            console.error('❌ [NOTARY-FORM] Error code:', result.errorCode);
+            console.error('❌ [NOTARY-FORM] Error message:', result.error);
+            console.error('❌ [NOTARY-FORM] Error details:', result.errorDetails);
+            console.error('❌ [NOTARY-FORM] Error hint:', result.errorHint);
+            console.error('❌ [NOTARY-FORM] Full error:', result);
+            
+            // Show more detailed error message
+            const errorMessage = result.error || 'Erreur lors de la création du compte. Veuillez réessayer.';
+            setNotification({
+              type: 'error',
+              message: errorMessage + (result.errorCode ? ` (Code: ${result.errorCode})` : '')
+            });
+            setIsCreatingUser(false);
+            return; // Don't proceed to next step if client/user creation failed
+          } else {
+            console.log('✅✅✅ [NOTARY-FORM] Client/user created/updated successfully ✅✅✅');
+            console.log('✅ [NOTARY-FORM] Client ID:', result.client_id);
+            console.log('✅ [NOTARY-FORM] User ID:', result.user_id);
+            console.log('✅ [NOTARY-FORM] Submission ID:', result.submission_id);
+            console.log('✅ [NOTARY-FORM] User created:', result.user_created);
+            
+            // Auto-login if a new user was created
+            if (result.user_created && result.password && formData.email) {
+              console.log('🔐 [NOTARY-FORM] Auto-logging in new user...');
+              try {
+                const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                  email: formData.email.trim().toLowerCase(),
+                  password: result.password
+                });
+
+                if (signInError) {
+                  console.error('❌ [NOTARY-FORM] Auto-login failed:', signInError);
+                  // Don't block the flow, just log the error
+                } else if (signInData?.user) {
+                  console.log('✅ [NOTARY-FORM] User auto-logged in successfully');
+                  // Update authentication state without reloading page
+                  setIsAuthenticated(true);
+                }
+              } catch (error) {
+                console.error('❌ [NOTARY-FORM] Error during auto-login:', error);
+                // Don't block the flow
               }
             }
-          } catch (clientErr) {
-            console.error('❌ [NOTARY-FORM] Error with client record:', clientErr);
+            
+            // Update formData with submission ID if it was created/updated
+            if (result.submission_id && !formData.submissionId) {
+              updateFormData({ submissionId: result.submission_id });
+            }
           }
         } catch (error) {
-          console.error('❌ [NOTARY-FORM] Unexpected error updating user:', error);
+          console.error('%c❌❌❌ [NOTARY-FORM] Unexpected error creating client/user ❌❌❌', 'background: red; color: white; font-size: 20px; padding: 10px;');
+          console.error('❌ [NOTARY-FORM] Error type:', typeof error);
+          console.error('❌ [NOTARY-FORM] Error:', error);
+          console.error('❌ [NOTARY-FORM] Error message:', error?.message);
+          console.error('❌ [NOTARY-FORM] Error stack:', error?.stack);
+          console.error('❌ [NOTARY-FORM] Error name:', error?.name);
+          console.error('❌ [NOTARY-FORM] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
           setNotification({
             type: 'error',
-            message: t('form.errors.errorUpdatingInfo') || 'An error occurred while updating your information. Please try again.'
+            message: 'Erreur lors de la création du compte. Veuillez réessayer.'
           });
           setIsCreatingUser(false);
-          return;
+          return; // Don't proceed to next step if error occurred
         } finally {
+          console.log('🏁 [NOTARY-FORM] Finally block - setting isCreatingUser to false');
           setIsCreatingUser(false);
         }
+      } else {
+        console.log('⚠️ [NOTARY-FORM] stepFromPath is not 4, skipping client creation. stepFromPath:', stepFromPath);
       }
       
+      console.log('➡️ [NOTARY-FORM] Calling nextStep()');
       nextStep();
     } else {
+      console.log('%c⛔ CANNOT PROCEED - VALIDATION FAILED', 'background: red; color: white; font-size: 18px; padding: 10px;');
+      console.log('⛔ [NOTARY-FORM] canProceedFromCurrentStep() returned false');
       setNotification({
         type: 'error',
         message: t('form.errors.completeRequiredFields') || 'Please complete all required fields before continuing.'
@@ -1733,26 +1903,60 @@ const NotaryForm = () => {
       console.log('💰 [CURRENCY] Devise finale envoyée à Stripe:', currency);
       console.log('💰 [CURRENCY] Devise dans submissionData:', submissionData.currency);
       
+      // Get existing submission ID if exists
+      const sessionId = localStorage.getItem('formSessionId');
+      let existingSubmissionId = null;
+      
+      if (sessionId) {
+        try {
+          const { data: submissions } = await supabase
+            .from('submission')
+            .select('id')
+            .eq('status', 'pending_payment')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          if (submissions && submissions.length > 0) {
+            for (const sub of submissions) {
+              const { data: subData } = await supabase
+                .from('submission')
+                .select('data')
+                .eq('id', sub.id)
+                .single();
+              
+              if (subData?.data?.session_id === sessionId) {
+                existingSubmissionId = sub.id;
+                break;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error finding existing submission:', error);
+        }
+      }
+
       const requestBody = {
         formData: {
           ...submissionData,
-          currency: currency // S'assurer que formData.currency contient aussi la bonne devise
+          currency: currency, // S'assurer que formData.currency contient aussi la bonne devise
+          sessionId: sessionId // Add sessionId to formData
         },
-          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
-          // IMPORTANT: Edge Function MUST use these fields for signatories:
-          // - formData.signatories: array of signatories
-          // - formData.signatoriesCount: total number of signatories
-          // - formData.additionalSignatoriesCount: number of additional signatories (total - 1, first is free)
-          // - formData.additionalSignatoriesCost: cost in EUR (additionalSignatoriesCount * 45)
-          // 
-          // The Edge Function MUST:
-          // 1. Convert formData.additionalSignatoriesCost from EUR to the target currency if needed
-          // 2. Add this converted cost to the total amount
-          // 3. Create a Stripe line item: {
-          //      name: "Additional Signatories",
-          //      amount: convertedCostInCents, // Convert to cents and to target currency
-          //      quantity: formData.additionalSignatoriesCount
-          //    }
+        currency: currency, // Envoyer la devise comme paramètre séparé et explicite
+        submissionId: existingSubmissionId, // Send existing submission ID if found
+        // IMPORTANT: Edge Function MUST use these fields for signatories:
+        // - formData.signatories: array of signatories
+        // - formData.signatoriesCount: total number of signatories
+        // - formData.additionalSignatoriesCount: number of additional signatories (total - 1, first is free)
+        // - formData.additionalSignatoriesCost: cost in EUR (additionalSignatoriesCount * 45)
+        // 
+        // The Edge Function MUST:
+        // 1. Convert formData.additionalSignatoriesCost from EUR to the target currency if needed
+        // 2. Add this converted cost to the total amount
+        // 3. Create a Stripe line item: {
+        //      name: "Additional Signatories",
+        //      amount: convertedCostInCents, // Convert to cents and to target currency
+        //      quantity: formData.additionalSignatoriesCount
+        //    }
       };
       
       console.log('💰 [CURRENCY] Body envoyé à l\'Edge Function:');
@@ -2101,7 +2305,16 @@ const NotaryForm = () => {
               </span>
             <button
               type="button"
-              onClick={handleContinueClick}
+              onClick={(e) => {
+                console.log('%c🟢🟢🟢 BUTTON CLICKED IN FOOTER 🟢🟢🟢', 'background: green; color: white; font-size: 24px; padding: 15px; font-weight: bold;');
+                console.error('🔴 BUTTON CLICKED - ERROR LOG');
+                console.warn('⚠️ BUTTON CLICKED - WARNING LOG');
+                console.log('🟢 [FOOTER] Button clicked, calling handleContinueClick');
+                console.log('🟢 [FOOTER] isCreatingUser:', isCreatingUser);
+                console.log('🟢 [FOOTER] isUploading:', isUploading);
+                console.log('🟢 [FOOTER] canProceed:', canProceedFromCurrentStep());
+                handleContinueClick();
+              }}
               disabled={isCreatingUser || isUploading}
               className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 ${
                 canProceedFromCurrentStep() && !isCreatingUser && !isUploading
@@ -2115,7 +2328,12 @@ const NotaryForm = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="truncate">{t('form.navigation.creatingAccount')}</span>
+                  <span className="truncate">
+                    {isAuthenticated 
+                      ? (t('form.navigation.processing') || 'Processing...')
+                      : t('form.navigation.creatingAccount')
+                    }
+                  </span>
                 </>
               ) : isUploading ? (
                 <>

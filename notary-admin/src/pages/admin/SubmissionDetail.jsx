@@ -14,7 +14,6 @@ import DocumentViewer from '../../components/DocumentViewer';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
-import { convertTimeToNotaryTimezone } from '../../utils/timezoneConverter';
 
 const SubmissionDetail = () => {
   const { id } = useParams();
@@ -29,10 +28,6 @@ const SubmissionDetail = () => {
   const [optionsMap, setOptionsMap] = useState({});
   const [documents, setDocuments] = useState([]);
   const [activeTab, setActiveTab] = useState('details');
-  const [notaries, setNotaries] = useState([]);
-  const [selectedNotaryId, setSelectedNotaryId] = useState('');
-  const [isEditingAppointment, setIsEditingAppointment] = useState(false);
-  const [isEditingSubmission, setIsEditingSubmission] = useState(false);
   const [notarizedFiles, setNotarizedFiles] = useState([]);
   const [fileComments, setFileComments] = useState({});
   const [signatories, setSignatories] = useState([]);
@@ -44,10 +39,10 @@ const SubmissionDetail = () => {
   const [internalNotes, setInternalNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [isAddingNote, setIsAddingNote] = useState(false);
+  const [emails, setEmails] = useState([]);
+  const [sms, setSms] = useState([]);
+  const [expandedEmails, setExpandedEmails] = useState(new Set());
   const [editFormData, setEditFormData] = useState({
-    appointment_date: '',
-    appointment_time: '',
-    timezone: '',
     first_name: '',
     last_name: '',
     email: '',
@@ -72,7 +67,6 @@ const SubmissionDetail = () => {
 
   useEffect(() => {
     fetchAdminInfo();
-    fetchNotaries();
   }, []);
 
   useEffect(() => {
@@ -81,31 +75,9 @@ const SubmissionDetail = () => {
     }
   }, [id, adminInfo]);
 
-  // Recalculate price when editFormData changes
-  useEffect(() => {
-    if (isEditingSubmission && Object.keys(servicesMap).length > 0 && Object.keys(optionsMap).length > 0) {
-      const newPrice = calculatePriceHelper(
-        editFormData.selectedServices,
-        editFormData.serviceDocuments,
-        servicesMap,
-        optionsMap,
-        editFormData.signatoriesByDocument
-      );
-      setCalculatedPrice(newPrice);
-    }
-  }, [editFormData, servicesMap, optionsMap, isEditingSubmission]);
-
-  // Auto-switch away from edit tab if submission is cancelled
-  useEffect(() => {
-    if (submission?.status === 'cancelled' && (activeTab === 'edit' || isEditingSubmission)) {
-      setActiveTab('details');
-      setIsEditingSubmission(false);
-    }
-  }, [submission?.status, activeTab, isEditingSubmission]);
-
   // Validate form whenever editFormData changes
   useEffect(() => {
-    if (isEditingSubmission && Object.keys(servicesMap).length > 0) {
+    if (false && Object.keys(servicesMap).length > 0) {
       // Validate form inline to avoid dependency issues
       const errors = [];
       
@@ -171,7 +143,7 @@ const SubmissionDetail = () => {
     } else {
       setIsFormValid(false);
     }
-  }, [editFormData, servicesMap, isEditingSubmission, phoneErrors, emailErrors]);
+  }, [editFormData, servicesMap, phoneErrors, emailErrors]);
 
   // Handle tab parameter from URL
   useEffect(() => {
@@ -201,6 +173,20 @@ const SubmissionDetail = () => {
   useEffect(() => {
     if (activeTab === 'notes' && id) {
       fetchInternalNotes();
+    }
+  }, [activeTab, id]);
+
+  // Fetch emails when emails tab is active
+  useEffect(() => {
+    if (activeTab === 'emails' && submission?.email) {
+      fetchEmails();
+    }
+  }, [activeTab, submission?.email]);
+
+  // Fetch SMS when sms tab is active
+  useEffect(() => {
+    if (activeTab === 'sms' && id) {
+      fetchSMS();
     }
   }, [activeTab, id]);
 
@@ -343,6 +329,118 @@ const SubmissionDetail = () => {
       setTimeline([]);
     } finally {
       setTimelineLoading(false);
+    }
+  };
+
+  const fetchEmails = async () => {
+    if (!submission?.email && !submission?.id) return;
+    
+    try {
+      // Récupérer TOUS les emails envoyés pour cette submission
+      const { data: emailsData, error: emailsError } = await supabase
+        .from('email_sent')
+        .select('*')
+        .or(`submission_id.eq.${submission.id},email.eq.${submission.email || ''}`)
+        .order('sent_at', { ascending: false });
+
+      if (emailsError) throw emailsError;
+
+      // Format emails for display
+      const formattedEmails = (emailsData || []).map(email => {
+        // Determine status based on events
+        let status = 'sent';
+        if (email.dropped_at) status = 'dropped';
+        else if (email.bounced_at) status = 'bounced';
+        else if (email.spam_reported_at) status = 'spam';
+        else if (email.unsubscribed_at) status = 'unsubscribed';
+        else if (email.delivered_at) status = 'delivered';
+        else if (email.sent_at) status = 'sent';
+
+        // Determine type label
+        let typeLabel = email.email_type;
+        if (email.email_type?.startsWith('abandoned_cart_')) {
+          typeLabel = 'Séquence de relance';
+        } else if (email.email_type === 'payment_success') {
+          typeLabel = 'Confirmation de paiement';
+        } else if (email.email_type === 'payment_failed') {
+          typeLabel = 'Échec de paiement';
+        } else if (email.email_type === 'notarized_file_uploaded') {
+          typeLabel = 'Fichier notarisé';
+        } else if (email.email_type === 'message_received') {
+          typeLabel = 'Message reçu';
+        } else if (email.email_type === 'submission_updated') {
+          typeLabel = 'Mise à jour de soumission';
+        } else {
+          typeLabel = email.email_type || 'Transactionnel';
+        }
+
+        return {
+          id: email.id,
+          type: email.email_type?.startsWith('abandoned_cart_') ? 'sequence' : 'transactional',
+          typeLabel: typeLabel,
+          subject: email.subject,
+          html_content: email.html_content,
+          sent_at: email.sent_at,
+          delivered_at: email.delivered_at,
+          opened_at: email.opened_at,
+          clicked_at: email.clicked_at,
+          clicked_url: email.clicked_url,
+          bounced_at: email.bounced_at,
+          bounce_reason: email.bounce_reason,
+          status: status,
+          sequence_step: email.email_type?.startsWith('abandoned_cart_') 
+            ? email.email_type.replace('abandoned_cart_', '') 
+            : null,
+        };
+      });
+
+      setEmails(formattedEmails);
+    } catch (error) {
+      console.error('Error fetching emails:', error);
+      toast.error('Erreur lors du chargement des emails');
+    }
+  };
+
+  const fetchSMS = async () => {
+    if (!id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('sms_sent')
+        .select('*')
+        .eq('submission_id', id)
+        .order('sent_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedSMS = (data || []).map(sms => {
+        let typeLabel = sms.sms_type;
+        if (sms.sms_type?.startsWith('abandoned_cart_')) {
+          typeLabel = 'Séquence de relance';
+        } else if (sms.sms_type === 'notification') {
+          typeLabel = 'Notification';
+        } else {
+          typeLabel = sms.sms_type || 'Autre';
+        }
+
+        // Determine status based on timestamps
+        let status = 'sent';
+        if (sms.failed_at) status = 'failed';
+        else if (sms.delivered_at) status = 'delivered';
+        else if (sms.sent_at) status = 'sent';
+        else status = 'pending';
+
+        return {
+          ...sms,
+          typeLabel: typeLabel,
+          status: status,
+        };
+      });
+
+      setSms(formattedSMS);
+    } catch (error) {
+      console.error('Error fetching SMS:', error);
+      toast.error('Erreur lors du chargement des SMS');
     }
   };
 
@@ -520,21 +618,6 @@ const SubmissionDetail = () => {
     }
   };
 
-  const fetchNotaries = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('notary')
-        .select('id, full_name, email, is_active')
-        .eq('is_active', true)
-        .order('full_name', { ascending: true });
-
-      if (error) throw error;
-      setNotaries(data || []);
-    } catch (error) {
-      console.error('Error fetching notaries:', error);
-    }
-  };
-
   const fetchSubmissionDetail = async () => {
     try {
       setLoading(true);
@@ -543,8 +626,7 @@ const SubmissionDetail = () => {
         .from('submission')
         .select(`
           *,
-          client:client_id(first_name, last_name),
-          notary:assigned_notary_id(id, full_name, email)
+          client:client_id(first_name, last_name)
         `)
         .eq('id', id)
         .single();
@@ -553,7 +635,6 @@ const SubmissionDetail = () => {
       if (!submissionData) throw new Error('Submission not found');
 
       setSubmission(submissionData);
-      setSelectedNotaryId(submissionData.assigned_notary_id || '');
 
       // Initialize edit form data
       // Get signatories from database or submission.data
@@ -601,9 +682,6 @@ const SubmissionDetail = () => {
       }
 
       setEditFormData({
-        appointment_date: submissionData.appointment_date || '',
-        appointment_time: submissionData.appointment_time || '',
-        timezone: submissionData.timezone || '',
         first_name: submissionData.first_name || '',
         last_name: submissionData.last_name || '',
         email: submissionData.email || '',
@@ -613,8 +691,8 @@ const SubmissionDetail = () => {
         postal_code: submissionData.postal_code || '',
         country: submissionData.country || '',
         notes: submissionData.notes || '',
-        selectedServices: submissionData.data?.selectedServices || [],
-        serviceDocuments: submissionData.data?.serviceDocuments || {},
+        selectedServices: submissionData.data?.selectedServices || submissionData.data?.selected_services || [],
+        serviceDocuments: submissionData.data?.serviceDocuments || submissionData.data?.documents || {},
         signatoriesByDocument: signatoriesData,
         notary_cost: submissionData.notary_cost || 0
       });
@@ -659,35 +737,117 @@ const SubmissionDetail = () => {
         }
       }
 
-      // Fetch services
+      // Get services and documents from submission.data
+      const selectedServicesFromData = submissionData.data?.selectedServices || submissionData.data?.selected_services || [];
+      let serviceDocumentsFromData = submissionData.data?.serviceDocuments || submissionData.data?.documents || {};
+
+      // Merge documents from submission_files with documents from submission.data to get public_url
+      if (docsData && docsData.length > 0) {
+        // Create a map of documents by name for quick lookup (normalize names for matching)
+        const docsByName = {};
+        docsData.forEach(doc => {
+          const fileName = doc.file_name || doc.name;
+          if (fileName) {
+            // Normalize filename for matching (remove path, lowercase)
+            const normalizedName = fileName.toLowerCase().trim();
+            docsByName[normalizedName] = doc;
+            // Also store with original case
+            docsByName[fileName] = doc;
+          }
+        });
+
+        // Update serviceDocumentsFromData with public_url from submission_files
+        Object.keys(serviceDocumentsFromData).forEach(serviceId => {
+          const documents = serviceDocumentsFromData[serviceId] || [];
+          if (Array.isArray(documents)) {
+            serviceDocumentsFromData[serviceId] = documents.map(doc => {
+              const fileName = doc.name || doc.file_name;
+              if (!fileName) return doc;
+              
+              // Try exact match first
+              let fileFromDB = docsByName[fileName];
+              // Try normalized match
+              if (!fileFromDB) {
+                fileFromDB = docsByName[fileName.toLowerCase().trim()];
+              }
+              
+              if (fileFromDB && fileFromDB.file_url) {
+                return {
+                  ...doc,
+                  public_url: fileFromDB.file_url,
+                  url: fileFromDB.file_url,
+                  file_url: fileFromDB.file_url,
+                  // Keep original dataUrl if no public_url exists
+                  dataUrl: doc.dataUrl || (fileFromDB.file_url ? undefined : doc.dataUrl)
+                };
+              }
+              return doc;
+            });
+          }
+        });
+        
+        console.log('📄 [SubmissionDetail] Merged documents:', {
+          docsFromDB: docsData.length,
+          servicesWithDocs: Object.keys(serviceDocumentsFromData).length,
+          mergedDocs: serviceDocumentsFromData
+        });
+        
+        // Update submissionData.data with merged documents
+        if (!submissionData.data) {
+          submissionData.data = {};
+        }
+        submissionData.data.serviceDocuments = serviceDocumentsFromData;
+        submissionData.data.selectedServices = selectedServicesFromData;
+      }
+
+      // Fetch only the services that are in submission.data
+      let sMap = {};
+      if (selectedServicesFromData.length > 0) {
       const { data: servicesData } = await supabase
         .from('services')
-        .select('*');
+          .select('*')
+          .in('service_id', selectedServicesFromData);
 
-      const sMap = {};
       if (servicesData) {
         servicesData.forEach(service => {
           sMap[service.service_id] = service;
         });
+        }
       }
       setServicesMap(sMap);
 
-      // Fetch options
+      // Get all option IDs from documents in submission.data
+      const optionIds = new Set();
+      Object.values(serviceDocumentsFromData).forEach((documents) => {
+        if (Array.isArray(documents)) {
+          documents.forEach(doc => {
+            if (doc.selectedOptions && Array.isArray(doc.selectedOptions)) {
+              doc.selectedOptions.forEach(optionId => optionIds.add(optionId));
+            }
+          });
+        }
+      });
+
+      // Fetch only the options that are in submission.data
+      let oMap = {};
+      if (optionIds.size > 0) {
       const { data: optionsData } = await supabase
         .from('options')
         .select('*')
-        .eq('is_active', true);
+          .in('option_id', Array.from(optionIds));
 
-      const oMap = {};
       if (optionsData) {
         optionsData.forEach(option => {
           oMap[option.option_id] = option;
         });
       }
-      setOptionsMap(oMap);
       setAllOptions(optionsData || []);
+      } else {
+        setAllOptions([]);
+      }
+      setOptionsMap(oMap);
 
-      // Fetch all services for editing
+      // Fetch all services for editing (if needed)
       const { data: allServicesData } = await supabase
         .from('services')
         .select('*')
@@ -703,8 +863,8 @@ const SubmissionDetail = () => {
 
       // Calculate initial price (including signatories)
       const initialPrice = calculatePriceHelper(
-        submissionData.data?.selectedServices || [], 
-        submissionData.data?.serviceDocuments || {}, 
+        selectedServicesFromData, 
+        serviceDocumentsFromData, 
         sMap, 
         oMap,
         signatoriesData
@@ -738,74 +898,12 @@ const SubmissionDetail = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  };
-
-  // Format time in 12-hour format (AM/PM)
-  const formatTime12h = (timeString) => {
-    if (!timeString || timeString === 'N/A') return 'N/A';
-    try {
-      const [hours, minutes] = timeString.split(':').map(Number);
-      const hour = parseInt(hours);
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-      return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
     } catch (error) {
-      return timeString;
-    }
-  };
-
-  // Convert time from Florida (Eastern Time, UTC-5) to client timezone for display
-  const convertTimeToClientTimezone = (time, date, clientTimezone) => {
-    if (!time || !date || !clientTimezone) return time;
-    
-    try {
-      // IMPORTANT: The time stored in submission.appointment_time is in Florida time (UTC-5)
-      // We need to convert it to the client's timezone for display
-      
-      // Parse the stored time (Florida time, UTC-5)
-      const [floridaHours, floridaMinutes] = time.split(':').map(Number);
-      
-      // Get client timezone offset
-      let clientOffsetHours = 0;
-      if (clientTimezone && clientTimezone.startsWith('UTC')) {
-        const match = clientTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
-        if (match) {
-          const sign = match[1] === '+' ? 1 : -1;
-          const hours = parseInt(match[2], 10);
-          const minutes = match[3] ? parseInt(match[3], 10) : 0;
-          clientOffsetHours = sign * (hours + minutes / 60);
-        }
-      }
-      
-      // Florida is UTC-5
-      const floridaOffsetHours = -5;
-      
-      // Calculate the difference between client timezone and Florida timezone
-      const offsetDiff = clientOffsetHours - floridaOffsetHours;
-      
-      // Convert Florida time to client timezone
-      let clientHour = floridaHours + offsetDiff;
-      const clientMinutes = floridaMinutes;
-      
-      // Handle day overflow/underflow
-      if (clientHour < 0) {
-        clientHour += 24;
-      } else if (clientHour >= 24) {
-        clientHour -= 24;
-      }
-      
-      // Format in 12-hour format
-      const hour = Math.floor(clientHour);
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-      
-      // Format with proper padding for minutes
-      return `${displayHour}:${String(clientMinutes).padStart(2, '0')} ${period}`;
-    } catch (error) {
-      console.error('Error converting time:', error);
-      return time;
+      return 'N/A';
     }
   };
 
@@ -1136,64 +1234,6 @@ const SubmissionDetail = () => {
     }
   };
 
-  // Update appointment
-  const handleUpdateAppointment = async () => {
-    try {
-      const { error } = await supabase
-        .from('submission')
-        .update({
-          appointment_date: editFormData.appointment_date,
-          appointment_time: editFormData.appointment_time,
-          timezone: editFormData.timezone,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      // Create notifications
-      if (submission.client_id) {
-        await createNotification(
-          submission.client_id,
-          'client',
-          'Appointment Updated',
-          `Your appointment has been updated to ${editFormData.appointment_date} at ${formatTime12h(editFormData.appointment_time)} (${editFormData.timezone}).`,
-          'info',
-          'appointment_updated',
-          {
-            submission_id: id,
-            appointment_date: editFormData.appointment_date,
-            appointment_time: editFormData.appointment_time,
-            timezone: editFormData.timezone
-          }
-        );
-      }
-
-      if (submission.assigned_notary_id) {
-        await createNotification(
-          submission.assigned_notary_id,
-          'notary',
-          'Appointment Updated',
-          `Appointment for submission #${id.substring(0, 8)} has been updated to ${editFormData.appointment_date} at ${formatTime12h(editFormData.appointment_time)} (${editFormData.timezone}).`,
-          'info',
-          'appointment_updated',
-          {
-            submission_id: id,
-            appointment_date: editFormData.appointment_date,
-            appointment_time: editFormData.appointment_time,
-            timezone: editFormData.timezone
-          }
-        );
-      }
-
-      setIsEditingAppointment(false);
-      await fetchSubmissionDetail();
-      toast.success('Appointment updated successfully!');
-    } catch (error) {
-      console.error('Error updating appointment:', error);
-      toast.error(`Error: ${error.message}`);
-    }
-  };
 
   // Validate form data before submission
   const validateEditForm = () => {
@@ -1303,308 +1343,6 @@ const SubmissionDetail = () => {
     return errors;
   };
 
-  // Update full submission
-  const handleUpdateSubmission = async () => {
-    // Validate form before submission
-    const validationErrors = validateEditForm();
-    if (validationErrors.length > 0) {
-      toast.error(`Please fix the following errors:\n${validationErrors.join('\n')}`);
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // Recalculate price (including signatories)
-      const newPrice = calculatePrice(
-        editFormData.selectedServices,
-        editFormData.serviceDocuments,
-        servicesMap,
-        optionsMap,
-        editFormData.signatoriesByDocument
-      );
-
-      // Update submission
-      const { error: updateError } = await supabase
-        .from('submission')
-        .update({
-          appointment_date: editFormData.appointment_date,
-          appointment_time: editFormData.appointment_time,
-          timezone: editFormData.timezone,
-          first_name: editFormData.first_name,
-          last_name: editFormData.last_name,
-          email: editFormData.email,
-          phone: editFormData.phone,
-          address: editFormData.address,
-          city: editFormData.city,
-          postal_code: editFormData.postal_code,
-          country: editFormData.country,
-          notes: editFormData.notes,
-          total_price: newPrice,
-          notary_cost: parseFloat(editFormData.notary_cost) || 0,
-          data: {
-            ...submission.data,
-            selectedServices: editFormData.selectedServices,
-            serviceDocuments: editFormData.serviceDocuments,
-            signatoriesByDocument: editFormData.signatoriesByDocument
-          },
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      // Update submission_services
-      // First, delete existing
-      await supabase
-        .from('submission_services')
-        .delete()
-        .eq('submission_id', id);
-
-      // Then, insert new ones
-      if (editFormData.selectedServices.length > 0) {
-        const serviceRecords = editFormData.selectedServices.map(serviceId => {
-          const service = allServices.find(s => s.service_id === serviceId);
-          return service ? {
-            submission_id: id,
-            service_id: service.id
-          } : null;
-        }).filter(Boolean);
-
-        if (serviceRecords.length > 0) {
-          await supabase
-            .from('submission_services')
-            .insert(serviceRecords);
-        }
-      }
-
-      // Create notifications
-      if (submission.client_id) {
-        await createNotification(
-          submission.client_id,
-          'client',
-          'Submission Updated',
-          'Your submission has been updated by an administrator. Please review the changes.',
-          'info',
-          'submission_modified',
-          { submission_id: id, new_price: newPrice }
-        );
-      }
-
-      if (submission.assigned_notary_id) {
-        await createNotification(
-          submission.assigned_notary_id,
-          'notary',
-          'Submission Updated',
-          `Submission #${id.substring(0, 8)} has been updated by an administrator.`,
-          'info',
-          'submission_modified',
-          { submission_id: id }
-        );
-      }
-
-      // Update signatories in database if payment was completed
-      const paymentInfo = submission.data?.payment;
-      if (paymentInfo && paymentInfo.payment_status === 'paid') {
-        // Delete existing signatories
-        await supabase
-          .from('signatories')
-          .delete()
-          .eq('submission_id', id);
-
-        // Insert updated signatories
-        const signatoryEntries = [];
-        Object.entries(editFormData.signatoriesByDocument).forEach(([docKey, signatories]) => {
-          if (Array.isArray(signatories)) {
-            signatories.forEach((signatory) => {
-              if (signatory.firstName && signatory.lastName) {
-                signatoryEntries.push({
-                  submission_id: id,
-                  document_key: docKey,
-                  first_name: signatory.firstName,
-                  last_name: signatory.lastName,
-                  birth_date: signatory.birthDate,
-                  birth_city: signatory.birthCity,
-                  postal_address: signatory.postalAddress,
-                  email: signatory.email || null,
-                  phone: signatory.phone || null,
-                });
-              }
-            });
-          }
-        });
-
-        if (signatoryEntries.length > 0) {
-          await supabase
-            .from('signatories')
-            .insert(signatoryEntries);
-        }
-
-        // ALWAYS update Stripe payment when submission is updated
-        if (paymentInfo && paymentInfo.payment_status === 'paid') {
-          try {
-            const oldPrice = parseFloat(submission.total_price) || 0;
-            
-            const requestBody = {
-              submissionId: id,
-              newAmount: newPrice,
-              oldAmount: oldPrice
-              // NO updateMetadataOnly - always calculate and charge/refund if needed
-            };
-            
-            console.log('🔄 [UPDATE-SUBMISSION] Calling update-payment to update PRICE in Stripe');
-            console.log('💰 [UPDATE-SUBMISSION] Old price:', oldPrice, 'New price:', newPrice);
-            
-            let paymentUpdateResult = null;
-            let paymentUpdateError = null;
-            
-            try {
-              const { data, error } = await supabase.functions.invoke('update-payment', {
-                body: requestBody
-              });
-              
-              paymentUpdateResult = data;
-              paymentUpdateError = error;
-              
-              // If there's an error, try to parse the error message from the response
-              if (paymentUpdateError) {
-                console.error('❌ [UPDATE-SUBMISSION] Error updating Stripe payment:', paymentUpdateError);
-                console.error('❌ [UPDATE-SUBMISSION] Full error object:', paymentUpdateError);
-                console.error('❌ [UPDATE-SUBMISSION] Error keys:', Object.keys(paymentUpdateError));
-                
-                // Try multiple ways to get the error message
-                let errorMessage = 'Unknown error';
-                
-                // Method 1: Check if error has message property
-                if (paymentUpdateError.message && paymentUpdateError.message !== 'Edge Function returned a non-2xx status code') {
-                  errorMessage = paymentUpdateError.message;
-                }
-                
-                // Method 2: Check if data contains error info (sometimes error is in data when status is 400)
-                if (paymentUpdateResult && paymentUpdateResult.error) {
-                  errorMessage = typeof paymentUpdateResult.error === 'string' 
-                    ? paymentUpdateResult.error 
-                    : paymentUpdateResult.error?.error || paymentUpdateResult.error?.message || errorMessage;
-                }
-                
-                // Method 3: Try to get from context if available
-                if (errorMessage === 'Unknown error' && paymentUpdateError.context) {
-                  console.log('❌ [UPDATE-SUBMISSION] Error context:', paymentUpdateError.context);
-                  // Context might contain response body
-                  if (paymentUpdateError.context.response) {
-                    try {
-                      const errorBody = typeof paymentUpdateError.context.response === 'string' 
-                        ? JSON.parse(paymentUpdateError.context.response)
-                        : paymentUpdateError.context.response;
-                      
-                      if (errorBody?.error) {
-                        errorMessage = typeof errorBody.error === 'string' 
-                          ? errorBody.error 
-                          : errorBody.error?.error || errorBody.error?.message || errorMessage;
-                      } else if (errorBody?.message) {
-                        errorMessage = errorBody.message;
-                      }
-                    } catch (e) {
-                      console.warn('Could not parse error response from context:', e);
-                    }
-                  }
-                }
-                
-                console.error('❌ [UPDATE-SUBMISSION] Final error message:', errorMessage);
-                toast.warning(`Submission updated but Stripe sync failed: ${errorMessage}`);
-              }
-            } catch (invokeError) {
-              console.error('❌ [UPDATE-SUBMISSION] Exception calling update-payment:', invokeError);
-              paymentUpdateError = invokeError;
-              toast.warning(`Submission updated but Stripe sync failed: ${invokeError.message || 'Unknown error'}`);
-            }
-
-            if (!paymentUpdateError && paymentUpdateResult?.success) {
-              // Only open checkout session if explicitly required AND checkout_url is provided
-              if (paymentUpdateResult?.requires_customer_action === true && paymentUpdateResult?.checkout_url) {
-                // If checkout session was created, show message and open link
-                console.log('🔄 [UPDATE-SUBMISSION] Checkout session required, opening:', paymentUpdateResult.checkout_url);
-                toast.warning(`${paymentUpdateResult.message} Opening checkout session...`, 10000);
-                // Open checkout session in new tab after a short delay
-                setTimeout(() => {
-                  window.open(paymentUpdateResult.checkout_url, '_blank');
-                }, 1000);
-              } else {
-                // Payment succeeded automatically - no checkout needed
-                console.log('✅ [UPDATE-SUBMISSION] Payment processed automatically, no checkout needed');
-                toast.success(`Submission updated! ${paymentUpdateResult.message || 'Stripe payment updated successfully.'}`);
-              }
-            } else if (!paymentUpdateError && paymentUpdateResult && !paymentUpdateResult.success) {
-              // Response received but indicates failure
-              const errorMsg = paymentUpdateResult.error || paymentUpdateResult.message || 'Stripe sync failed';
-              toast.warning(`Submission updated but Stripe sync failed: ${errorMsg}`);
-            }
-          } catch (paymentError) {
-            console.error('Error calling update-payment function:', paymentError);
-            toast.warning('Submission updated but Stripe sync failed. Please update manually in Stripe.');
-          }
-        }
-      }
-
-      setIsEditingSubmission(false);
-      await fetchSubmissionDetail();
-      
-      // Send email to client about submission update
-      try {
-        const clientEmail = editFormData.email || submission.email;
-        const clientName = `${editFormData.first_name || ''} ${editFormData.last_name || ''}`.trim() || 'Client';
-        const submissionNumber = id.substring(0, 8);
-        
-        // Get services names for email
-        const servicesNames = (editFormData.selectedServices || [])
-          .map(serviceId => servicesMap[serviceId]?.name)
-          .filter(Boolean)
-          .join(', ');
-        
-        const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
-        await sendTransactionalEmail(supabase, {
-          email_type: 'submission_updated',
-          recipient_email: clientEmail,
-          recipient_name: clientName,
-          recipient_type: 'client',
-          data: {
-            submission_id: id,
-            submission_number: submissionNumber,
-            old_price: submission.total_price || 0,
-            new_price: newPrice,
-            price_changed: Math.abs((submission.total_price || 0) - newPrice) > 0.01,
-            services: servicesNames,
-            appointment_date: editFormData.appointment_date,
-            appointment_time: editFormData.appointment_time,
-            timezone: editFormData.timezone,
-            updated_fields: {
-              personal_info: editFormData.first_name !== submission.first_name || 
-                           editFormData.last_name !== submission.last_name ||
-                           editFormData.email !== submission.email ||
-                           editFormData.phone !== submission.phone,
-              address: editFormData.address !== submission.address ||
-                      editFormData.city !== submission.city ||
-                      editFormData.postal_code !== submission.postal_code ||
-                      editFormData.country !== submission.country,
-              services: JSON.stringify(editFormData.selectedServices) !== JSON.stringify(submission.data?.selectedServices || []),
-              appointment: editFormData.appointment_date !== submission.appointment_date ||
-                          editFormData.appointment_time !== submission.appointment_time
-            }
-          }
-        });
-      } catch (emailError) {
-        console.error('Error sending submission update email:', emailError);
-        // Don't block the update if email fails
-      }
-      
-      toast.success('Submission updated successfully! New total price: €' + newPrice.toFixed(2));
-    } catch (error) {
-      console.error('Error updating submission:', error);
-      toast.error(`Error: ${error.message}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   if (loading) {
     return (
       <AdminLayout>
@@ -1633,8 +1371,8 @@ const SubmissionDetail = () => {
     );
   }
 
-  const selectedServices = submission.data?.selectedServices || [];
-  const serviceDocuments = submission.data?.serviceDocuments || {};
+  const selectedServices = submission.data?.selectedServices || submission.data?.selected_services || [];
+  const serviceDocuments = submission.data?.serviceDocuments || submission.data?.documents || {};
 
   return (
     <AdminLayout>
@@ -1680,7 +1418,6 @@ const SubmissionDetail = () => {
               <button
                 onClick={() => {
                   setActiveTab('details');
-                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'details' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
@@ -1694,7 +1431,6 @@ const SubmissionDetail = () => {
               <button
                 onClick={() => {
                   setActiveTab('documents');
-                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'documents' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
@@ -1708,7 +1444,6 @@ const SubmissionDetail = () => {
               <button
                 onClick={() => {
                   setActiveTab('signatories');
-                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'signatories' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
@@ -1719,26 +1454,9 @@ const SubmissionDetail = () => {
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
-              {submission?.status !== 'cancelled' && (
-                <button
-                  onClick={() => {
-                    setActiveTab('edit');
-                    setIsEditingSubmission(true);
-                  }}
-                  className={`pb-3 text-sm font-medium transition-colors relative ${
-                    activeTab === 'edit' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Edit Submission
-                  {activeTab === 'edit' && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                  )}
-                </button>
-              )}
               <button
                 onClick={() => {
                   setActiveTab('notarized');
-                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'notarized' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
@@ -1757,7 +1475,6 @@ const SubmissionDetail = () => {
               <button
                 onClick={() => {
                   setActiveTab('transactions');
-                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'transactions' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
@@ -1776,7 +1493,6 @@ const SubmissionDetail = () => {
               <button
                 onClick={() => {
                   setActiveTab('timeline');
-                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'timeline' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
@@ -1790,7 +1506,6 @@ const SubmissionDetail = () => {
               <button
                 onClick={() => {
                   setActiveTab('notes');
-                  setIsEditingSubmission(false);
                 }}
                 className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === 'notes' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
@@ -1803,6 +1518,44 @@ const SubmissionDetail = () => {
                   </span>
                 )}
                 {activeTab === 'notes' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('emails');
+                }}
+                className={`pb-3 text-sm font-medium transition-colors relative flex items-center ${
+                  activeTab === 'emails' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Icon icon="heroicons:envelope" className="w-5 h-5 mr-2" />
+                Emails
+                {emails.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs">
+                    {emails.length}
+                  </span>
+                )}
+                {activeTab === 'emails' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('sms');
+                }}
+                className={`pb-3 text-sm font-medium transition-colors relative flex items-center ${
+                  activeTab === 'sms' ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5 mr-2" />
+                SMS
+                {sms.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs">
+                    {sms.length}
+                  </span>
+                )}
+                {activeTab === 'sms' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                 )}
               </button>
@@ -1845,203 +1598,6 @@ const SubmissionDetail = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Notary Assignment */}
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Notary Assignment</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Assign Notary
-                      </label>
-                      <select
-                        value={selectedNotaryId}
-                        onChange={(e) => setSelectedNotaryId(e.target.value)}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      >
-                        <option value="">-- Select a notary --</option>
-                        {notaries.map((notary) => (
-                          <option key={notary.id} value={notary.id}>
-                            {notary.full_name} {notary.email ? `(${notary.email})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={handleAssignNotary}
-                        disabled={!selectedNotaryId}
-                        className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {submission.assigned_notary_id ? 'Update Assignment' : 'Assign Notary'}
-                      </button>
-                      {submission.assigned_notary_id && (
-                        <button
-                          onClick={handleRemoveNotary}
-                          className="px-6 py-3 bg-red-600 text-white font-semibold rounded-full hover:bg-red-700 transition-colors"
-                        >
-                          Remove Notary
-                        </button>
-                      )}
-                    </div>
-                    {submission.notary && (
-                      <div className="mt-4 p-4 bg-white rounded-xl space-y-4">
-                        <div>
-                          <p className="text-sm text-gray-600">Currently Assigned:</p>
-                          <p className="font-semibold text-gray-900">{submission.notary.full_name}</p>
-                          {submission.notary.email && (
-                            <p className="text-sm text-gray-600">{submission.notary.email}</p>
-                          )}
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Notary Cost (€)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={submission.notary_cost || 0}
-                            onChange={async (e) => {
-                              const newCost = parseFloat(e.target.value) || 0;
-                              try {
-                                const { error } = await supabase
-                                  .from('submission')
-                                  .update({ notary_cost: newCost, updated_at: new Date().toISOString() })
-                                  .eq('id', id);
-                                
-                                if (error) throw error;
-                                
-                                setSubmission({ ...submission, notary_cost: newCost });
-                                
-                                // Create notification for notary
-                                if (submission.assigned_notary_id) {
-                                  await createNotification(
-                                    submission.assigned_notary_id,
-                                    'notary',
-                                    'Notary Cost Updated',
-                                    `The cost for submission #${id.substring(0, 8)} has been updated to €${newCost.toFixed(2)}.`,
-                                    'info',
-                                    'notary_cost_updated',
-                                    { submission_id: id, notary_cost: newCost }
-                                  );
-                                }
-                              } catch (error) {
-                                console.error('Error updating notary cost:', error);
-                                toast.error(`Error: ${error.message}`);
-                              }
-                            }}
-                            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                            placeholder="0.00"
-                          />
-                          <p className="mt-1 text-xs text-gray-500">Cost paid to the notary for this submission</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Appointment */}
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-gray-900">Appointment</h2>
-                    {!isEditingAppointment && !isEditingSubmission && (
-                      <button
-                        onClick={() => setIsEditingAppointment(true)}
-                        className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-semibold flex items-center"
-                      >
-                        <Icon icon="heroicons:pencil" className="w-4 h-4 mr-2" />
-                        Edit
-                      </button>
-                    )}
-                  </div>
-                  {isEditingAppointment ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">Date</label>
-                        <input
-                          type="date"
-                          value={editFormData.appointment_date}
-                          onChange={(e) => setEditFormData({ ...editFormData, appointment_date: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">Time</label>
-                        <input
-                          type="time"
-                          value={editFormData.appointment_time}
-                          onChange={(e) => setEditFormData({ ...editFormData, appointment_time: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">Timezone</label>
-                        <input
-                          type="text"
-                          value={editFormData.timezone}
-                          onChange={(e) => setEditFormData({ ...editFormData, timezone: e.target.value })}
-                          placeholder="e.g., UTC+1"
-                          className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                        />
-                      </div>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={handleUpdateAppointment}
-                          className="btn-glassy px-6 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsEditingAppointment(false);
-                            setEditFormData({
-                              ...editFormData,
-                              appointment_date: submission.appointment_date,
-                              appointment_time: submission.appointment_time,
-                              timezone: submission.timezone
-                            });
-                          }}
-                          className="px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-full hover:bg-gray-300 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Date:</span>
-                        <span className="font-semibold text-gray-900">{formatDate(submission.appointment_date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Client ({submission.timezone}):</span>
-                        <span className="font-semibold text-gray-900">
-                          {(() => {
-                            const [hours, minutes] = submission.appointment_time.split(':').map(Number);
-                            const hour = parseInt(hours);
-                            const period = hour >= 12 ? 'PM' : 'AM';
-                            const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-                            return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
-                          })()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Florida:</span>
-                        <span className="font-semibold text-gray-900">
-                          {submission.timezone ? convertTimeToNotaryTimezone(submission.appointment_time, submission.appointment_date, submission.timezone, 'America/New_York') : 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Notes */}
-                {submission.notes && (
-                  <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
-                    <p className="text-gray-700">{submission.notes}</p>
-                  </div>
-                )}
 
                 {/* Price Details */}
                 <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
@@ -2212,85 +1768,6 @@ const SubmissionDetail = () => {
                               ? `https://dashboard.stripe.com/${stripeAccountId}/${env}/payments/${paymentIntentId}`
                               : null;
                             
-                            return (
-                              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                                <button
-                                  onClick={async () => {
-                                  const confirmed = await confirm({
-                                    title: 'Refund Payment',
-                                    message: `Are you sure you want to refund the full payment amount of €${(submission.data.payment.amount_paid / 100).toFixed(2)}? This action cannot be undone.`,
-                                    confirmText: 'Refund',
-                                    cancelText: 'Cancel',
-                                    type: 'danger',
-                                  });
-
-                                  if (!confirmed) return;
-
-                                  // Set loading state in confirm dialog
-                                  setConfirmLoading(true);
-
-                                  try {
-                                    const paymentInfo = submission.data.payment;
-                                    if (!paymentInfo.stripe_session_id) {
-                                      toast.error('No payment session found');
-                                      setConfirmLoading(false);
-                                      return;
-                                    }
-
-                                    // Retrieve session to get payment intent
-                                    const { data: sessionData, error: sessionError } = await supabase.functions.invoke('verify-payment', {
-                                      body: { sessionId: paymentInfo.stripe_session_id }
-                                    });
-
-                                    if (sessionError) throw sessionError;
-
-                                    // Create full refund
-                                    const { data: refundResult, error: refundError } = await supabase.functions.invoke('update-payment', {
-                                      body: {
-                                        submissionId: id,
-                                        newAmount: 0,
-                                        oldAmount: paymentInfo.amount_paid / 100
-                                      }
-                                    });
-
-                                    if (refundError) throw refundError;
-
-                                    if (refundResult?.success) {
-                                      // Update submission status to cancelled
-                                      const { error: statusError } = await supabase
-                                        .from('submission')
-                                        .update({
-                                          status: 'cancelled',
-                                          updated_at: new Date().toISOString()
-                                        })
-                                        .eq('id', id);
-
-                                      if (statusError) {
-                                        console.error('Error updating submission status:', statusError);
-                                      }
-
-                                      toast.success(`Payment refunded successfully: ${refundResult.message}`);
-                                      await fetchSubmissionDetail();
-                                      // Close confirm dialog after successful refund
-                                      setConfirmLoading(false);
-                                      closeConfirm();
-                                    } else {
-                                      toast.error('Refund failed');
-                                      setConfirmLoading(false);
-                                    }
-                                  } catch (error) {
-                                    console.error('Error refunding payment:', error);
-                                    toast.error(`Failed to refund payment: ${error.message}`);
-                                    setConfirmLoading(false);
-                                  }
-                                }}
-                                className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                              >
-                                <Icon icon="heroicons:arrow-path" className="w-5 h-5" />
-                                Refund Payment
-                              </button>
-                              </div>
-                            );
                           })()}
                         </div>
                       </>
@@ -2336,6 +1813,14 @@ const SubmissionDetail = () => {
                               <div className="mt-4 space-y-2 pl-4 border-l-2 border-gray-200">
                                 {documents.map((doc, index) => {
                                   const docOptions = doc.selectedOptions || [];
+                                  // Get file URL from various possible fields
+                                  const fileUrl = doc.public_url || doc.dataUrl || doc.url || doc.file_url;
+                                  // Get file name
+                                  const fileName = doc.name || doc.file_name;
+                                  // Get file type
+                                  const fileType = doc.type || doc.file_type || doc.mime_type;
+                                  // Get file size
+                                  const fileSize = doc.size || doc.file_size;
 
                                   return (
                                     <div key={index} className="bg-gray-50 rounded-lg p-3">
@@ -2343,28 +1828,44 @@ const SubmissionDetail = () => {
                                         <div className="flex items-center flex-1">
                                           <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 mr-2 flex-shrink-0" />
                                           <div className="min-w-0 flex-1">
-                                            <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
-                                            <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
+                                            <p className="font-medium text-gray-900 text-sm truncate">{fileName}</p>
+                                            <p className="text-xs text-gray-500">{fileSize ? (fileSize / 1024).toFixed(2) + ' KB' : 'Size unknown'}</p>
                                           </div>
                                         </div>
-                                        {doc.public_url && (
-                                          <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-2 ml-4">
+                                          {fileUrl ? (
+                                            <>
                                             <DocumentViewer
-                                              fileUrl={doc.public_url}
-                                              fileName={doc.name}
-                                              fileType={doc.type}
-                                              fileSize={doc.size}
+                                                fileUrl={fileUrl}
+                                                fileName={fileName}
+                                                fileType={fileType}
+                                                fileSize={fileSize}
                                             />
                                             <button
-                                              onClick={() => downloadDocument(doc.public_url, doc.name)}
-                                              className="ml-3 text-black hover:text-gray-700 font-medium text-xs flex items-center flex-shrink-0"
+                                                onClick={() => {
+                                                  if (doc.dataUrl && !doc.public_url && !doc.url && !doc.file_url) {
+                                                    // Handle dataUrl (base64) download
+                                                    const link = document.createElement('a');
+                                                    link.href = doc.dataUrl;
+                                                    link.download = fileName;
+                                                    document.body.appendChild(link);
+                                                    link.click();
+                                                    document.body.removeChild(link);
+                                                  } else {
+                                                    downloadDocument(fileUrl, fileName);
+                                                  }
+                                                }}
+                                                className="px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center flex-shrink-0"
                                               title="Télécharger"
                                             >
-                                              <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-1" />
+                                                <Icon icon="heroicons:arrow-down-tray" className="w-4 h-4 mr-2" />
                                               Download
                                             </button>
-                                          </div>
+                                            </>
+                                          ) : (
+                                            <span className="text-xs text-gray-400">No file available</span>
                                         )}
+                                        </div>
                                       </div>
 
                                       {/* Options for this document */}
@@ -2951,6 +2452,195 @@ const SubmissionDetail = () => {
               </div>
             )}
 
+            {/* Emails Tab */}
+            {activeTab === 'emails' && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Emails</h2>
+                <div className="space-y-4">
+                  {emails.length === 0 ? (
+                    <div className="text-center py-12 text-gray-600">
+                      Aucun email envoyé pour cette submission
+                    </div>
+                  ) : (
+                    emails.map((email) => {
+                      const isExpanded = expandedEmails.has(email.id);
+                      return (
+                        <div key={email.id} className="bg-white rounded-xl p-6 border border-gray-200">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-lg font-semibold text-gray-900">{email.subject}</h3>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                  email.status === 'delivered' || email.status === 'sent' ? 'bg-green-100 text-green-800' :
+                                  email.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                  email.status === 'dropped' || email.status === 'bounced' || email.status === 'spam' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {email.status === 'delivered' ? 'Livré' :
+                                   email.status === 'sent' ? 'Envoyé' :
+                                   email.status === 'dropped' ? 'Supprimé' :
+                                   email.status === 'bounced' ? 'Rebondi' :
+                                   email.status === 'spam' ? 'Spam' :
+                                   email.status === 'unsubscribed' ? 'Désabonné' :
+                                   email.status}
+                                </span>
+                                {email.type === 'sequence' && email.sequence_step && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                    {email.sequence_step}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-600 space-y-1">
+                                <div>
+                                  <span className="font-medium">Type:</span> {email.typeLabel}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Icon icon="heroicons:paper-airplane" className="w-4 h-4 text-gray-500" />
+                                  <span className="font-medium">Envoyé le:</span> {formatDate(email.sent_at)}
+                                </div>
+                                {email.delivered_at && (
+                                  <div className="flex items-center gap-2 text-green-600">
+                                    <Icon icon="heroicons:check-circle" className="w-4 h-4" />
+                                    <span className="font-medium">Livré le:</span> {formatDate(email.delivered_at)}
+                                  </div>
+                                )}
+                                {email.opened_at && (
+                                  <div className="flex items-center gap-2 text-green-600">
+                                    <Icon icon="heroicons:eye" className="w-4 h-4" />
+                                    <span className="font-medium">Ouvert le:</span> {formatDate(email.opened_at)}
+                                  </div>
+                                )}
+                                {email.clicked_at && (
+                                  <div className="flex items-center gap-2 text-blue-600">
+                                    <Icon icon="heroicons:cursor-arrow-rays" className="w-4 h-4" />
+                                    <span className="font-medium">Cliqué le:</span> {formatDate(email.clicked_at)}
+                                    {email.clicked_url && (
+                                      <a href={email.clicked_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-500 hover:underline">
+                                        (voir lien)
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                                {email.bounced_at && (
+                                  <div className="flex items-center gap-2 text-red-600">
+                                    <Icon icon="heroicons:x-circle" className="w-4 h-4" />
+                                    <span className="font-medium">Rebondi le:</span> {formatDate(email.bounced_at)}
+                                    {email.bounce_reason && (
+                                      <span className="ml-2">({email.bounce_reason})</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {email.html_content && (
+                                <div className="mt-4">
+                                  <button
+                                    onClick={() => {
+                                      const newExpanded = new Set(expandedEmails);
+                                      if (isExpanded) {
+                                        newExpanded.delete(email.id);
+                                      } else {
+                                        newExpanded.add(email.id);
+                                      }
+                                      setExpandedEmails(newExpanded);
+                                    }}
+                                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                  >
+                                    <Icon 
+                                      icon={isExpanded ? "heroicons:chevron-up" : "heroicons:chevron-down"} 
+                                      className="w-4 h-4" 
+                                    />
+                                    {isExpanded ? 'Masquer le contenu' : 'Afficher le contenu'}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200 overflow-auto max-h-96">
+                                      <iframe
+                                        srcDoc={email.html_content}
+                                        className="w-full border-0"
+                                        style={{ minHeight: '400px' }}
+                                        title="Email content"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SMS Tab */}
+            {activeTab === 'sms' && (
+              <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">SMS</h2>
+                <div className="space-y-4">
+                  {sms.length === 0 ? (
+                    <div className="text-center py-12 text-gray-600">
+                      Aucun SMS envoyé pour cette submission
+                      <p className="text-sm text-gray-500 mt-2">La fonctionnalité SMS sera disponible prochainement</p>
+                    </div>
+                  ) : (
+                    sms.map((smsItem) => (
+                      <div key={smsItem.id} className="bg-white rounded-xl p-6 border border-gray-200">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                smsItem.status === 'delivered' || smsItem.status === 'sent' ? 'bg-green-100 text-green-800' :
+                                smsItem.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {smsItem.status === 'delivered' ? 'Livré' :
+                                 smsItem.status === 'sent' ? 'Envoyé' :
+                                 smsItem.status === 'failed' ? 'Échoué' :
+                                 'En attente'}
+                              </span>
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                {smsItem.typeLabel}
+                              </span>
+                            </div>
+                            <div className="mb-3">
+                              <p className="text-gray-900 whitespace-pre-wrap">{smsItem.message}</p>
+                            </div>
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <div>
+                                <span className="font-medium">Numéro:</span> {smsItem.phone_number}
+                              </div>
+                              <div>
+                                <span className="font-medium">Envoyé le:</span> {formatDate(smsItem.sent_at)}
+                              </div>
+                              {smsItem.delivered_at && (
+                                <div className="text-green-600">
+                                  <span className="font-medium">Livré le:</span> {formatDate(smsItem.delivered_at)}
+                                </div>
+                              )}
+                              {smsItem.failed_at && (
+                                <div className="text-red-600">
+                                  <span className="font-medium">Échoué le:</span> {formatDate(smsItem.failed_at)}
+                                  {smsItem.failed_reason && (
+                                    <span className="ml-2">({smsItem.failed_reason})</span>
+                                  )}
+                                </div>
+                              )}
+                              {smsItem.twilio_message_sid && (
+                                <div className="text-xs text-gray-500 mt-2">
+                                  <span className="font-medium">Twilio SID:</span> {smsItem.twilio_message_sid}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Internal Notes Tab */}
             {activeTab === 'notes' && (
               <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
@@ -3098,947 +2788,10 @@ const SubmissionDetail = () => {
                 )}
               </div>
             )}
-
-            {/* Edit Submission Tab */}
-            {submission?.status !== 'cancelled' && activeTab === 'edit' && (
-              <div className="space-y-6">
-                <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
-                  <p className="text-sm text-yellow-800">
-                    <Icon icon="heroicons:exclamation-triangle" className="w-5 h-5 inline mr-2" />
-                    <strong>Warning:</strong> Modifying this submission will recalculate the total price based on current service and option prices.
-                  </p>
                 </div>
 
-                {/* Personal Information */}
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Personal Information</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">First Name</label>
-                      <input
-                        type="text"
-                        value={editFormData.first_name}
-                        onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Last Name</label>
-                      <input
-                        type="text"
-                        value={editFormData.last_name}
-                        onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Email</label>
-                      <input
-                        type="email"
-                        value={editFormData.email}
-                        onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Phone</label>
-                      <input
-                        type="tel"
-                        value={editFormData.phone}
-                        onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Address</label>
-                      <input
-                        type="text"
-                        value={editFormData.address}
-                        onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">City</label>
-                      <input
-                        type="text"
-                        value={editFormData.city}
-                        onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Postal Code</label>
-                      <input
-                        type="text"
-                        value={editFormData.postal_code}
-                        onChange={(e) => setEditFormData({ ...editFormData, postal_code: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Country</label>
-                      <input
-                        type="text"
-                        value={editFormData.country}
-                        onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Appointment */}
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Appointment</h2>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Date</label>
-                      <input
-                        type="date"
-                        value={editFormData.appointment_date}
-                        onChange={(e) => setEditFormData({ ...editFormData, appointment_date: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Time</label>
-                      <input
-                        type="time"
-                        value={editFormData.appointment_time}
-                        onChange={(e) => setEditFormData({ ...editFormData, appointment_time: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">Timezone</label>
-                      <input
-                        type="text"
-                        value={editFormData.timezone}
-                        onChange={(e) => setEditFormData({ ...editFormData, timezone: e.target.value })}
-                        placeholder="e.g., UTC+1"
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Services Selection */}
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Services</h2>
-                  <div className="space-y-4">
-                    {allServices.map((service) => {
-                      const isSelected = editFormData.selectedServices.includes(service.service_id);
-                      const documents = editFormData.serviceDocuments[service.service_id] || [];
-                      const isApostilleService = service.service_id === '473fb677-4dd3-4766-8221-0250ea3440cd';
-
-                      return (
-                        <div key={service.id} className="bg-white rounded-xl p-4 border-2 border-gray-200">
-                          {/* Service Checkbox */}
-                          <label className="flex items-start space-x-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  const newServiceDocuments = {
-                                    ...editFormData.serviceDocuments,
-                                    [service.service_id]: editFormData.serviceDocuments[service.service_id] || []
-                                  };
-                                  
-                                  // Ensure at least one signatory per document
-                                  const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
-                                  const docs = newServiceDocuments[service.service_id] || [];
-                                  docs.forEach((doc, docIndex) => {
-                                    const docKey = `${service.service_id}_${docIndex}`;
-                                    if (!newSignatoriesByDocument[docKey] || newSignatoriesByDocument[docKey].length === 0) {
-                                      newSignatoriesByDocument[docKey] = [{
-                                        firstName: '',
-                                        lastName: '',
-                                        birthDate: '',
-                                        birthCity: '',
-                                        postalAddress: '',
-                                        email: '',
-                                        phone: ''
-                                      }];
-                                    }
-                                  });
-                                  
-                                  setEditFormData({
-                                    ...editFormData,
-                                    selectedServices: [...editFormData.selectedServices, service.service_id],
-                                    serviceDocuments: newServiceDocuments,
-                                    signatoriesByDocument: newSignatoriesByDocument
-                                  });
-                                } else {
-                                  const newSelected = editFormData.selectedServices.filter(id => id !== service.service_id);
-                                  const newServiceDocuments = { ...editFormData.serviceDocuments };
-                                  const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
-                                  
-                                  // Remove signatories for this service
-                                  documents.forEach((doc, docIndex) => {
-                                    const docKey = `${service.service_id}_${docIndex}`;
-                                    delete newSignatoriesByDocument[docKey];
-                                  });
-                                  
-                                  delete newServiceDocuments[service.service_id];
-                                  setEditFormData({
-                                    ...editFormData,
-                                    selectedServices: newSelected,
-                                    serviceDocuments: newServiceDocuments,
-                                    signatoriesByDocument: newSignatoriesByDocument
-                                  });
-                                }
-                              }}
-                              className="mt-1 w-5 h-5 text-black border-gray-300 rounded focus:ring-black"
-                            />
-                            <div className="flex-1">
-                              <p className="font-semibold text-gray-900">{service.name}</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-2">
-                                €{parseFloat(service.base_price || 0).toFixed(2)} per document
-                              </p>
-                            </div>
-                          </label>
-
-                          {/* Documents Management - Only show if service is selected */}
-                          {isSelected && (
-                            <div className="mt-4 pt-4 border-t border-gray-200">
-                              <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-sm font-semibold text-gray-900">Documents ({documents.length})</h3>
-                                <label className="px-3 py-1.5 bg-black text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
-                                  <Icon icon="heroicons:plus-circle" className="w-4 h-4 inline mr-1" />
-                                  Add Document
-                                  <input
-                                    type="file"
-                                    multiple
-                                    className="hidden"
-                                    onChange={async (e) => {
-                                      const files = Array.from(e.target.files);
-                                      if (files.length === 0) return;
-
-                                      const convertedFiles = await Promise.all(
-                                        files.map(async (file) => {
-                                          return new Promise((resolve) => {
-                                            const reader = new FileReader();
-                                            reader.onloadend = () => {
-                                              resolve({
-                                                name: file.name,
-                                                size: file.size,
-                                                type: file.type,
-                                                lastModified: file.lastModified,
-                                                dataUrl: reader.result,
-                                                selectedOptions: [],
-                                              });
-                                            };
-                                            reader.readAsDataURL(file);
-                                          });
-                                        })
-                                      );
-
-                                      const newServiceDocuments = {
-                                        ...editFormData.serviceDocuments,
-                                        [service.service_id]: [...documents, ...convertedFiles]
-                                      };
-
-                                      // Ensure signatories for new documents
-                                      const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
-                                      convertedFiles.forEach((doc, index) => {
-                                        const docIndex = documents.length + index;
-                                        const docKey = `${service.service_id}_${docIndex}`;
-                                        if (!newSignatoriesByDocument[docKey]) {
-                                          newSignatoriesByDocument[docKey] = [{
-                                            firstName: '',
-                                            lastName: '',
-                                            birthDate: '',
-                                            birthCity: '',
-                                            postalAddress: '',
-                                            email: '',
-                                            phone: ''
-                                          }];
-                                        }
-                                      });
-
-                                      setEditFormData({
-                                        ...editFormData,
-                                        serviceDocuments: newServiceDocuments,
-                                        signatoriesByDocument: newSignatoriesByDocument
-                                      });
-                                    }}
-                                  />
-                                </label>
-                              </div>
-
-                              {/* Documents List */}
-                              {documents.length > 0 && (
-                                <div className="space-y-3">
-                                  {documents.map((doc, docIndex) => {
-                                    const docOptions = doc.selectedOptions || [];
-                                    const docKey = `${service.service_id}_${docIndex}`;
-
-                                    return (
-                                      <div key={docIndex} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <div className="flex items-start justify-between mb-2">
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                              <Icon icon="heroicons:document-text" className="w-5 h-5 text-gray-600 flex-shrink-0" />
-                                              <div className="min-w-0 flex-1">
-                                                <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
-                                                <p className="text-xs text-gray-500">{(doc.size / 1024).toFixed(2)} KB</p>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          <button
-                                            onClick={() => {
-                                              const newServiceDocuments = { ...editFormData.serviceDocuments };
-                                              newServiceDocuments[service.service_id] = newServiceDocuments[service.service_id].filter((_, i) => i !== docIndex);
-                                              
-                                              // Remove signatories for this document
-                                              const newSignatoriesByDocument = { ...editFormData.signatoriesByDocument };
-                                              delete newSignatoriesByDocument[docKey];
-                                              
-                                              // Reindex remaining signatories
-                                              const remainingDocs = newServiceDocuments[service.service_id];
-                                              const reindexedSignatories = {};
-                                              Object.keys(newSignatoriesByDocument).forEach(key => {
-                                                if (key.startsWith(`${service.service_id}_`)) {
-                                                  const oldIndex = parseInt(key.split('_').pop());
-                                                  if (oldIndex < docIndex) {
-                                                    reindexedSignatories[key] = newSignatoriesByDocument[key];
-                                                  } else if (oldIndex > docIndex) {
-                                                    const newKey = `${service.service_id}_${oldIndex - 1}`;
-                                                    reindexedSignatories[newKey] = newSignatoriesByDocument[key];
-                                                  }
-                                                } else {
-                                                  reindexedSignatories[key] = newSignatoriesByDocument[key];
-                                                }
-                                              });
-
-                                              if (newServiceDocuments[service.service_id].length === 0) {
-                                                delete newServiceDocuments[service.service_id];
-                                              }
-
-                                              setEditFormData({
-                                                ...editFormData,
-                                                serviceDocuments: newServiceDocuments,
-                                                signatoriesByDocument: reindexedSignatories
-                                              });
-                                            }}
-                                            className="ml-2 text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
-                                          >
-                                            <Icon icon="heroicons:trash" className="w-4 h-4" />
-                                            Remove
-                                          </button>
-                                        </div>
-
-                                        {/* Options for this document */}
-                                        {!isApostilleService && allOptions.length > 0 && (
-                                          <div className="mt-3 pt-3 border-t border-gray-200">
-                                            <p className="text-xs font-semibold text-gray-700 mb-2">Options:</p>
-                                            <div className="space-y-2">
-                                              {allOptions.map((option) => (
-                                                <label key={option.option_id} className="flex items-center space-x-2 cursor-pointer group">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={docOptions.includes(option.option_id)}
-                                                    onChange={() => {
-                                                      const newServiceDocuments = { ...editFormData.serviceDocuments };
-                                                      const file = newServiceDocuments[service.service_id][docIndex];
-                                                      
-                                                      if (!file.selectedOptions) {
-                                                        file.selectedOptions = [];
-                                                      }
-                                                      
-                                                      if (file.selectedOptions.includes(option.option_id)) {
-                                                        file.selectedOptions = file.selectedOptions.filter(id => id !== option.option_id);
-                                                      } else {
-                                                        file.selectedOptions = [...file.selectedOptions, option.option_id];
-                                                      }
-                                                      
-                                                      setEditFormData({
-                                                        ...editFormData,
-                                                        serviceDocuments: newServiceDocuments
-                                                      });
-                                                    }}
-                                                    className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
-                                                  />
-                                                  <span className="text-xs font-medium text-gray-700 group-hover:text-black transition-colors">
-                                                    {option.name}
-                                                    <span className="text-gray-500 font-normal ml-1">
-                                                      (+€{option.additional_price?.toFixed(2) || '0.00'})
-                                                    </span>
-                                                  </span>
-                                                </label>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Signatories Editing */}
-                {editFormData.selectedServices.length > 0 && (
-                  <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Signatories</h2>
-                    <div className="space-y-6">
-                      {editFormData.selectedServices.map((serviceId) => {
-                        const service = servicesMap[serviceId];
-                        const documents = editFormData.serviceDocuments[serviceId] || [];
-                        if (!service) return null;
-
-                        return documents.map((doc, docIndex) => {
-                          const docKey = `${serviceId}_${docIndex}`;
-                          const docSignatories = editFormData.signatoriesByDocument[docKey] || [];
-                          
-                          return (
-                            <div key={docKey} className="bg-white rounded-xl p-4 border border-gray-200">
-                              <h3 className="font-semibold text-gray-900 mb-4">
-                                {doc.name || `Document ${docIndex + 1}`} - Signatories
-                              </h3>
-                              <div className="space-y-4">
-                                {docSignatories.map((signatory, sigIndex) => (
-                                  <div key={sigIndex} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                                    <div className="flex items-center justify-between mb-3">
-                                      <span className="text-sm font-semibold text-gray-900">
-                                        Signatory {sigIndex + 1}
-                                        {sigIndex === 0 && <span className="ml-2 text-xs text-gray-500">(included)</span>}
-                                        {sigIndex > 0 && <span className="ml-2 text-xs text-orange-600 font-medium">(+€10)</span>}
-                                      </span>
-                                      {sigIndex > 0 && (
-                                        <button
-                                          onClick={() => {
-                                            const newSignatories = docSignatories.filter((_, i) => i !== sigIndex);
-                                            setEditFormData({
-                                              ...editFormData,
-                                              signatoriesByDocument: {
-                                                ...editFormData.signatoriesByDocument,
-                                                [docKey]: newSignatories
-                                              }
-                                            });
-                                          }}
-                                          className="text-red-600 hover:text-red-700 text-sm font-medium"
-                                        >
-                                          Remove
-                                        </button>
-                                      )}
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">First Name</label>
-                                        <input
-                                          type="text"
-                                          value={signatory.firstName || ''}
-                                          onChange={(e) => {
-                                            const updated = [...docSignatories];
-                                            updated[sigIndex] = { ...updated[sigIndex], firstName: e.target.value };
-                                            setEditFormData({
-                                              ...editFormData,
-                                              signatoriesByDocument: {
-                                                ...editFormData.signatoriesByDocument,
-                                                [docKey]: updated
-                                              }
-                                            });
-                                          }}
-                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name</label>
-                                        <input
-                                          type="text"
-                                          value={signatory.lastName || ''}
-                                          onChange={(e) => {
-                                            const updated = [...docSignatories];
-                                            updated[sigIndex] = { ...updated[sigIndex], lastName: e.target.value };
-                                            setEditFormData({
-                                              ...editFormData,
-                                              signatoriesByDocument: {
-                                                ...editFormData.signatoriesByDocument,
-                                                [docKey]: updated
-                                              }
-                                            });
-                                          }}
-                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Date of Birth</label>
-                                        <input
-                                          type="date"
-                                          value={signatory.birthDate || ''}
-                                          onChange={(e) => {
-                                            const updated = [...docSignatories];
-                                            updated[sigIndex] = { ...updated[sigIndex], birthDate: e.target.value };
-                                            setEditFormData({
-                                              ...editFormData,
-                                              signatoriesByDocument: {
-                                                ...editFormData.signatoriesByDocument,
-                                                [docKey]: updated
-                                              }
-                                            });
-                                          }}
-                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Birth City</label>
-                                        <input
-                                          type="text"
-                                          value={signatory.birthCity || ''}
-                                          onChange={(e) => {
-                                            const updated = [...docSignatories];
-                                            updated[sigIndex] = { ...updated[sigIndex], birthCity: e.target.value };
-                                            setEditFormData({
-                                              ...editFormData,
-                                              signatoriesByDocument: {
-                                                ...editFormData.signatoriesByDocument,
-                                                [docKey]: updated
-                                              }
-                                            });
-                                          }}
-                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
-                                        />
-                                      </div>
-                                      <div className="col-span-2">
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Postal Address</label>
-                                        <input
-                                          type="text"
-                                          value={signatory.postalAddress || ''}
-                                          onChange={(e) => {
-                                            const updated = [...docSignatories];
-                                            updated[sigIndex] = { ...updated[sigIndex], postalAddress: e.target.value };
-                                            setEditFormData({
-                                              ...editFormData,
-                                              signatoriesByDocument: {
-                                                ...editFormData.signatoriesByDocument,
-                                                [docKey]: updated
-                                              }
-                                            });
-                                          }}
-                                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black text-sm"
-                                          placeholder="Enter full address"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
-                                        <input
-                                          type="email"
-                                          value={signatory.email || ''}
-                                          onChange={(e) => {
-                                            const updated = [...docSignatories];
-                                            updated[sigIndex] = { ...updated[sigIndex], email: e.target.value };
-                                            setEditFormData({
-                                              ...editFormData,
-                                              signatoriesByDocument: {
-                                                ...editFormData.signatoriesByDocument,
-                                                [docKey]: updated
-                                              }
-                                            });
-                                            
-                                            // Validate email in real-time
-                                            const errorKey = `${docKey}_${sigIndex}`;
-                                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                                            if (e.target.value && e.target.value.trim()) {
-                                              if (!emailRegex.test(e.target.value.trim())) {
-                                                setEmailErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid email address' }));
-                                              } else {
-                                                setEmailErrors(prev => {
-                                                  const newErrors = { ...prev };
-                                                  delete newErrors[errorKey];
-                                                  return newErrors;
-                                                });
-                                              }
-                                            } else {
-                                              setEmailErrors(prev => {
-                                                const newErrors = { ...prev };
-                                                delete newErrors[errorKey];
-                                                return newErrors;
-                                              });
-                                            }
-                                          }}
-                                          className={`w-full px-3 py-2 bg-white border rounded-lg focus:ring-2 text-sm ${
-                                            emailErrors[`${docKey}_${sigIndex}`] 
-                                              ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                                              : 'border-gray-300 focus:ring-black focus:border-black'
-                                          }`}
-                                          placeholder="email@example.com"
-                                        />
-                                        {emailErrors[`${docKey}_${sigIndex}`] && (
-                                          <p className="mt-1 text-xs text-red-600 flex items-center">
-                                            <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
-                                            <span>{emailErrors[`${docKey}_${sigIndex}`]}</span>
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Number</label>
-                                        <div className={`flex items-center bg-white border rounded-lg overflow-hidden focus-within:ring-2 pl-2 pr-2 ${
-                                          phoneErrors[`${docKey}_${sigIndex}`] 
-                                            ? 'border-red-500 focus-within:ring-red-500 focus-within:border-red-500' 
-                                            : 'border-gray-300 focus-within:ring-black'
-                                        }`}>
-                                          <PhoneInputWrapper
-                                            international
-                                            defaultCountry="US"
-                                            value={signatory.phone || ''}
-                                            onChange={(value) => {
-                                              const updated = [...docSignatories];
-                                              updated[sigIndex] = { ...updated[sigIndex], phone: value || '' };
-                                              setEditFormData({
-                                                ...editFormData,
-                                                signatoriesByDocument: {
-                                                  ...editFormData.signatoriesByDocument,
-                                                  [docKey]: updated
-                                                }
-                                              });
-                                              
-                                              // Validate phone number in real-time
-                                              const errorKey = `${docKey}_${sigIndex}`;
-                                              if (value && value.length > 3) {
-                                                if (!isValidPhoneNumber(value)) {
-                                                  setPhoneErrors(prev => ({ ...prev, [errorKey]: 'Please enter a valid phone number' }));
-                                                } else {
-                                                  setPhoneErrors(prev => {
-                                                    const newErrors = { ...prev };
-                                                    delete newErrors[errorKey];
-                                                    return newErrors;
-                                                  });
-                                                }
-                                              } else if (value === '' || !value) {
-                                                setPhoneErrors(prev => {
-                                                  const newErrors = { ...prev };
-                                                  delete newErrors[errorKey];
-                                                  return newErrors;
-                                                });
-                                              }
-                                            }}
-                                            className="phone-input-integrated w-full flex text-sm"
-                                            countrySelectProps={{
-                                              className: "pr-1 py-2 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none text-xs"
-                                            }}
-                                            numberInputProps={{
-                                              className: "flex-1 pl-1 py-2 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-sm"
-                                            }}
-                                          />
-                                        </div>
-                                        {phoneErrors[`${docKey}_${sigIndex}`] && (
-                                          <p className="mt-1 text-xs text-red-600 flex items-center">
-                                            <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
-                                            <span>{phoneErrors[`${docKey}_${sigIndex}`]}</span>
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                                <button
-                                  onClick={() => {
-                                    const newSignatory = {
-                                      firstName: '',
-                                      lastName: '',
-                                      birthDate: '',
-                                      birthCity: '',
-                                      postalAddress: '',
-                                      email: '',
-                                      phone: ''
-                                    };
-                                    setEditFormData({
-                                      ...editFormData,
-                                      signatoriesByDocument: {
-                                        ...editFormData.signatoriesByDocument,
-                                        [docKey]: [...docSignatories, newSignatory]
-                                      }
-                                    });
-                                  }}
-                                  className="w-full px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
-                                >
-                                  <Icon icon="heroicons:plus-circle" className="w-5 h-5" />
-                                  Add Signatory (+$10)
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        });
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Notary Cost */}
-                {submission.assigned_notary_id && (
-                  <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Notary Cost</h2>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Cost Paid to Notary ($)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editFormData.notary_cost || 0}
-                        onChange={(e) => setEditFormData({ ...editFormData, notary_cost: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                        placeholder="0.00"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Cost paid to the assigned notary for this submission</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Notes */}
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Notes</h2>
-                  <textarea
-                    value={editFormData.notes}
-                    onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-                    rows={4}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column - Chat or Price Details */}
+          {/* Right Column - Chat */}
           <div className="lg:col-span-1">
-            {activeTab === 'edit' ? (
-              <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto">
-                <div className="bg-[#F3F4F6] rounded-2xl p-6 border-2 border-gray-300">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                      <Icon icon="heroicons:currency-dollar" className="w-5 h-5 text-gray-600" />
-                    </div>
-                    Price Details
-                  </h2>
-                  <div className="space-y-3">
-                    {editFormData.selectedServices.length > 0 ? (
-                      <>
-                        {editFormData.selectedServices.map((serviceId) => {
-                          const service = servicesMap[serviceId];
-                          const documents = editFormData.serviceDocuments[serviceId] || [];
-                          if (!service) return null;
-
-                          const serviceTotal = documents.length * (parseFloat(service.base_price) || 0);
-                          
-                          // Track count per option for detailed display
-                          const optionCounts = {};
-
-                          // Calculate options total and collect details for this service
-                          documents.forEach(doc => {
-                            if (doc.selectedOptions && doc.selectedOptions.length > 0) {
-                              doc.selectedOptions.forEach(optionId => {
-                                const option = optionsMap[optionId];
-                                if (option) {
-                                  const optionPrice = parseFloat(option.additional_price) || 0;
-                                  // Track option count
-                                  if (!optionCounts[optionId]) {
-                                    optionCounts[optionId] = {
-                                      option: option,
-                                      count: 0,
-                                      total: 0
-                                    };
-                                  }
-                                  optionCounts[optionId].count += 1;
-                                  optionCounts[optionId].total += optionPrice;
-                                }
-                              });
-                            }
-                          });
-
-                          // Calculate signatories cost for this service
-                          documents.forEach((doc, docIndex) => {
-                            const docKey = `${serviceId}_${docIndex}`;
-                            const docSignatories = editFormData.signatoriesByDocument[docKey];
-                            if (Array.isArray(docSignatories) && docSignatories.length > 1) {
-                              signatoriesTotal += (docSignatories.length - 1) * 10; // $10 per additional signatory
-                            }
-                          });
-
-                          return (
-                            <div key={serviceId} className="bg-white rounded-xl p-4 border border-gray-200">
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1">
-                                  <h3 className="font-semibold text-gray-900">{service.name}</h3>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {documents.length} document{documents.length > 1 ? 's' : ''} × €{parseFloat(service.base_price || 0).toFixed(2)}
-                                  </p>
-                                </div>
-                                <span className="font-bold text-gray-900">€{serviceTotal.toFixed(2)}</span>
-                              </div>
-                              
-                              {/* Options breakdown - detailed */}
-                              {Object.keys(optionCounts).length > 0 && (
-                                <div className="ml-4 mt-2 pt-2 border-t border-gray-200 space-y-1">
-                                  {Object.values(optionCounts).map((optionDetail, idx) => {
-                                    const option = optionDetail.option;
-                                    return (
-                                      <div key={option.option_id || idx} className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-600 italic">
-                                          + {option.name}
-                                          {optionDetail.count > 1 && <span className="ml-1">({optionDetail.count} documents)</span>}
-                                        </span>
-                                        <span className="font-semibold text-gray-700">€{optionDetail.total.toFixed(2)}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              {/* Signatories breakdown */}
-                              {signatoriesTotal > 0 && (
-                                <div className="ml-4 mt-2 pt-2 border-t border-gray-200">
-                                  <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600 italic">+ Additional Signatories</span>
-                                    <span className="font-semibold text-gray-700">€{signatoriesTotal.toFixed(2)}</span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {/* Total */}
-                        <div className="mt-4 pt-4 border-t-2 border-gray-300">
-                          <div className="flex justify-between items-center">
-                            <span className="text-lg font-bold text-gray-900">Total Amount</span>
-                            <span className="text-2xl font-bold text-gray-900">${calculatedPrice.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-gray-600">No services selected.</p>
-                    )}
-                  </div>
-
-                  {/* Stripe Actions */}
-                  {submission.data?.payment?.stripe_session_id && (() => {
-                    // Extract account ID from Stripe secret key (if available) or use default
-                    const stripeAccountId = 'acct_1SOkkU21pQO5v0OI'; // Default account ID, should be from env
-                    const isTestMode = true; // Should be determined from Stripe key or env
-                    const env = isTestMode ? 'test' : 'live';
-                    
-                    // Get payment_intent_id from payment data, or use stripe_session_id as fallback
-                    const paymentIntentId = submission.data?.payment?.payment_intent_id;
-                    const sessionId = submission.data?.payment?.stripe_session_id;
-                    
-                    // Construct Stripe dashboard URL - use payment_intent_id if available, otherwise use session_id
-                    const stripeUrl = paymentIntentId 
-                      ? `https://dashboard.stripe.com/${stripeAccountId}/${env}/payments/${paymentIntentId}`
-                      : sessionId
-                        ? `https://dashboard.stripe.com/${stripeAccountId}/${env}/payments/${sessionId}`
-                        : null;
-                    
-                    return null;
-                  })()}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col gap-3 mt-6">
-                    <button
-                      onClick={handleUpdateSubmission}
-                      disabled={!isFormValid || isSaving}
-                      className={`btn-glassy px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 w-full flex items-center justify-center gap-2 ${
-                        !isFormValid || isSaving ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''
-                      }`}
-                    >
-                      {isSaving ? (
-                        <>
-                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Saving...
-                        </>
-                      ) : (
-                        'Save Changes'
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsEditingSubmission(false);
-                        setActiveTab('details');
-                        // Reset form data
-                        // Get signatories from already loaded data (signatories state or submission.data)
-                        let resetSignatoriesData = {};
-                        
-                        if (signatories.length > 0) {
-                          // Convert database signatories to editFormData format
-                          signatories.forEach(sig => {
-                            if (!resetSignatoriesData[sig.document_key]) {
-                              resetSignatoriesData[sig.document_key] = [];
-                            }
-                            resetSignatoriesData[sig.document_key].push({
-                              firstName: sig.first_name,
-                              lastName: sig.last_name,
-                              birthDate: sig.birth_date,
-                              birthCity: sig.birth_city,
-                              postalAddress: sig.postal_address,
-                              email: sig.email || '',
-                              phone: sig.phone || ''
-                            });
-                          });
-                        } else {
-                          // Use signatories from submission.data
-                          const signatoriesFromData = submission.data?.signatoriesByDocument || {};
-                          Object.entries(signatoriesFromData).forEach(([docKey, sigs]) => {
-                            if (sigs && sigs.length > 0) {
-                              resetSignatoriesData[docKey] = sigs.map(sig => ({
-                                firstName: sig.firstName || sig.first_name,
-                                lastName: sig.lastName || sig.last_name,
-                                birthDate: sig.birthDate || sig.birth_date,
-                                birthCity: sig.birthCity || sig.birth_city,
-                                postalAddress: sig.postalAddress || sig.postal_address,
-                                email: sig.email || '',
-                                phone: sig.phone || ''
-                              }));
-                            }
-                          });
-                        }
-
-                        setEditFormData({
-                          appointment_date: submission.appointment_date || '',
-                          appointment_time: submission.appointment_time || '',
-                          timezone: submission.timezone || '',
-                          first_name: submission.first_name || '',
-                          last_name: submission.last_name || '',
-                          email: submission.email || '',
-                          phone: submission.phone || '',
-                          address: submission.address || '',
-                          city: submission.city || '',
-                          postal_code: submission.postal_code || '',
-                          country: submission.country || '',
-                          notes: submission.notes || '',
-                          selectedServices: submission.data?.selectedServices || [],
-                          serviceDocuments: submission.data?.serviceDocuments || {},
-                          signatoriesByDocument: resetSignatoriesData,
-                          notary_cost: submission.notary_cost || 0
-                        });
-                        const initialPrice = calculatePriceHelper(
-                          submission.data?.selectedServices || [],
-                          submission.data?.serviceDocuments || {},
-                          servicesMap,
-                          optionsMap,
-                          resetSignatoriesData
-                        );
-                        setCalculatedPrice(initialPrice);
-                      }}
-                      className="px-8 py-3 bg-gray-200 text-gray-700 font-semibold rounded-full hover:bg-gray-300 transition-colors w-full"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
               <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Messages</h2>
                 {adminInfo && submission.client && (
@@ -4052,7 +2805,6 @@ const SubmissionDetail = () => {
                   />
                 )}
               </div>
-            )}
           </div>
         </div>
       </div>

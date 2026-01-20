@@ -8,6 +8,7 @@ import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import PriceDetails from '../PriceDetails';
 import Notification from '../Notification';
+import { updateFunnelStatusToSummaryViewed } from '../../utils/updateFunnelStatus';
 
 const DELIVERY_POSTAL_PRICE_EUR = 29.95;
 
@@ -255,6 +256,15 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     };
     convertDeliveryPrice();
   }, [currency, formData.deliveryMethod, formatPriceAsync, formatPriceSync]);
+
+  // Update funnel_status to 'summary_viewed' when Summary page is opened
+  useEffect(() => {
+    console.log('📄 [SUMMARY] Summary page opened - updating funnel_status to summary_viewed');
+    updateFunnelStatusToSummaryViewed().catch(error => {
+      console.error('❌ [SUMMARY] Error updating funnel_status to summary_viewed:', error);
+      // Don't block page rendering if funnel update fails
+    });
+  }, []); // Run once when component mounts
 
   // Track summary page view when component mounts
   useEffect(() => {
