@@ -38,6 +38,27 @@ const PaymentSuccess = () => {
           setInvoiceUrl(data.invoiceUrl);
           setUserEmail(data.userData?.email || data.email || null);
           
+          // Clear form data from localStorage immediately after successful payment verification
+          // This prevents the form from restoring old data when user navigates back
+          console.log('🧹 [PAYMENT-SUCCESS] Clearing form data from localStorage after successful payment');
+          try {
+            localStorage.removeItem('notaryFormData');
+            localStorage.removeItem('notaryCompletedSteps');
+            localStorage.removeItem('formSessionId');
+            // Also clear any other form-related localStorage keys
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && (key.startsWith('notary') || key.startsWith('form'))) {
+                keysToRemove.push(key);
+              }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            console.log('✅ [PAYMENT-SUCCESS] Form data cleared from localStorage');
+          } catch (error) {
+            console.error('❌ [PAYMENT-SUCCESS] Error clearing localStorage:', error);
+          }
+          
           // Track payment success in GTM (purchase event for Google Ads conversion)
           // Structured according to GTM Enhanced Conversions requirements
           trackPaymentSuccess({
@@ -73,9 +94,23 @@ const PaymentSuccess = () => {
   }, [searchParams]);
 
   const handleGoToDashboard = () => {
-    // Clear localStorage
-    localStorage.removeItem('notaryFormData');
-    localStorage.removeItem('notaryCompletedSteps');
+    // localStorage already cleared when payment was verified, but ensure it's cleared again
+    try {
+      localStorage.removeItem('notaryFormData');
+      localStorage.removeItem('notaryCompletedSteps');
+      localStorage.removeItem('formSessionId');
+      // Clear any other form-related keys
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('notary') || key.startsWith('form'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+    } catch (error) {
+      console.error('Error clearing localStorage:', error);
+    }
     navigate('/dashboard');
   };
 

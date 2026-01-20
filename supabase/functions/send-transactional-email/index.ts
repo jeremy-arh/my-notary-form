@@ -1,254 +1,20 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Format time in 12-hour format (AM/PM)
-function formatTime12h(timeString: string | undefined): string {
-  if (!timeString || timeString === 'N/A') return 'N/A';
-  try {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    const hour = parseInt(hours.toString());
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-    return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
-  } catch (error) {
-    return timeString;
-  }
-}
-
-// Convert appointment date and time from client timezone to notary timezone
-function convertToNotaryTimezone(
-  date: string | undefined,
-  time: string | undefined,
-  clientTimezone: string | undefined,
-  notaryTimezone: string | undefined
-): { date: string; time: string; timezone: string } {
-  if (!date || !time || !clientTimezone || !notaryTimezone) {
-    return {
-      date: date || '',
-      time: time || '',
-      timezone: notaryTimezone || clientTimezone || 'UTC'
-    };
-  }
-
-  try {
-    // Handle UTC offset format (e.g., 'UTC+1', 'UTC-5')
-    let clientTz = clientTimezone;
-    if (clientTimezone.startsWith('UTC')) {
-      clientTz = getIANAFromUTCOffset(clientTimezone);
-    }
-
-    let notaryTz = notaryTimezone;
-    if (notaryTimezone.startsWith('UTC')) {
-      notaryTz = getIANAFromUTCOffset(notaryTimezone);
-    }
-
-    // Parse date and time components
-    const [year, month, day] = date.split('-').map(Number);
-    const [hours, minutes] = time.split(':').map(Number);
-
-    // Strategy: Find the UTC timestamp that displays as the target time in client's timezone
-    // We'll use an iterative binary search approach
-    
-    // Start with a reasonable estimate: assume noon UTC on the target date
-    const targetDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-    let utcTimestamp = targetDate.getTime();
-    
-    // Binary search for the correct UTC timestamp
-    let low = utcTimestamp - 12 * 60 * 60 * 1000; // 12 hours before
-    let high = utcTimestamp + 12 * 60 * 60 * 1000; // 12 hours after
-    let bestUtcTimestamp = utcTimestamp;
-    
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const mid = Math.floor((low + high) / 2);
-      const testDate = new Date(mid);
-      
-      // Format this UTC timestamp in client's timezone
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: clientTz,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-      
-      const parts = formatter.formatToParts(testDate);
-      const formattedYear = parseInt(parts.find(p => p.type === 'year')?.value || '0');
-      const formattedMonth = parseInt(parts.find(p => p.type === 'month')?.value || '0');
-      const formattedDay = parseInt(parts.find(p => p.type === 'day')?.value || '0');
-      const formattedHour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
-      const formattedMinute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
-      
-      // Check if this matches our target
-      if (formattedYear === year &&
-          formattedMonth === month &&
-          formattedDay === day &&
-          formattedHour === hours &&
-          formattedMinute === minutes) {
-        bestUtcTimestamp = mid;
-        break;
-      }
-      
-      // Compare to determine direction
-      // First compare dates, then times
-      let comparison = 0;
-      if (formattedYear !== year) {
-        comparison = formattedYear - year;
-      } else if (formattedMonth !== month) {
-        comparison = formattedMonth - month;
-      } else if (formattedDay !== day) {
-        comparison = formattedDay - day;
-      } else if (formattedHour !== hours) {
-        comparison = formattedHour - hours;
-      } else {
-        comparison = formattedMinute - minutes;
-      }
-      
-      if (comparison < 0) {
-        // Formatted time is before target, need to increase UTC timestamp
-        low = mid + 1;
-      } else {
-        // Formatted time is after target, need to decrease UTC timestamp
-        high = mid - 1;
-      }
-      
-      bestUtcTimestamp = mid;
-      
-      // Prevent infinite loops
-      if (high <= low) {
-        break;
-      }
-    }
-    
-    // Now format this UTC timestamp in notary's timezone
-    const appointmentDate = new Date(bestUtcTimestamp);
-    
-    const formattedDate = appointmentDate.toLocaleDateString('en-US', {
-      timeZone: notaryTz,
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    const formattedTime = appointmentDate.toLocaleTimeString('en-US', {
-      timeZone: notaryTz,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-    
-    // Get timezone name for display
-    const timezoneName = getTimezoneName(notaryTz);
-    
-    return {
-      date: formattedDate,
-      time: formattedTime,
-      timezone: timezoneName
-    };
-  } catch (error) {
-    console.error('Error converting timezone:', error);
-    return {
-      date: date,
-      time: time,
-      timezone: notaryTimezone || clientTimezone || 'UTC'
-    };
-  }
-}
-
-// Get timezone offset in milliseconds for a specific date
-function getTimezoneOffsetForDate(timezone: string, date: Date): number {
-  try {
-    // Get what UTC time this date represents when displayed in the timezone
-    // Format the date in UTC and in the target timezone, then compare
-    const utcString = date.toLocaleString('en-US', { timeZone: 'UTC', hour12: false });
-    const tzString = date.toLocaleString('en-US', { timeZone: timezone, hour12: false });
-    
-    // Parse both strings to get time components
-    const utcDate = new Date(utcString);
-    const tzDate = new Date(tzString);
-    
-    // The difference is the offset
-    return tzDate.getTime() - utcDate.getTime();
-  } catch (error) {
-    // Fallback: use a simpler calculation
-    try {
-      const utcDate = new Date(date.toISOString());
-      const tzFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        timeZoneName: 'longOffset'
-      });
-      // This is a simplified approach - in practice, we'd need a library
-      // For now, return 0 and let the iterative method handle it
-      return 0;
-    } catch (e) {
-      return 0;
-    }
-  }
-}
-
-// Convert UTC offset to IANA timezone identifier
-function getIANAFromUTCOffset(offset: string): string {
-  const offsetMap: Record<string, string> = {
-    'UTC+0': 'UTC',
-    'UTC+1': 'Europe/Paris',
-    'UTC+2': 'Europe/Berlin',
-    'UTC+3': 'Europe/Moscow',
-    'UTC+4': 'Asia/Dubai',
-    'UTC+5': 'Asia/Karachi',
-    'UTC+6': 'Asia/Dhaka',
-    'UTC+7': 'Asia/Bangkok',
-    'UTC+8': 'Asia/Shanghai',
-    'UTC+9': 'Asia/Tokyo',
-    'UTC+10': 'Australia/Sydney',
-    'UTC+11': 'Pacific/Guadalcanal',
-    'UTC+12': 'Pacific/Auckland',
-    'UTC-1': 'Atlantic/Azores',
-    'UTC-2': 'Atlantic/South_Georgia',
-    'UTC-3': 'America/Sao_Paulo',
-    'UTC-4': 'America/Caracas',
-    'UTC-5': 'America/New_York',
-    'UTC-6': 'America/Chicago',
-    'UTC-7': 'America/Denver',
-    'UTC-8': 'America/Los_Angeles',
-    'UTC-9': 'America/Anchorage',
-    'UTC-10': 'Pacific/Honolulu',
-    'UTC-11': 'Pacific/Midway',
-    'UTC-12': 'Pacific/Baker_Island'
-  };
-  
-  return offsetMap[offset] || 'UTC';
-}
-
-// Get timezone display name
-function getTimezoneName(timezone: string): string {
-  try {
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      timeZoneName: 'short'
-    });
-    const parts = formatter.formatToParts(now);
-    const tzName = parts.find(p => p.type === 'timeZoneName')?.value || timezone;
-    return tzName;
-  } catch (error) {
-    return timezone;
-  }
-}
 
 interface EmailRequest {
-  email_type: 'payment_success' | 'payment_failed' | 'notary_assigned' | 'notarized_file_uploaded' | 'message_received' | 'new_submission_available' | 'appointment_reminder_day_before' | 'appointment_reminder_one_hour_before' | 'submission_updated'
+  email_type: 'payment_success' | 'payment_failed' | 'notarized_file_uploaded' | 'message_received' | 'submission_updated' | 'abandoned_cart_h+1' | 'abandoned_cart_j+1' | 'abandoned_cart_j+3' | 'abandoned_cart_j+7' | 'abandoned_cart_j+10' | 'abandoned_cart_j+15' | 'abandoned_cart_j+30'
   recipient_email: string
   recipient_name: string
   recipient_type: 'client' | 'notary'
   data: {
     submission_id?: string
     submission_number?: string
-    notary_name?: string
     file_name?: string
     file_url?: string
     message_preview?: string
@@ -257,24 +23,10 @@ interface EmailRequest {
     payment_amount?: number
     payment_date?: string
     error_message?: string
-    client_name?: string
-    appointment_date?: string
-    appointment_time?: string
-    timezone?: string
-    client_timezone?: string
-    notary_timezone?: string
-    address?: string
-    city?: string
-    country?: string
-    old_price?: number
-    new_price?: number
-    price_changed?: boolean
-    services?: string
-    updated_fields?: {
-      personal_info?: boolean
-      address?: boolean
-      services?: boolean
-      appointment?: boolean
+    updated_fields?: string
+    notification_id?: string
+    contact?: {
+      PRENOM?: string
     }
   }
 }
@@ -286,9 +38,19 @@ serve(async (req) => {
   }
 
   try {
+    console.log('📧 [send-transactional-email] Request received')
     const emailRequest: EmailRequest = await req.json()
+    console.log('📧 [send-transactional-email] Email request parsed:', {
+      email_type: emailRequest.email_type,
+      recipient_email: emailRequest.recipient_email,
+      recipient_name: emailRequest.recipient_name,
+      recipient_type: emailRequest.recipient_type,
+      has_submission_id: !!emailRequest.data?.submission_id,
+      submission_id: emailRequest.data?.submission_id,
+    })
 
     if (!emailRequest.email_type || !emailRequest.recipient_email || !emailRequest.recipient_name) {
+      console.error('❌ [send-transactional-email] Missing required fields')
       return new Response(
         JSON.stringify({ error: 'email_type, recipient_email, and recipient_name are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -303,20 +65,25 @@ serve(async (req) => {
     const NOTARY_DASHBOARD_URL = Deno.env.get('NOTARY_DASHBOARD_URL') || 'https://notary.mynotary.io'
 
     if (!SENDGRID_API_KEY) {
-      console.error('SENDGRID_API_KEY is not set')
+      console.error('❌ [send-transactional-email] SENDGRID_API_KEY is not set')
       return new Response(
         JSON.stringify({ error: 'SendGrid API key is not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+    
+    console.log('✅ [send-transactional-email] Environment variables loaded')
 
     // Determine dashboard URL
     const dashboardUrl = emailRequest.recipient_type === 'notary' ? NOTARY_DASHBOARD_URL : CLIENT_DASHBOARD_URL
 
     // Generate email HTML based on type
+    console.log('📧 [send-transactional-email] Generating email template...')
     const { subject, html, attachments } = generateEmailTemplate(emailRequest, dashboardUrl)
+    console.log('✅ [send-transactional-email] Email template generated, subject:', subject)
 
     // Prepare SendGrid payload
+    console.log('📧 [send-transactional-email] Preparing SendGrid payload...')
     const sendGridPayload: any = {
       from: {
         email: SENDGRID_FROM_EMAIL,
@@ -326,6 +93,11 @@ serve(async (req) => {
         {
           to: [{ email: emailRequest.recipient_email, name: emailRequest.recipient_name }],
           subject: subject,
+          // Add custom_args to track submission_id and email_type in webhooks
+          custom_args: {
+            submission_id: emailRequest.data?.submission_id || '',
+            email_type: emailRequest.email_type || '',
+          },
         },
       ],
       content: [
@@ -334,6 +106,16 @@ serve(async (req) => {
           value: html,
         },
       ],
+      // Enable click tracking and open tracking
+      tracking_settings: {
+        click_tracking: {
+          enable: true,
+          enable_text: true,
+        },
+        open_tracking: {
+          enable: true,
+        },
+      },
     }
 
     // Add attachments if invoice PDF is provided
@@ -342,6 +124,7 @@ serve(async (req) => {
     }
 
     // Send email via SendGrid
+    console.log('📧 [send-transactional-email] Sending email via SendGrid...')
     const sendGridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {
@@ -351,9 +134,11 @@ serve(async (req) => {
       body: JSON.stringify(sendGridPayload),
     })
 
+    console.log('📧 [send-transactional-email] SendGrid response status:', sendGridResponse.status)
+
     if (!sendGridResponse.ok) {
       const errorText = await sendGridResponse.text()
-      console.error('SendGrid error:', sendGridResponse.status, errorText)
+      console.error('❌ [send-transactional-email] SendGrid error:', sendGridResponse.status, errorText)
       return new Response(
         JSON.stringify({ 
           error: 'Failed to send email', 
@@ -364,7 +149,99 @@ serve(async (req) => {
       )
     }
 
-    console.log('Email sent successfully to:', emailRequest.recipient_email, 'Type:', emailRequest.email_type)
+    // Extract SendGrid message ID from response headers
+    const sgMessageId = sendGridResponse.headers.get('x-message-id') || null
+    console.log('📧 [Email Logging] SendGrid message ID:', sgMessageId)
+
+    // Log email in email_sent table
+    try {
+      console.log('📧 [Email Logging] Starting email logging process...')
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      
+      if (!supabaseUrl) {
+        console.error('❌ [Email Logging] SUPABASE_URL is not set!')
+        throw new Error('SUPABASE_URL environment variable is not set')
+      }
+      
+      if (!supabaseServiceKey) {
+        console.error('❌ [Email Logging] SUPABASE_SERVICE_ROLE_KEY is not set!')
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is not set')
+      }
+      
+      console.log('📧 [Email Logging] Creating Supabase client...')
+      const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+      // Get client_id from submission if submission_id is provided
+      let clientId = null
+      if (emailRequest.data?.submission_id) {
+        console.log('📧 [Email Logging] Fetching client_id for submission:', emailRequest.data.submission_id)
+        const { data: submission, error: submissionError } = await supabase
+          .from('submission')
+          .select('client_id')
+          .eq('id', emailRequest.data.submission_id)
+          .single()
+        
+        if (submissionError) {
+          console.error('❌ [Email Logging] Error fetching submission:', submissionError)
+        } else {
+          console.log('📧 [Email Logging] Submission data:', submission)
+          if (submission?.client_id) {
+            clientId = submission.client_id
+            console.log('📧 [Email Logging] Found client_id:', clientId)
+          } else {
+            console.log('📧 [Email Logging] No client_id found for submission')
+          }
+        }
+      } else {
+        console.log('📧 [Email Logging] No submission_id provided, skipping client_id lookup')
+      }
+
+      // Prepare insert data
+      const insertData = {
+        email: emailRequest.recipient_email,
+        recipient_name: emailRequest.recipient_name,
+        recipient_type: emailRequest.recipient_type,
+        email_type: emailRequest.email_type,
+        subject: subject,
+        html_content: html, // Store HTML content
+        submission_id: emailRequest.data?.submission_id || null,
+        client_id: clientId,
+        notification_id: emailRequest.data?.notification_id || null,
+        sg_message_id: sgMessageId,
+      }
+      
+      console.log('📧 [Email Logging] Insert data prepared:', JSON.stringify(insertData, null, 2))
+      console.log('📧 [Email Logging] Attempting to insert into email_sent table...')
+
+      // Insert email record
+      const { data: insertData_result, error: insertError } = await supabase
+        .from('email_sent')
+        .insert(insertData)
+        .select()
+
+      if (insertError) {
+        console.error('❌ [Email Logging] Error inserting into email_sent table!')
+        console.error('❌ [Email Logging] Error details:', JSON.stringify(insertError, null, 2))
+        console.error('❌ [Email Logging] Error code:', insertError.code)
+        console.error('❌ [Email Logging] Error message:', insertError.message)
+        console.error('❌ [Email Logging] Error hint:', insertError.hint)
+        console.error('❌ [Email Logging] Insert data that failed:', JSON.stringify(insertData, null, 2))
+        // Don't fail the email send if logging fails
+      } else {
+        console.log('✅ [Email Logging] Successfully inserted email into email_sent table!')
+        console.log('✅ [Email Logging] Insert result:', JSON.stringify(insertData_result, null, 2))
+      }
+    } catch (logError: any) {
+      console.error('❌ [Email Logging] Exception during email logging!')
+      console.error('❌ [Email Logging] Error type:', logError?.constructor?.name)
+      console.error('❌ [Email Logging] Error message:', logError?.message)
+      console.error('❌ [Email Logging] Error stack:', logError?.stack)
+      console.error('❌ [Email Logging] Full error object:', JSON.stringify(logError, Object.getOwnPropertyNames(logError), 2))
+      // Don't fail the email send if logging fails
+    }
+
+    console.log('✅ [send-transactional-email] Email sent successfully to:', emailRequest.recipient_email, 'Type:', emailRequest.email_type, 'Message ID:', sgMessageId)
 
     return new Response(
       JSON.stringify({ 
@@ -375,10 +252,14 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-  } catch (error) {
-    console.error('Error:', error)
+  } catch (error: any) {
+    console.error('❌ [send-transactional-email] Exception caught!')
+    console.error('❌ [send-transactional-email] Error type:', error?.constructor?.name)
+    console.error('❌ [send-transactional-email] Error message:', error?.message)
+    console.error('❌ [send-transactional-email] Error stack:', error?.stack)
+    console.error('❌ [send-transactional-email] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error?.message || 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
@@ -390,16 +271,25 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
   let html = ''
   const attachments: any[] = []
 
-  // Base HTML structure - styled exactly like Papers email
-  // Logo in top-left, no banner, black button, Geist font
-  const baseHTML = (content: string) => `
-<!DOCTYPE html>
+  // Helper function to format amount
+  const formatAmount = (amount: number | undefined): string => {
+    if (!amount) return ''
+    return `$${parseFloat(amount.toString()).toFixed(2)}`
+  }
+
+  // Generate template based on email type
+  switch (email_type) {
+    case 'payment_success':
+      subject = 'Payment confirmed for your certification'
+      const submissionNumber = data.submission_number || data.submission_id?.substring(0, 8) || ''
+      const amount = formatAmount(data.payment_amount)
+      html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>${subject}</title>
+  <title>Payment confirmed for your certification</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -409,22 +299,18 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     </xml>
   </noscript>
   <![endif]-->
-  <!-- Google Fonts - Geist -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style type="text/css">
-    /* Geist Font for email clients that support web fonts */
     @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
     
-    /* Fallback for email clients */
     body, table, td, p, a, li, blockquote {
       -webkit-text-size-adjust: 100%;
       -ms-text-size-adjust: 100%;
       font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
     }
     
-    /* Outlook specific fixes */
     table {
       mso-table-lspace: 0pt;
       mso-table-rspace: 0pt;
@@ -436,6 +322,38 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
       outline: none;
       text-decoration: none;
     }
+
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
   </style>
   <!--[if mso]>
   <style type="text/css">
@@ -446,63 +364,67 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
   <![endif]-->
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
-  <!-- Main Container -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; padding: 40px 20px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
     <tr>
-      <td align="center" style="padding: 0;">
-        <!-- Email Content Card -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
-          <!-- Logo in top-left corner (no banner) -->
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
           <tr>
-            <td style="padding: 50px 50px 0 50px; background-color: #ffffff;">
-              <!-- Logo - Black version, positioned top-left like Papers -->
-              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="MY NOTARY" width="130" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
             </td>
           </tr>
           
-          <!-- Content -->
           <tr>
-            <td style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-              ${content}
-            </td>
-          </tr>
-          
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-              <!-- Footer Separator -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
-                <tr>
-                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
-                </tr>
-              </table>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${recipient_name},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Your payment for submission <strong style="color: #222222; font-weight: 600;">#${submissionNumber}</strong> has been confirmed.
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Amount paid: <strong style="color: #222222; font-weight: 600;">${amount}</strong>
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Your certification request is now being processed. You'll receive a notification once your certified document is ready.
+              </p>
               
-              <!-- Footer Content with Logo and Text -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 20px 0;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
                 <tr>
-                  <td style="padding: 0;">
-                    <!-- Logo and Text -->
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
                       <tr>
-                        <td style="padding: 0 12px 0 0; vertical-align: middle;">
-                          <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="MY NOTARY" width="100" style="width: 100px; max-width: 100px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
-                        </td>
-                        <td style="padding: 0; vertical-align: middle;">
-                          <p style="margin: 0; font-size: 18px; font-weight: 700; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-                            MY NOTARY
-                          </p>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="${dashboardUrl}/submission/${data.submission_id}" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            View my submission →
+                          </a>
                         </td>
                       </tr>
                     </table>
                   </td>
                 </tr>
               </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you have any questions, simply reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
               <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
-                This is an automated email from <strong style="color: #000000; font-weight: 600;">MY NOTARY</strong>.<br>
-                Please do not reply to this email.
+                Best regards,<br>
+                The My Notary Team
               </p>
               <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-                <a href="${dashboardUrl}" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Visit Dashboard</a>
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
               </p>
             </td>
           </tr>
@@ -511,503 +433,1891 @@ function generateEmailTemplate(request: EmailRequest, dashboardUrl: string): { s
     </tr>
   </table>
 </body>
-</html>
-  `.trim()
-
-  // Generate template based on email type
-  switch (email_type) {
-    case 'payment_success':
-      subject = `✅ Payment Confirmed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Your payment for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> has been confirmed successfully.
-        </p>
-        ${data.payment_amount ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Amount paid: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">$${parseFloat(data.payment_amount.toString()).toFixed(2)}</strong>${data.payment_date ? ` on ${new Date(data.payment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}` : ''}.
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          ${data.invoice_url ? 'You can download your invoice using the link below.' : 'If you have any questions, our team is here to help.'}
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black (like Papers but black) -->
-        ${data.invoice_url || data.invoice_pdf ? `
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px;">
-          <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${data.invoice_url || '#'}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      Download Invoice
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-        ` : ''}
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
-          <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Submission Details
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      `)
-      
-      // Add invoice as attachment if provided as base64
-      if (data.invoice_pdf) {
-        attachments.push({
-          content: data.invoice_pdf,
-          filename: `invoice-${data.submission_id || 'invoice'}.pdf`,
-          type: 'application/pdf',
-          disposition: 'attachment'
-        })
-      }
+</html>`
       break
 
     case 'payment_failed':
-      subject = `❌ Payment Failed - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          The payment for your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> has failed.
-        </p>
-        ${data.error_message ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Reason: ${data.error_message}
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Please try the payment again using the link below. If you have any questions, our team is here to help.
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
-          <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      Retry Payment
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      `)
-      break
+      subject = `Payment failed for submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
+      const submissionNumberFailed = data.submission_number || data.submission_id?.substring(0, 8) || ''
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Payment failed for your certification</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
 
-    case 'notary_assigned':
-      subject = `👤 Notary Assigned - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          A notary has been assigned to your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
-        </p>
-        ${data.notary_name ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Assigned notary: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.notary_name}</strong>.
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          You can now communicate with the notary and track the progress of your submission. If you have any questions, our team is here to help.
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
           <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${recipient_name},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Unfortunately, the payment for your submission <strong style="color: #222222; font-weight: 600;">#${submissionNumberFailed}</strong> could not be processed.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Please try again using a different payment method or check with your bank. Your certification request will remain on hold until the payment is completed.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
                 <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Submission
-                    </a>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="${dashboardUrl}/submission/${data.submission_id}" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Retry payment →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you need assistance, simply reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                The My Notary Team
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
             </td>
           </tr>
         </table>
-      `)
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
       break
 
     case 'notarized_file_uploaded':
-      subject = `📄 Notarized Document Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          A new notarized document has been added to your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
-        </p>
-        ${data.file_name ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Document: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.file_name}</strong>
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          You can view and download your notarized documents using the link below. If you have any questions, our team is here to help.
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+      subject = 'Your certified document is ready'
+      const submissionNumberNotarized = data.submission_number || data.submission_id?.substring(0, 8) || ''
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Your certified document is ready</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
           <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${recipient_name},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Great news! Your certified document for submission <strong style="color: #222222; font-weight: 600;">#${submissionNumberNotarized}</strong> is now ready.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                You can download your certified document directly from your dashboard. This document is officially recognised for administrative, banking, and legal purposes.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
                 <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}?tab=notarized" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Notarized Documents
-                    </a>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="${dashboardUrl}/submission/${data.submission_id}?tab=notarized" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Download my document →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Thank you for using My Notary. If you have any questions, simply reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                The My Notary Team
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
             </td>
           </tr>
         </table>
-      `)
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
       break
 
     case 'message_received':
-      subject = `💬 New Message - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          You have received a new message regarding your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
-        </p>
-        ${data.message_preview ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-style: italic; padding-left: 16px; border-left: 2px solid #E5E5E5;">
-          "${data.message_preview}"
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          You can view and respond to the message using the link below. If you have any questions, our team is here to help.
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
-          <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Conversation
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      `)
-      break
+      subject = 'New message regarding your certification'
+      const submissionNumberMessage = data.submission_number || data.submission_id?.substring(0, 8) || ''
+      const messagePreview = data.message_preview || ''
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>New message regarding your certification</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
 
-    case 'new_submission_available':
-      subject = `📋 New Submission Available - Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
-      // Convert appointment date/time to notary's timezone if both timezones are provided
-      let appointmentDisplayDate = data.appointment_date ? new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-      let appointmentDisplayTime = data.appointment_time ? formatTime12h(data.appointment_time) : '';
-      let appointmentTimezone = '';
-      
-      console.log('🔍 [TIMEZONE CONVERSION] Data received:', {
-        appointment_date: data.appointment_date,
-        appointment_time: data.appointment_time,
-        client_timezone: data.client_timezone,
-        notary_timezone: data.notary_timezone
-      });
-      
-      // Use Miami (America/New_York) as default if notary timezone is not provided
-      const notaryTimezone = data.notary_timezone || 'America/New_York';
-      // Use UTC as default if client timezone is not provided
-      const clientTimezone = data.client_timezone || 'UTC';
-      
-      if (data.appointment_date && data.appointment_time) {
-        console.log('✅ [TIMEZONE CONVERSION] Converting timezone...', {
-          clientTimezone,
-          notaryTimezone
-        });
-        const converted = convertToNotaryTimezone(
-          data.appointment_date,
-          data.appointment_time,
-          clientTimezone,
-          notaryTimezone
-        );
-        console.log('✅ [TIMEZONE CONVERSION] Converted result:', converted);
-        appointmentDisplayDate = converted.date;
-        appointmentDisplayTime = formatTime12h(converted.time);
-        appointmentTimezone = converted.timezone;
-      } else {
-        console.log('⚠️ [TIMEZONE CONVERSION] Missing appointment date/time, using original values');
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
       }
-      
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          A new notary submission has been registered and is now available for assignment.
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Submission #${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>
-        </p>
-        ${data.client_name ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.client_name}</strong>
-        </p>
-        ` : ''}
-        ${data.appointment_date ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${appointmentDisplayDate}${appointmentDisplayTime ? ` at ${appointmentDisplayTime}` : ''}${appointmentTimezone ? ` (${appointmentTimezone})` : ''}</strong>
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          You can view and accept this submission from your dashboard. If you have any questions, our team is here to help.
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
           <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 280px;">
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${recipient_name},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                You have received a new message regarding submission <strong style="color: #222222; font-weight: 600;">#${submissionNumberMessage}</strong>.
+              </p>
+              <p class="body-text" style="margin: 0 0 30px; font-size: 17px; line-height: 1.7; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-style: italic; padding-left: 16px; border-left: 2px solid #E5E5E5;">
+                "${messagePreview}"
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Please respond at your earliest convenience.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
                 <tr>
-                  <td align="center" style="border-radius: 25px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Submission
-                    </a>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="${dashboardUrl}/submission/${data.submission_id}" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            View conversation →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
-            </td>
-          </tr>
-        </table>
-      `)
-      break
 
-    case 'appointment_reminder_day_before':
-      subject = `⏰ Appointment Reminder - Tomorrow at ${data.appointment_time ? formatTime12h(data.appointment_time) : ''}`
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          This is a reminder that you have an appointment <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">tomorrow</strong> for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong>.
-        </p>
-        ${data.appointment_date && data.appointment_time ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Date: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${new Date(data.appointment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} at ${formatTime12h(data.appointment_time)}</strong>${data.timezone ? ` (${data.timezone})` : ''}
-        </p>
-        ` : ''}
-        ${data.client_name ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">${data.client_name}</strong>
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Please make sure you are prepared for the appointment. If you have any questions or need to reschedule, please contact us as soon as possible.
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you have any questions, simply reply to this email.
+              </p>
+            </td>
+          </tr>
+          
           <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
                 <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Submission Details
-                    </a>
-                  </td>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
                 </tr>
               </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                The My Notary Team
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
             </td>
           </tr>
         </table>
-      `)
-      break
-
-    case 'appointment_reminder_one_hour_before':
-      subject = `⏰ Appointment Reminder - ${data.appointment_date ? new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Your Appointment'}`
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          This is a reminder that your appointment for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> is scheduled in <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">1 hour</strong>.
-        </p>
-        ${data.appointment_date && data.appointment_time ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Date:</strong> ${new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br>
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Time:</strong> ${formatTime12h(data.appointment_time)}${data.timezone ? ` (${data.timezone})` : ''}
-        </p>
-        ` : ''}
-        ${data.address ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Location:</strong> ${data.address}${data.city ? `, ${data.city}` : ''}${data.country ? `, ${data.country}` : ''}
-        </p>
-        ` : ''}
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Please make sure you're ready for your appointment. If you need to reschedule or have any questions, please contact us.
-        </p>
-        
-        <!-- Call to Action Button -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
-          <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Submission Details
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      `)
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
       break
 
     case 'submission_updated':
-      subject = `📝 Submission Updated - #${data.submission_number || data.submission_id?.substring(0, 8) || ''}`
-      
-      // Build list of changes
-      const changesList = []
-      if (data.updated_fields?.personal_info) {
-        changesList.push('Personal information')
+      subject = 'Your submission has been updated'
+      const submissionNumberUpdated = data.submission_number || data.submission_id?.substring(0, 8) || ''
+      const updatedFields = data.updated_fields || 'Various details'
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Your submission has been updated</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
       }
-      if (data.updated_fields?.address) {
-        changesList.push('Address')
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
       }
-      if (data.updated_fields?.services) {
-        changesList.push('Services')
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
       }
-      if (data.updated_fields?.appointment) {
-        changesList.push('Appointment date/time')
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
       }
-      if (data.price_changed) {
-        changesList.push('Price')
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
       }
-      
-      const changesText = changesList.length > 0 
-        ? changesList.join(', ')
-        : 'Various details'
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#${data.submission_number || data.submission_id?.substring(0, 8) || ''}</strong> has been updated.
-        </p>
-        
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Updated fields:</strong> ${changesText}
-        </p>
-        
-        ${data.price_changed && data.old_price !== undefined && data.new_price !== undefined ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Price change:</strong> $${parseFloat(data.old_price.toString()).toFixed(2)} → <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">$${parseFloat(data.new_price.toString()).toFixed(2)}</strong>
-        </p>
-        ` : ''}
-        
-        ${data.services ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Services:</strong> ${data.services}
-        </p>
-        ` : ''}
-        
-        ${data.appointment_date && data.appointment_time ? `
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Appointment:</strong> ${new Date(data.appointment_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at ${formatTime12h(data.appointment_time)}${data.timezone ? ` (${data.timezone})` : ''}
-        </p>
-        ` : ''}
-        
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Please review the updated details in your dashboard. If you have any questions or concerns, please don't hesitate to contact us.
-        </p>
-        
-        <!-- Call to Action Button -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
           <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${recipient_name},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Your submission <strong style="color: #222222; font-weight: 600;">#${submissionNumberUpdated}</strong> has been updated.
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <strong style="color: #222222; font-weight: 600;">Updated fields:</strong> ${updatedFields}
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Please review the updated details in your dashboard.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
                 <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}/submission/${data.submission_id}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Updated Submission
-                    </a>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="${dashboardUrl}/submission/${data.submission_id}" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            View submission →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you have any questions, simply reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                The My Notary Team
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
             </td>
           </tr>
         </table>
-      `)
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+      break
+
+    case 'abandoned_cart_h+1':
+      subject = 'Your certification is waiting'
+      const prenomH1 = data.contact?.PRENOM || recipient_name
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Your certification is waiting</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    /* Mobile Styles */
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${prenomH1},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                You started a certification request on <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</strong> but didn't complete it.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Your documents are ready to be processed — just one step left to receive your certified document.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="https://app.mynotary.io/form" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Complete my request →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you have any questions, simply reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                The My Notary Team
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+      break
+
+    case 'abandoned_cart_j+1':
+      subject = 'A question about your certification?'
+      const prenomJ1 = data.contact?.PRENOM || recipient_name
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>A question about your certification?</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    /* Mobile Styles */
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${prenomJ1},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                I'm following up as your certification request hasn't been completed yet.
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Perhaps you have a question? Here are the most common ones:
+              </p>
+              
+              <p class="body-text" style="margin: 0 0 10px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <strong style="color: #222222; font-weight: 600;">How long does it take?</strong><br>
+                Your certified document is usually ready within 1 hour.
+              </p>
+              <p class="body-text" style="margin: 0 0 10px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <strong style="color: #222222; font-weight: 600;">Is it officially recognised?</strong><br>
+                Yes, our certifications are valid for administrative, banking, and legal purposes.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <strong style="color: #222222; font-weight: 600;">Is it 100% online?</strong><br>
+                Absolutely, the entire process is done remotely.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="https://app.mynotary.io/form" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Complete my request →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Another question? Reply to this email, I'll get back to you personally.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                Jeremy<br>
+                Founder, My Notary
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+      break
+
+    case 'abandoned_cart_j+3':
+      subject = 'Last chance for your certification'
+      const prenomJ3 = data.contact?.PRENOM || recipient_name
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Last chance for your certification</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    /* Mobile Styles */
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${prenomJ3},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Your session on My Notary is about to expire.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you still need to get your documents certified, now is the time to complete your request. After this, you'll need to start the process again from the beginning.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="https://app.mynotary.io/form" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Complete my certification →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                We remain at your disposal if you have any questions.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                Jeremy
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+      break
+
+    case 'abandoned_cart_j+7':
+      subject = 'Still need your document certified?'
+      const prenomJ7 = data.contact?.PRENOM || recipient_name
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Still need your document certified?</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    /* Mobile Styles */
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${prenomJ7},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                A week ago, you started a certification request on My Notary. I wanted to check in — do you still need your document certified?
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                The process takes just a few minutes, and your certified document is typically ready within 1 hour — all done 100% online.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="https://app.mynotary.io/form" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Get my document certified →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you ran into any issues or have questions, just reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                Jeremy<br>
+                Founder, My Notary
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+      break
+
+    case 'abandoned_cart_j+10':
+      subject = 'Why thousands trust My Notary'
+      const prenomJ10 = data.contact?.PRENOM || recipient_name
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Trusted by thousands across Europe</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    /* Mobile Styles */
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${prenomJ10},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                I noticed you haven't completed your certification yet. I understand — trusting an online service with important documents can feel uncertain.
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Here's what you should know about My Notary:
+              </p>
+              
+              <p class="body-text" style="margin: 0 0 10px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <strong style="color: #222222; font-weight: 600;">✓ Certified notaries</strong><br>
+                We work exclusively with licensed, certified notaries.
+              </p>
+              <p class="body-text" style="margin: 0 0 10px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <strong style="color: #222222; font-weight: 600;">✓ Legally recognised</strong><br>
+                Our certifications are accepted for administrative, banking, and legal purposes.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <strong style="color: #222222; font-weight: 600;">✓ Secure & confidential</strong><br>
+                Your documents are encrypted and handled with the highest security standards.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="https://app.mynotary.io/form" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Complete my certification →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Still have doubts? I'm happy to answer any questions personally — just reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                Jeremy<br>
+                Founder, My Notary
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+      break
+
+    case 'abandoned_cart_j+15':
+      subject = 'Can I help you with anything?'
+      const prenomJ15 = data.contact?.PRENOM || recipient_name
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Can I help you with anything?</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    /* Mobile Styles */
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${prenomJ15},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                It's been a couple of weeks since you started your certification request. I wanted to reach out personally to see if there's anything I can help with.
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you encountered any issues during the process, or if our service doesn't quite fit what you need, I'd genuinely appreciate your feedback. It helps us improve.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                And if you still need your document certified, I'm here to make sure everything goes smoothly.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="https://app.mynotary.io/form" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Complete my certification →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Just hit reply — I read every email personally.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                Jeremy<br>
+                Founder, My Notary
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+      break
+
+    case 'abandoned_cart_j+30':
+      subject = "We're here when you need us"
+      const prenomJ30 = data.contact?.PRENOM || recipient_name
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>We're here when you need us</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    /* Mobile Styles */
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <tr>
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${prenomJ30},
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                This will be my last email about your certification request.
+              </p>
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                I understand timing isn't always right, or perhaps you found another solution. Either way, no hard feelings.
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you ever need a document certified in the future — whether it's a passport copy, diploma, ID, or any other document — <strong style="color: #222222; font-weight: 600;">My Notary</strong> will be here. Fast, online, and officially recognised.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="https://mynotary.io" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Visit mynotary.io →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Wishing you all the best.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                Jeremy<br>
+                Founder, My Notary
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
       break
 
     default:
-      subject = '📧 MY NOTARY Notification'
-      html = baseHTML(`
-        <!-- Body Content - Left Aligned -->
-        <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          Hi ${recipient_name},
-        </p>
-        <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          You have a new notification. If you have any questions, our team is here to help.
-        </p>
-        
-        <!-- Call to Action Button - Centered, Rounded, Black -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+      subject = 'Notification from My Notary'
+      html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Notification from My Notary</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    @media only screen and (max-width: 620px) {
+      .outer-wrapper {
+        padding: 10px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .header-cell {
+        padding: 30px 20px 0 20px !important;
+      }
+      .content-cell {
+        padding: 40px 20px 30px 20px !important;
+      }
+      .footer-cell {
+        padding: 0 20px 25px 20px !important;
+      }
+      .cta-button {
+        width: 100% !important;
+      }
+      .cta-link {
+        padding: 14px 24px !important;
+        font-size: 14px !important;
+      }
+      .body-text {
+        font-size: 16px !important;
+      }
+      .logo-img {
+        width: 110px !important;
+      }
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" class="outer-wrapper" style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
           <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <td class="header-cell" style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="mynotary.io" width="130" class="logo-img" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="content-cell" style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <p class="body-text" style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi ${recipient_name},
+              </p>
+              <p class="body-text" style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                You have a new notification from My Notary. Please visit your dashboard for more details.
+              </p>
+              
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px 0;">
                 <tr>
-                  <td align="center" style="border-radius: 30px; background-color: #000000;">
-                    <a href="${dashboardUrl}" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
-                      View Dashboard
-                    </a>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta-button" style="width: 280px;">
+                      <tr>
+                        <td align="center" style="border-radius: 25px; background-color: #000000;">
+                          <a href="${dashboardUrl}" class="cta-link" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Go to dashboard →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
+
+              <p class="body-text" style="margin: 0; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                If you have any questions, simply reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td class="footer-cell" style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                Best regards,<br>
+                The My Notary Team
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="https://mynotary.io" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">mynotary.io</a>
+              </p>
             </td>
           </tr>
         </table>
-      `)
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
   }
 
   return { subject, html, attachments: attachments.length > 0 ? attachments : undefined }

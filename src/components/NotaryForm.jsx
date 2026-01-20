@@ -17,6 +17,7 @@ const NotaryForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
@@ -235,6 +236,141 @@ const NotaryForm = () => {
         navigate(step.path);
       }
     }
+  };
+
+  const handleContinueClick = async () => {
+    // Create client/user and link to submission at Personal Info step (step 5)
+    // This MUST happen before nextStep() to ensure client/user exist
+    if (currentStep === 5) {
+      console.log('%c🚨🚨🚨 STEP 5 DETECTED - STARTING CLIENT CREATION 🚨🚨🚨', 'background: red; color: white; font-size: 24px; padding: 15px; font-weight: bold;');
+      console.warn('🚨🚨🚨 STEP 5 - CLIENT CREATION STARTING 🚨🚨🚨');
+      console.error('🔴🔴🔴 STEP 5 - ERROR LOG TO MAKE IT VISIBLE 🔴🔴🔴');
+      
+      setIsCreatingUser(true);
+      try {
+        console.log('%c👤👤👤 STEP 5: Creating/updating client/user 👤👤👤', 'background: orange; color: white; font-size: 20px; padding: 10px;');
+        console.log('👤 [NOTARY-FORM] Email:', formData.email);
+        console.log('👤 [NOTARY-FORM] First name:', formData.firstName);
+        console.log('👤 [NOTARY-FORM] Last name:', formData.lastName);
+        
+        // Validate required fields
+        if (!formData.email || !formData.firstName || !formData.lastName) {
+          console.error('❌ [NOTARY-FORM] Missing required fields for client creation');
+          alert('Email, prénom et nom sont requis pour créer le compte');
+          setIsCreatingUser(false);
+          return; // Don't proceed if required fields are missing
+        }
+        
+        // Get session ID
+        const sessionId = localStorage.getItem('formSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        if (!localStorage.getItem('formSessionId')) {
+          localStorage.setItem('formSessionId', sessionId);
+        }
+
+        // Find existing submission by session_id
+        console.log('🔍 [NOTARY-FORM] Looking for existing submission with session_id:', sessionId);
+        const { data: submissions } = await supabase
+          .from('submission')
+          .select('id, data')
+          .eq('status', 'pending_payment')
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        let submissionId = null;
+        if (submissions && submissions.length > 0) {
+          const foundSubmission = submissions.find(sub => 
+            sub.data?.session_id === sessionId
+          );
+          if (foundSubmission) {
+            submissionId = foundSubmission.id;
+            console.log('✅ [NOTARY-FORM] Found existing submission:', submissionId);
+          } else {
+            console.log('ℹ️ [NOTARY-FORM] No submission found with matching session_id');
+          }
+        }
+
+        // Call Edge Function to create client/user and link to submission
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        const requestBody = {
+          email: formData.email.trim().toLowerCase(), // Normalize email
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          phone: formData.phone || null,
+          address: formData.address || null,
+          city: formData.city || null,
+          postalCode: formData.postalCode || null,
+          country: formData.country || null,
+          selectedServices: formData.selectedOptions || [], // Use selectedOptions in this version
+          documents: {}, // Edge Function expects an object, not an array - empty for this simplified version
+          deliveryMethod: null, // Not used in this version
+          signatories: [], // Not used in this version
+          currentStep: currentStep,
+          sessionId: sessionId,
+          submissionId: submissionId
+        };
+        
+        console.log('%c📤 CALLING EDGE FUNCTION', 'background: purple; color: white; font-size: 18px; padding: 8px;');
+        console.log('📤 [NOTARY-FORM] Calling create-client-and-submission with:', requestBody);
+        console.warn('⚠️ [NOTARY-FORM] About to call Edge Function');
+        console.error('🔴 [NOTARY-FORM] Edge Function call starting');
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/create-client-and-submission`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || ''}`,
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        console.log('%c📥 RESPONSE RECEIVED', 'background: cyan; color: black; font-size: 18px; padding: 8px;');
+        const result = await response.json();
+        console.log('📥 [NOTARY-FORM] Response status:', response.status);
+        console.log('📥 [NOTARY-FORM] Response OK?', response.ok);
+        console.warn('⚠️ [NOTARY-FORM] Response status:', response.status);
+        console.error('🔴 [NOTARY-FORM] Response OK:', response.ok);
+        console.log('📥 [NOTARY-FORM] Response data:', JSON.stringify(result, null, 2));
+
+        if (!response.ok) {
+          console.error('❌❌❌ [NOTARY-FORM] Error creating client/user ❌❌❌');
+          console.error('❌ [NOTARY-FORM] Status:', response.status);
+          console.error('❌ [NOTARY-FORM] Error code:', result.errorCode);
+          console.error('❌ [NOTARY-FORM] Error message:', result.error);
+          console.error('❌ [NOTARY-FORM] Error details:', result.errorDetails);
+          console.error('❌ [NOTARY-FORM] Error hint:', result.errorHint);
+          console.error('❌ [NOTARY-FORM] Full error:', result);
+          
+          // Show more detailed error message
+          const errorMessage = result.error || 'Erreur lors de la création du compte. Veuillez réessayer.';
+          alert(errorMessage + (result.errorCode ? ` (Code: ${result.errorCode})` : ''));
+          setIsCreatingUser(false);
+          return; // Don't proceed to next step if client/user creation failed
+        } else {
+          console.log('✅✅✅ [NOTARY-FORM] Client/user created/updated successfully ✅✅✅');
+          console.log('✅ [NOTARY-FORM] Client ID:', result.client_id);
+          console.log('✅ [NOTARY-FORM] User ID:', result.user_id);
+          console.log('✅ [NOTARY-FORM] Submission ID:', result.submission_id);
+          
+          // Update formData with submission ID if it was created/updated
+          if (result.submission_id && !formData.submissionId) {
+            updateFormData({ submissionId: result.submission_id });
+          }
+        }
+      } catch (error) {
+        console.error('❌❌❌ [NOTARY-FORM] Unexpected error creating client/user ❌❌❌');
+        console.error('❌ [NOTARY-FORM] Error:', error);
+        alert('Erreur lors de la création du compte. Veuillez réessayer.');
+        setIsCreatingUser(false);
+        return; // Don't proceed to next step if error occurred
+      } finally {
+        setIsCreatingUser(false);
+      }
+    }
+    
+    // Proceed to next step
+    nextStep();
   };
 
   const handleSubmit = async () => {
@@ -456,6 +592,8 @@ const NotaryForm = () => {
                   updateFormData={updateFormData}
                   nextStep={nextStep}
                   prevStep={prevStep}
+                  handleContinueClick={handleContinueClick}
+                  isCreatingUser={isCreatingUser}
                 />
               }
             />

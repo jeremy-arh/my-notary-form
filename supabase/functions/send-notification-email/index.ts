@@ -201,20 +201,43 @@ serve(async (req) => {
         {
           to: [{ email: userEmailData.email, name: templateData.user_name }],
           dynamic_template_data: templateData,
+          // Add custom_args to track notification_id and email_type in webhooks
+          custom_args: {
+            notification_id: notif.id || '',
+            submission_id: notif.action_data?.submission_id || '',
+            email_type: 'notification',
+          },
         },
       ],
       template_id: SENDGRID_TEMPLATE_ID,
+      // Enable click tracking and open tracking
+      tracking_settings: {
+        click_tracking: {
+          enable: true,
+          enable_text: true,
+        },
+        open_tracking: {
+          enable: true,
+        },
+      },
     }
 
-    // If no template ID, use plain HTML email
+    // Generate HTML content for storage (even if using template)
+    let htmlContent: string | null = null
     if (!SENDGRID_TEMPLATE_ID) {
+      // If no template ID, use plain HTML email
+      htmlContent = generatePlainEmailHTML(notif, templateData)
       sendGridPayload.content = [
         {
           type: 'text/html',
-          value: generatePlainEmailHTML(notif, templateData),
+          value: htmlContent,
         },
       ]
       delete sendGridPayload.template_id
+    } else {
+      // If using template, generate a basic HTML version for storage
+      // Note: This won't be the exact template rendered by SendGrid, but a representation
+      htmlContent = generatePlainEmailHTML(notif, templateData)
     }
 
     const sendGridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
@@ -239,7 +262,55 @@ serve(async (req) => {
       )
     }
 
-    console.log('Email sent successfully to:', userEmailData.email)
+    // Extract SendGrid message ID from response headers
+    const sgMessageId = sendGridResponse.headers.get('x-message-id') || null
+
+    // Log email in email_sent table
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+      // Get client_id from user if available
+      let clientId = null
+      if (notif.user_type === 'client' && notif.user_id) {
+        const { data: client } = await supabase
+          .from('client')
+          .select('id')
+          .eq('id', notif.user_id)
+          .single()
+        
+        if (client?.id) {
+          clientId = client.id
+        }
+      }
+
+      // Insert email record with html_content
+      const { error: insertError } = await supabase
+        .from('email_sent')
+        .insert({
+          email: userEmailData.email,
+          recipient_name: templateData.user_name,
+          recipient_type: notif.user_type || 'client',
+          email_type: 'notification',
+          subject: notif.title,
+          html_content: htmlContent, // Store HTML content
+          submission_id: notif.action_data?.submission_id || null,
+          client_id: clientId,
+          notification_id: notif.id,
+          sg_message_id: sgMessageId,
+        })
+
+      if (insertError) {
+        console.error('Error logging email to email_sent:', insertError)
+        // Don't fail the email send if logging fails
+      }
+    } catch (logError) {
+      console.error('Error logging email:', logError)
+      // Don't fail the email send if logging fails
+    }
+
+    console.log('Email sent successfully to:', userEmailData.email, 'Message ID:', sgMessageId)
 
     return new Response(
       JSON.stringify({ 

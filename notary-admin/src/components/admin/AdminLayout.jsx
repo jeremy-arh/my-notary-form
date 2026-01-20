@@ -15,7 +15,7 @@ const AdminLayout = ({ children }) => {
   const menuItems = [
     { path: '/dashboard', name: 'Dashboard', icon: 'heroicons:chart-bar' },
     { path: '/users', name: 'Users', icon: 'heroicons:users' },
-    { path: '/submissions', name: 'Submissions', icon: 'heroicons:document-text' },
+    { path: '/crm', name: 'CRM', icon: 'heroicons:user-circle' },
     { path: '/notary', name: 'Notaries', icon: 'heroicons:user-group' },
     { path: '/stripe', name: 'Stripe Payments', icon: 'heroicons:credit-card' },
     { path: '/cashflow', name: 'Trésorerie', icon: 'heroicons:banknotes' },
@@ -274,7 +274,7 @@ const AdminLayout = ({ children }) => {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-80 min-h-screen bg-white">
+      <main className="flex-1 lg:ml-80 min-h-screen bg-white overflow-x-hidden">
         {/* Top Navigation Bar */}
         <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-end">
           {adminInfo && (

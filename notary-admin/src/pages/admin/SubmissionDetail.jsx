@@ -42,6 +42,7 @@ const SubmissionDetail = () => {
   const [emails, setEmails] = useState([]);
   const [sms, setSms] = useState([]);
   const [expandedEmails, setExpandedEmails] = useState(new Set());
+  const [viewingEmail, setViewingEmail] = useState(null);
   const [editFormData, setEditFormData] = useState({
     first_name: '',
     last_name: '',
@@ -347,9 +348,11 @@ const SubmissionDetail = () => {
 
       // Format emails for display
       const formattedEmails = (emailsData || []).map(email => {
-        // Determine status based on events
+        // Determine status based on events (priority: clicked > opened > delivered > sent > bounced > dropped > spam > unsubscribed)
         let status = 'sent';
-        if (email.dropped_at) status = 'dropped';
+        if (email.clicked_at) status = 'clicked';
+        else if (email.opened_at) status = 'opened';
+        else if (email.dropped_at) status = 'dropped';
         else if (email.bounced_at) status = 'bounced';
         else if (email.spam_reported_at) status = 'spam';
         else if (email.unsubscribed_at) status = 'unsubscribed';
@@ -2468,15 +2471,19 @@ const SubmissionDetail = () => {
                         <div key={email.id} className="bg-white rounded-xl p-6 border border-gray-200">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
+                              <div className="flex items-center gap-3 mb-2 flex-wrap">
                                 <h3 className="text-lg font-semibold text-gray-900">{email.subject}</h3>
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                  email.status === 'clicked' ? 'bg-blue-100 text-blue-800' :
+                                  email.status === 'opened' ? 'bg-green-100 text-green-800' :
                                   email.status === 'delivered' || email.status === 'sent' ? 'bg-green-100 text-green-800' :
                                   email.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                                   email.status === 'dropped' || email.status === 'bounced' || email.status === 'spam' ? 'bg-red-100 text-red-800' :
                                   'bg-gray-100 text-gray-800'
                                 }`}>
-                                  {email.status === 'delivered' ? 'Livré' :
+                                  {email.status === 'clicked' ? 'Cliqué' :
+                                   email.status === 'opened' ? 'Ouvert' :
+                                   email.status === 'delivered' ? 'Livré' :
                                    email.status === 'sent' ? 'Envoyé' :
                                    email.status === 'dropped' ? 'Supprimé' :
                                    email.status === 'bounced' ? 'Rebondi' :
@@ -2808,6 +2815,49 @@ const SubmissionDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* Email Preview Modal */}
+      {viewingEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-900">{viewingEmail.subject}</h3>
+                <p className="text-sm text-gray-600 mt-1">{viewingEmail.typeLabel}</p>
+              </div>
+              <button
+                onClick={() => setViewingEmail(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Icon icon="heroicons:x-mark" className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-6">
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                <iframe
+                  srcDoc={viewingEmail.html_content}
+                  className="w-full border-0 bg-white"
+                  style={{ minHeight: '500px' }}
+                  title="Email preview"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => {
+                  const newWindow = window.open();
+                  newWindow.document.write(viewingEmail.html_content);
+                  newWindow.document.close();
+                }}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors flex items-center gap-2"
+              >
+                <Icon icon="heroicons:arrow-top-right-on-square" className="w-4 h-4" />
+                Ouvrir dans un nouvel onglet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 };

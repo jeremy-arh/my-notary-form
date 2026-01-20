@@ -8,7 +8,13 @@ import { Line, Doughnut } from 'react-chartjs-2';
 import '../../lib/chartConfig'; // Register Chart.js components
 import { defaultChartOptions } from '../../lib/chartConfig';
 
+// Note: Les revenus sont récupérés depuis la table stripe.balance_transactions (wrapper Stripe de Supabase)
+// Cette table contient automatiquement les transactions Stripe avec les montants nets en EUR
+// Stripe convertit automatiquement les montants en EUR même si le paiement a été fait dans une autre devise
+
 const CashFlow = () => {
+  const [activeSubTab, setActiveSubTab] = useState('dashboard'); // 'dashboard', 'daily-indicators', 'google-ads', 'notary', 'webservice', 'other-costs'
+  const [webserviceView, setWebserviceView] = useState('recurring'); // 'recurring' or 'period'
   const [loading, setLoading] = useState(true);
   const [periodType, setPeriodType] = useState('month'); // 'month' or 'custom'
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -91,6 +97,7 @@ const CashFlow = () => {
         fetchWebserviceCosts(),
         fetchGoogleAdsCosts(),
         fetchNotaryPayments(),
+        fetchOtherCosts(),
         fetchBudget()
       ]);
     } catch (error) {
@@ -171,25 +178,36 @@ const CashFlow = () => {
 
   const fetchStripeRevenues = async () => {
     try {
-      const { data: submissions, error } = await supabase
-        .from('submission')
-        .select('*, data')
-        .order('created_at', { ascending: false });
+      // Récupérer les revenus depuis la table stripe.balance_transactions via une fonction SQL
+      // Cette table contient automatiquement les transactions Stripe avec les montants nets en EUR
+      const { data: balanceTransactions, error } = await supabase
+        .rpc('get_stripe_revenues');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching Stripe revenues:', error);
+        throw error;
+      }
 
-      const revenues = (submissions || [])
-        .filter(sub => sub.data?.payment?.payment_status === 'paid')
-        .map(sub => ({
-          id: sub.id,
-          amount: (sub.data.payment.amount_paid || 0) / 100,
-          date: sub.data.payment.paid_at || sub.created_at,
-          customer: `${sub.first_name} ${sub.last_name}`
-        }));
+      console.log('Balance transactions fetched:', balanceTransactions?.length || 0);
 
-      setStripeRevenues(revenues);
+      // Transformer les données pour correspondre au format attendu
+      const formattedRevenues = (balanceTransactions || []).map(bt => ({
+        id: bt.id,
+        amount: bt.net / 100, // Montant net en EUR (converti depuis centimes)
+        originalAmount: bt.amount / 100, // Montant brut dans la devise d'origine
+        originalCurrency: bt.currency?.toUpperCase() || 'EUR',
+        date: bt.created ? new Date(bt.created * 1000).toISOString() : new Date().toISOString(),
+        customer: bt.description || 'Client',
+        fee: bt.fee / 100, // Frais Stripe en EUR
+        balance_transaction_id: bt.id
+      }));
+
+      console.log('Formatted revenues:', formattedRevenues.length);
+      setStripeRevenues(formattedRevenues);
     } catch (error) {
       console.error('Error fetching Stripe revenues:', error);
+      // En cas d'erreur, initialiser avec un tableau vide pour éviter les erreurs
+      setStripeRevenues([]);
     }
   };
 
@@ -620,56 +638,14 @@ const CashFlow = () => {
         pointHoverRadius: 6
       },
       {
-        label: 'Google Ads',
-        data: barChartRawData.map(item => item.googleAds),
-        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-        borderColor: '#f97316',
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: '#f97316',
-        pointBorderColor: '#ffffff',
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6
-      },
-      {
-        label: 'Notaires',
-        data: barChartRawData.map(item => item.notary),
+        label: 'Coûts Totaux',
+        data: barChartRawData.map(item => item.totalCosts),
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         borderColor: '#ef4444',
         borderWidth: 3,
         fill: true,
         tension: 0.4,
         pointBackgroundColor: '#ef4444',
-        pointBorderColor: '#ffffff',
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6
-      },
-      {
-        label: 'Webservices',
-        data: barChartRawData.map(item => item.webservice),
-        backgroundColor: 'rgba(99, 102, 241, 0.1)',
-        borderColor: '#6366f1',
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: '#6366f1',
-        pointBorderColor: '#ffffff',
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6
-      },
-      {
-        label: 'Autres coûts',
-        data: barChartRawData.map(item => item.otherCosts || 0),
-        backgroundColor: 'rgba(168, 85, 247, 0.1)',
-        borderColor: '#a855f7',
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: '#a855f7',
         pointBorderColor: '#ffffff',
         pointBorderWidth: 2,
         pointRadius: 4,
@@ -836,6 +812,57 @@ const CashFlow = () => {
   };
 
   const dailyIndicators = getDailyIndicators();
+
+  // Calculer les agrégations pour les indicateurs quotidiens
+  const aggregatedIndicators = dailyIndicators.reduce((acc, day) => {
+    acc.totalGoogleAds += day.googleAds;
+    acc.totalNotaryCost += day.notaryCost;
+    acc.totalSales += day.numberOfSales;
+    acc.totalRevenue += day.totalRevenue;
+    acc.totalGrossMargin += day.grossMargin;
+    return acc;
+  }, {
+    totalGoogleAds: 0,
+    totalNotaryCost: 0,
+    totalSales: 0,
+    totalRevenue: 0,
+    totalGrossMargin: 0
+  });
+
+  // Calculer les moyennes
+  const averageUnitRevenue = aggregatedIndicators.totalSales > 0 
+    ? aggregatedIndicators.totalRevenue / aggregatedIndicators.totalSales 
+    : 0;
+  
+  const averageRoas = aggregatedIndicators.totalGoogleAds > 0
+    ? aggregatedIndicators.totalRevenue / aggregatedIndicators.totalGoogleAds
+    : null;
+
+  // Filtered data for each tab based on selected period
+  const { start: periodStart, end: periodEnd } = getPeriodDates();
+  
+  const filteredGoogleAdsCosts = googleAdsCosts.filter(c => {
+    const costDate = parseISO(c.cost_date);
+    return costDate >= periodStart && costDate <= periodEnd;
+  });
+
+  const filteredNotaryPayments = notaryPayments.filter(p => {
+    const paymentDate = parseISO(p.payment_date);
+    return paymentDate >= periodStart && paymentDate <= periodEnd;
+  });
+
+  // Webservice costs: récurrents (templates) ou filtrés par période (occurrences)
+  const recurringWebserviceCosts = webserviceCosts.filter(c => c.is_recurring === true);
+  
+  const filteredWebserviceCosts = webserviceCosts.filter(c => {
+    const costDate = parseISO(c.billing_date);
+    return costDate >= periodStart && costDate <= periodEnd;
+  });
+
+  const filteredOtherCosts = otherCosts.filter(c => {
+    const costDate = parseISO(c.cost_date);
+    return costDate >= periodStart && costDate <= periodEnd;
+  });
 
   // Save handlers
   const handleSaveWebservice = async () => {
@@ -1094,8 +1121,110 @@ const CashFlow = () => {
                 />
               </div>
             )}
+            {activeSubTab === 'daily-indicators' && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDailyView('table')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                    dailyView === 'table'
+                      ? 'bg-black text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Tableau
+                </button>
+                {periodType === 'month' && (
+                  <button
+                    onClick={() => setDailyView('calendar')}
+                    className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                      dailyView === 'calendar'
+                        ? 'bg-black text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Calendrier
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Sub Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveSubTab('dashboard')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                activeSubTab === 'dashboard'
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon icon="heroicons:chart-bar" className="w-5 h-5 mr-2" />
+              <span>Dashboard</span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('daily-indicators')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                activeSubTab === 'daily-indicators'
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon icon="heroicons:calendar-days" className="w-5 h-5 mr-2" />
+              <span>Indicateurs Quotidiens</span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('google-ads')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                activeSubTab === 'google-ads'
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon icon="heroicons:megaphone" className="w-5 h-5 mr-2" />
+              <span>Coûts Google Ads</span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('notary')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                activeSubTab === 'notary'
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon icon="heroicons:user-group" className="w-5 h-5 mr-2" />
+              <span>Versements Notaires</span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('webservice')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                activeSubTab === 'webservice'
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon icon="heroicons:server" className="w-5 h-5 mr-2" />
+              <span>Coûts Web Service</span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('other-costs')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                activeSubTab === 'other-costs'
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon icon="heroicons:currency-dollar" className="w-5 h-5 mr-2" />
+              <span>Autres Coûts</span>
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        {activeSubTab === 'dashboard' && (
+          <>
 
         {/* Budget et Nouveaux KPI en haut */}
         <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
@@ -1134,7 +1263,7 @@ const CashFlow = () => {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <div className="text-sm font-semibold text-gray-600 mb-1">Gads</div>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.totalGoogleAdsCosts)}</p>
@@ -1143,11 +1272,6 @@ const CashFlow = () => {
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <div className="text-sm font-semibold text-gray-600 mb-1">Notaire</div>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.totalNotaryPayments)}</p>
-            </div>
-            
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="text-sm font-semibold text-gray-600 mb-1">%conversion</div>
-              <p className="text-2xl font-bold text-gray-900">{kpis.conversionPercentage.toFixed(2)}%</p>
             </div>
             
             <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -1170,18 +1294,7 @@ const CashFlow = () => {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-gray-600">MRR</span>
-              <Icon icon="heroicons:chart-line" className="w-5 h-5 text-gray-400" />
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(kpis.mrr)}</p>
-            <p className="text-xs text-gray-500 mt-1">
-              {periodType === 'month' ? 'Moyenne sur 3 mois' : 'Projeté sur 30 jours'}
-            </p>
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-gray-600">Revenus</span>
@@ -1231,17 +1344,371 @@ const CashFlow = () => {
           </div>
         </div>
 
-        {/* Cost Breakdown */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div 
-            className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6 cursor-pointer hover:shadow-lg transition-all"
-            onClick={() => setIsWebserviceListModalOpen(true)}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Webservices</h3>
+          </>
+        )}
+
+        {/* Daily Indicators Tab */}
+        {activeSubTab === 'daily-indicators' && (
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-gray-900">
+                {dailyView === 'table' ? 'Indicateurs Quotidiens' : `Calendrier - ${format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}`}
+              </h2>
+            </div>
+
+            {dailyView === 'table' ? (
+              <>
+                {/* Données agrégées pour la période */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Résumé de la période</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">Gads</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {formatCurrency(aggregatedIndicators.totalGoogleAds)}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">Coût notaire</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {formatCurrency(aggregatedIndicators.totalNotaryCost)}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1"># Nbrs de vente</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {aggregatedIndicators.totalSales}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">Revenu moyen unitaire</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {formatCurrency(averageUnitRevenue)}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">Revenu total</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {formatCurrency(aggregatedIndicators.totalRevenue)}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">Marge Brute</div>
+                      <div className={`text-xl font-bold ${
+                        aggregatedIndicators.totalGrossMargin >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {formatCurrency(aggregatedIndicators.totalGrossMargin)}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">ROAS</div>
+                      <div className={`text-xl font-bold ${
+                        averageRoas !== null && averageRoas >= 1 ? 'text-green-600' : averageRoas !== null ? 'text-red-600' : 'text-gray-400'
+                      }`}>
+                        {averageRoas !== null ? `${averageRoas.toFixed(2)}x` : '-'}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">Jours</div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {dailyIndicators.length}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-900">Gads</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-900">Cout notaire</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-900"># Nbrs de vente</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-900">Revenu moyen unitaire</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-900">Revenu total</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-900">Marge Brute</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-900">ROAS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyIndicators.map((day, index) => (
+                      <tr 
+                        key={day.dateStr} 
+                        className={`border-b border-gray-200 hover:bg-gray-50 ${
+                          index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                        }`}
+                      >
+                        <td className="py-3 px-4 text-gray-900 font-medium">
+                          {format(day.date, 'dd', { locale: fr })}-{format(day.date, 'MMMM', { locale: fr })}-{format(day.date, 'yyyy', { locale: fr })}
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-900">
+                          {day.googleAds > 0 ? formatCurrency(day.googleAds) : '0,00 €'}
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-900">
+                          {day.notaryCost > 0 ? formatCurrency(day.notaryCost) : '0,00 €'}
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-900 font-semibold">
+                          {day.numberOfSales}
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-900">
+                          {day.averageUnitRevenue > 0 ? formatCurrency(day.averageUnitRevenue) : '0,00 €'}
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-900 font-semibold">
+                          {day.totalRevenue > 0 ? formatCurrency(day.totalRevenue) : '0,00 €'}
+                        </td>
+                        <td className={`py-3 px-4 text-right font-semibold ${
+                          day.grossMargin >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {formatCurrency(day.grossMargin)}
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-900">
+                          {day.roas !== null ? (
+                            <span className={day.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                              {day.roas.toFixed(2)}x
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+              </>
+            ) : (
+              periodType === 'month' && (
+                <div className="grid grid-cols-7 gap-2">
+                  {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
+                    <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
+                      {day}
+                    </div>
+                  ))}
+                  {/* Empty cells for days before the first day of the month */}
+                  {(() => {
+                    const firstDay = calendarData[0]?.date;
+                    if (!firstDay) return null;
+                    const firstDayOfWeek = firstDay.getDay() === 0 ? 7 : firstDay.getDay();
+                    const emptyCells = [];
+                    for (let i = 1; i < firstDayOfWeek; i++) {
+                      emptyCells.push(<div key={`empty-${i}`} className="bg-transparent" />);
+                    }
+                    return emptyCells;
+                  })()}
+                  {calendarData.map((day) => (
+                    <div
+                      key={day.dateStr}
+                      className={`bg-white rounded-xl border-2 p-3 min-h-[100px] ${
+                        day.net > 0 ? 'border-green-200' : day.net < 0 ? 'border-red-200' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="text-sm font-bold text-gray-900 mb-2">{day.date.getDate()}</div>
+                      {day.revenue > 0 && (
+                        <div className="text-xs text-green-600 font-semibold mb-1">
+                          +{formatCurrency(day.revenue)}
+                        </div>
+                      )}
+                      {day.googleAdsCost > 0 && (
+                        <div className="text-xs text-orange-600">
+                          Ads: -{formatCurrency(day.googleAdsCost)}
+                        </div>
+                      )}
+                      {day.notaryCost > 0 && (
+                        <div className="text-xs text-red-600">
+                          Notaire: -{formatCurrency(day.notaryCost)}
+                        </div>
+                      )}
+                      {day.net !== 0 && (
+                        <div className={`text-xs font-bold mt-1 ${
+                          day.net > 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          Net: {formatCurrency(day.net)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        )}
+
+        {/* Google Ads Costs Tab */}
+        {activeSubTab === 'google-ads' && (
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Coûts Google Ads</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditingItem(null);
+                    setGoogleAdsForm({
+                      cost_amount: '',
+                      cost_date: format(new Date(), 'yyyy-MM-dd'),
+                      campaign_name: '',
+                      description: ''
+                    });
+                    setIsGoogleAdsModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 font-semibold flex items-center gap-2"
+                >
+                  <Icon icon="heroicons:plus" className="w-5 h-5" />
+                  Ajouter
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full bg-white rounded-xl">
+                <thead>
+                  <tr className="border-b-2 border-gray-300">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Montant</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Campagne</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Description</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredGoogleAdsCosts.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center py-8 text-gray-600">
+                        Aucun coût Google Ads enregistré pour cette période
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredGoogleAdsCosts.map((cost) => (
+                      <tr key={cost.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-gray-900">{format(parseISO(cost.cost_date), 'dd/MM/yyyy', { locale: fr })}</td>
+                        <td className="py-3 px-4 text-gray-900 font-semibold">{formatCurrency(parseFloat(cost.cost_amount || 0))}</td>
+                        <td className="py-3 px-4 text-gray-600">{cost.campaign_name || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600">{cost.description || '-'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingItem(cost);
+                                setGoogleAdsForm({
+                                  cost_amount: cost.cost_amount,
+                                  cost_date: cost.cost_date,
+                                  campaign_name: cost.campaign_name || '',
+                                  description: cost.description || ''
+                                });
+                                setIsGoogleAdsModalOpen(true);
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:pencil" className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteGoogleAds(cost.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:trash" className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Notary Payments Tab */}
+        {activeSubTab === 'notary' && (
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Versements Notaires</h2>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={() => {
+                  setEditingItem(null);
+                  setNotaryForm({
+                    notary_name: '',
+                    payment_amount: '',
+                    payment_date: format(new Date(), 'yyyy-MM-dd'),
+                    submission_id: '',
+                    description: ''
+                  });
+                  setIsNotaryModalOpen(true);
+                }}
+                className="px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 font-semibold flex items-center gap-2"
+              >
+                <Icon icon="heroicons:plus" className="w-5 h-5" />
+                Ajouter
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full bg-white rounded-xl">
+                <thead>
+                  <tr className="border-b-2 border-gray-300">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Notaire</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Montant</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">ID Soumission</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Description</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredNotaryPayments.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="text-center py-8 text-gray-600">
+                        Aucun versement notaire enregistré pour cette période
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredNotaryPayments.map((payment) => (
+                      <tr key={payment.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-gray-900">{payment.notary_name || '-'}</td>
+                        <td className="py-3 px-4 text-gray-900 font-semibold">{formatCurrency(parseFloat(payment.payment_amount || 0))}</td>
+                        <td className="py-3 px-4 text-gray-600">{format(parseISO(payment.payment_date), 'dd/MM/yyyy', { locale: fr })}</td>
+                        <td className="py-3 px-4 text-gray-600">{payment.submission_id || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600">{payment.description || '-'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingItem(payment);
+                                setNotaryForm({
+                                  notary_name: payment.notary_name || '',
+                                  payment_amount: payment.payment_amount,
+                                  payment_date: payment.payment_date,
+                                  submission_id: payment.submission_id || '',
+                                  description: payment.description || ''
+                                });
+                                setIsNotaryModalOpen(true);
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:pencil" className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNotary(payment.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:trash" className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Web Service Costs Tab */}
+        {activeSubTab === 'webservice' && (
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Coûts Web Service</h2>
+              <button
+                onClick={() => {
                   setEditingItem(null);
                   setWebserviceForm({
                     service_name: '',
@@ -1254,92 +1721,187 @@ const CashFlow = () => {
                   });
                   setIsWebserviceModalOpen(true);
                 }}
-                className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all"
+                className="px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 font-semibold flex items-center gap-2"
               >
-                <Icon icon="heroicons:plus" className="w-4 h-4" />
+                <Icon icon="heroicons:plus" className="w-5 h-5" />
+                Ajouter
               </button>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{formatCurrency(kpis.totalWebserviceCosts)}</p>
-            <p className="text-sm text-gray-600 mt-2">{kpis.webservicePercentage.toFixed(1)}% des revenus</p>
-          </div>
-
-          <div 
-            className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6 cursor-pointer hover:shadow-lg transition-all"
-            onClick={() => setIsGoogleAdsListModalOpen(true)}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Google Ads</h3>
-              <div className="flex gap-2">
+            
+            {/* Sous-onglets pour Web Service */}
+            <div className="border-b border-gray-200 mb-6">
+              <nav className="flex space-x-4">
                 <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    await syncGoogleAdsCosts();
-                  }}
-                  disabled={syncingGoogleAds}
-                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Synchroniser depuis l'API Google Ads"
+                  onClick={() => setWebserviceView('recurring')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    webserviceView === 'recurring'
+                      ? 'border-black text-black'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  <Icon icon={syncingGoogleAds ? "heroicons:arrow-path" : "heroicons:arrow-path"} className={`w-4 h-4 ${syncingGoogleAds ? 'animate-spin' : ''}`} />
+                  Paiements Récurrents
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingItem(null);
-                    setGoogleAdsForm({
-                      cost_amount: '',
-                      cost_date: format(new Date(), 'yyyy-MM-dd'),
-                      campaign_name: '',
-                      description: ''
-                    });
-                    setIsGoogleAdsModalOpen(true);
-                  }}
-                  className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all"
+                  onClick={() => setWebserviceView('period')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    webserviceView === 'period'
+                      ? 'border-black text-black'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  <Icon icon="heroicons:plus" className="w-4 h-4" />
+                  Paiements ({periodType === 'month' 
+                    ? format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })
+                    : `${format(parseISO(startDate), 'dd MMM yyyy', { locale: fr })} - ${format(parseISO(endDate), 'dd MMM yyyy', { locale: fr })}`})
                 </button>
-              </div>
+              </nav>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{formatCurrency(kpis.totalGoogleAdsCosts)}</p>
-            <p className="text-sm text-gray-600 mt-2">{kpis.googleAdsPercentage.toFixed(1)}% des revenus</p>
-          </div>
-
-          <div 
-            className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6 cursor-pointer hover:shadow-lg transition-all"
-            onClick={() => setIsNotaryListModalOpen(true)}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Versements Notaires</h3>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingItem(null);
-                  setNotaryForm({
-                    notary_name: '',
-                    payment_amount: '',
-                    payment_date: format(new Date(), 'yyyy-MM-dd'),
-                    submission_id: '',
-                    description: ''
-                  });
-                  setIsNotaryModalOpen(true);
-                }}
-                className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all"
-              >
-                <Icon icon="heroicons:plus" className="w-4 h-4" />
-              </button>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full bg-white rounded-xl">
+                <thead>
+                  <tr className="border-b-2 border-gray-300">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Service</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Montant</th>
+                    {webserviceView === 'recurring' && (
+                      <>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Période</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Récurrent</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Statut</th>
+                      </>
+                    )}
+                    {webserviceView === 'period' && (
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
+                    )}
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Description</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {webserviceView === 'recurring' ? (
+                    // Vue: Tous les paiements récurrents (templates)
+                    recurringWebserviceCosts.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="text-center py-8 text-gray-600">
+                          Aucun paiement récurrent configuré
+                        </td>
+                      </tr>
+                    ) : (
+                      recurringWebserviceCosts.map((cost) => (
+                        <tr key={cost.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-gray-900">{cost.service_name}</td>
+                          <td className="py-3 px-4 text-gray-900 font-semibold">{formatCurrency(parseFloat(cost.cost_amount || 0))}</td>
+                          <td className="py-3 px-4 text-gray-600">
+                            {cost.billing_period === 'monthly' ? 'Mensuel' : cost.billing_period === 'annually' ? 'Annuel' : 'Unique'}
+                          </td>
+                          <td className="py-3 px-4 text-gray-600">{format(parseISO(cost.billing_date), 'dd/MM/yyyy', { locale: fr })}</td>
+                          <td className="py-3 px-4 text-gray-600">
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">Oui</span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-600">
+                            <button
+                              onClick={() => toggleWebserviceActive(cost.id, cost.is_active)}
+                              className={`px-2 py-1 rounded-full text-xs font-semibold transition-all ${
+                                cost.is_active
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+                              }`}
+                            >
+                              {cost.is_active ? 'Actif' : 'Inactif'}
+                            </button>
+                          </td>
+                          <td className="py-3 px-4 text-gray-600">{cost.description || '-'}</td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingItem(cost);
+                                  setWebserviceForm({
+                                    service_name: cost.service_name,
+                                    cost_amount: cost.cost_amount,
+                                    billing_period: cost.billing_period,
+                                    billing_date: cost.billing_date,
+                                    description: cost.description || '',
+                                    is_recurring: cost.is_recurring || false,
+                                    is_active: cost.is_active !== undefined ? cost.is_active : true
+                                  });
+                                  setIsWebserviceModalOpen(true);
+                                }}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              >
+                                <Icon icon="heroicons:pencil" className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteWebservice(cost.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              >
+                                <Icon icon="heroicons:trash" className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )
+                  ) : (
+                    // Vue: Paiements filtrés par période (occurrences)
+                    filteredWebserviceCosts.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="text-center py-8 text-gray-600">
+                          Aucun coût web service enregistré pour cette période
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredWebserviceCosts.map((cost) => (
+                      <tr key={cost.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-gray-900">{cost.service_name}</td>
+                        <td className="py-3 px-4 text-gray-900 font-semibold">{formatCurrency(parseFloat(cost.cost_amount || 0))}</td>
+                        <td className="py-3 px-4 text-gray-600">{format(parseISO(cost.billing_date), 'dd/MM/yyyy', { locale: fr })}</td>
+                        <td className="py-3 px-4 text-gray-600">{cost.description || '-'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingItem(cost);
+                                setWebserviceForm({
+                                  service_name: cost.service_name,
+                                  cost_amount: cost.cost_amount,
+                                  billing_period: cost.billing_period,
+                                  billing_date: cost.billing_date,
+                                  description: cost.description || '',
+                                  is_recurring: cost.is_recurring || false,
+                                  is_active: cost.is_active !== undefined ? cost.is_active : true
+                                });
+                                setIsWebserviceModalOpen(true);
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:pencil" className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteWebservice(cost.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:trash" className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      ))
+                    )
+                  )}
+                </tbody>
+              </table>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{formatCurrency(kpis.totalNotaryPayments)}</p>
-            <p className="text-sm text-gray-600 mt-2">{kpis.notaryPercentage.toFixed(1)}% des revenus</p>
           </div>
+        )}
 
-          <div 
-            className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6 cursor-pointer hover:shadow-lg transition-all"
-            onClick={() => setIsOtherCostListModalOpen(true)}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Autres coûts</h3>
+        {/* Other Costs Tab */}
+        {activeSubTab === 'other-costs' && (
+          <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Autres Coûts</h2>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={() => {
                   setEditingItem(null);
                   setOtherCostForm({
                     cost_name: '',
@@ -1350,170 +1912,84 @@ const CashFlow = () => {
                   });
                   setIsOtherCostModalOpen(true);
                 }}
-                className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all"
+                className="px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 font-semibold flex items-center gap-2"
               >
-                <Icon icon="heroicons:plus" className="w-4 h-4" />
+                <Icon icon="heroicons:plus" className="w-5 h-5" />
+                Ajouter
               </button>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{formatCurrency(kpis.totalOtherCosts)}</p>
-            <p className="text-sm text-gray-600 mt-2">{kpis.otherCostsPercentage.toFixed(1)}% des revenus</p>
-          </div>
-        </div>
-
-        {/* Tableau des indicateurs quotidiens et Calendrier */}
-        <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">
-              {dailyView === 'table' ? 'Indicateurs Quotidiens' : `Calendrier - ${format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}`}
-            </h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDailyView('table')}
-                className={`px-4 py-2 rounded-xl font-semibold transition-all ${
-                  dailyView === 'table'
-                    ? 'bg-black text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Tableau
-              </button>
-              {periodType === 'month' && (
-                <button
-                  onClick={() => setDailyView('calendar')}
-                  className={`px-4 py-2 rounded-xl font-semibold transition-all ${
-                    dailyView === 'calendar'
-                      ? 'bg-black text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  Calendrier
-                </button>
-              )}
-            </div>
-          </div>
-
-          {dailyView === 'table' ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full bg-white rounded-xl">
                 <thead>
                   <tr className="border-b-2 border-gray-300">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Nom</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Montant</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Gads</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Cout notaire</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-900"># Nbrs de vente</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Revenu moyen unitaire</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Revenu total</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Marge Brute</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-900">ROAS</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Catégorie</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Description</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-900">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dailyIndicators.map((day, index) => (
-                    <tr 
-                      key={day.dateStr} 
-                      className={`border-b border-gray-200 hover:bg-gray-50 ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                      }`}
-                    >
-                      <td className="py-3 px-4 text-gray-900 font-medium">
-                        {format(day.date, 'dd', { locale: fr })}-{format(day.date, 'MMMM', { locale: fr })}-{format(day.date, 'yyyy', { locale: fr })}
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-900">
-                        {day.googleAds > 0 ? formatCurrency(day.googleAds) : '0,00 €'}
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-900">
-                        {day.notaryCost > 0 ? formatCurrency(day.notaryCost) : '0,00 €'}
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-900 font-semibold">
-                        {day.numberOfSales}
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-900">
-                        {day.averageUnitRevenue > 0 ? formatCurrency(day.averageUnitRevenue) : '0,00 €'}
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-900 font-semibold">
-                        {day.totalRevenue > 0 ? formatCurrency(day.totalRevenue) : '0,00 €'}
-                      </td>
-                      <td className={`py-3 px-4 text-right font-semibold ${
-                        day.grossMargin >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {formatCurrency(day.grossMargin)}
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-900">
-                        {day.roas !== null ? (
-                          <span className={day.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
-                            {day.roas.toFixed(2)}x
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                  {filteredOtherCosts.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="text-center py-8 text-gray-600">
+                        Aucun autre coût enregistré pour cette période
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredOtherCosts.map((cost) => (
+                      <tr key={cost.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-gray-900">{cost.cost_name}</td>
+                        <td className="py-3 px-4 text-gray-900 font-semibold">{formatCurrency(parseFloat(cost.cost_amount || 0))}</td>
+                        <td className="py-3 px-4 text-gray-600">{format(parseISO(cost.cost_date), 'dd/MM/yyyy', { locale: fr })}</td>
+                        <td className="py-3 px-4 text-gray-600">{cost.category || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600">{cost.description || '-'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingItem(cost);
+                                setOtherCostForm({
+                                  cost_name: cost.cost_name,
+                                  cost_amount: cost.cost_amount,
+                                  cost_date: cost.cost_date,
+                                  category: cost.category || '',
+                                  description: cost.description || ''
+                                });
+                                setIsOtherCostModalOpen(true);
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:pencil" className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOtherCost(cost.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Icon icon="heroicons:trash" className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-          ) : (
-            periodType === 'month' && (
-              <div className="grid grid-cols-7 gap-2">
-                {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
-                  <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
-                    {day}
-                  </div>
-                ))}
-                {/* Empty cells for days before the first day of the month */}
-                {(() => {
-                  const firstDay = calendarData[0]?.date;
-                  if (!firstDay) return null;
-                  const firstDayOfWeek = firstDay.getDay() === 0 ? 7 : firstDay.getDay();
-                  const emptyCells = [];
-                  for (let i = 1; i < firstDayOfWeek; i++) {
-                    emptyCells.push(<div key={`empty-${i}`} className="bg-transparent" />);
-                  }
-                  return emptyCells;
-                })()}
-                {calendarData.map((day) => (
-                  <div
-                    key={day.dateStr}
-                    className={`bg-white rounded-xl border-2 p-3 min-h-[100px] ${
-                      day.net > 0 ? 'border-green-200' : day.net < 0 ? 'border-red-200' : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="text-sm font-bold text-gray-900 mb-2">{day.date.getDate()}</div>
-                    {day.revenue > 0 && (
-                      <div className="text-xs text-green-600 font-semibold mb-1">
-                        +{formatCurrency(day.revenue)}
-                      </div>
-                    )}
-                    {day.googleAdsCost > 0 && (
-                      <div className="text-xs text-orange-600">
-                        Ads: -{formatCurrency(day.googleAdsCost)}
-                      </div>
-                    )}
-                    {day.notaryCost > 0 && (
-                      <div className="text-xs text-red-600">
-                        Notaire: -{formatCurrency(day.notaryCost)}
-                      </div>
-                    )}
-                    {day.net !== 0 && (
-                      <div className={`text-xs font-bold mt-1 ${
-                        day.net > 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        Net: {formatCurrency(day.net)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Modals will be added here */}
-        {/* WebService Modal */}
-        {isWebserviceModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-6">
+      </div>
+
+      {/* Modals will be added here */}
+      <>
+      {/* WebService Modal */}
+      {isWebserviceModalOpen && (
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-2xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full overflow-y-auto p-6">
+                <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">
                   {editingItem ? 'Modifier le coût' : 'Nouveau coût webservice'}
                 </h2>
@@ -1633,15 +2109,17 @@ const CashFlow = () => {
                   </button>
                 </div>
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Google Ads Modal */}
         {isGoogleAdsModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-6">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-2xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full overflow-y-auto p-6">
+                <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">
                   {editingItem ? 'Modifier le coût' : 'Nouveau coût Google Ads'}
                 </h2>
@@ -1709,15 +2187,17 @@ const CashFlow = () => {
                   </button>
                 </div>
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Notary Modal */}
         {isNotaryModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-6">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-2xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full overflow-y-auto p-6">
+                <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">
                   {editingItem ? 'Modifier le versement' : 'Nouveau versement notaire'}
                 </h2>
@@ -1795,15 +2275,17 @@ const CashFlow = () => {
                   </button>
                 </div>
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* WebService List Modal */}
         {isWebserviceListModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-200">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-4xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Détails des coûts Webservices</h2>
                   <p className="text-sm text-gray-600 mt-1">
@@ -1917,14 +2399,16 @@ const CashFlow = () => {
                   );
                 })()}
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Google Ads List Modal */}
         {isGoogleAdsListModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-4xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full flex flex-col overflow-hidden">
               <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Détails des coûts Google Ads</h2>
@@ -2006,15 +2490,17 @@ const CashFlow = () => {
                   );
                 })()}
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Notary Payments List Modal */}
         {isNotaryListModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-200">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-4xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Détails des versements Notaires</h2>
                   <p className="text-sm text-gray-600 mt-1">
@@ -2098,15 +2584,17 @@ const CashFlow = () => {
                   );
                 })()}
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Other Costs List Modal */}
         {isOtherCostListModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-200">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-4xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Détails des autres coûts</h2>
                   <p className="text-sm text-gray-600 mt-1">
@@ -2190,15 +2678,17 @@ const CashFlow = () => {
                   );
                 })()}
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Budget Modal */}
         {isBudgetModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-6">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-2xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full overflow-y-auto p-6">
+                <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Configurer le budget</h2>
                 <button
                   onClick={() => setIsBudgetModalOpen(false)}
@@ -2267,26 +2757,28 @@ const CashFlow = () => {
                   </button>
                 </div>
               </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Other Cost Modal */}
         {isOtherCostModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingItem ? 'Modifier le coût' : 'Nouveau coût'}
-                </h2>
-                <button
-                  onClick={() => setIsOtherCostModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <Icon icon="heroicons:x-mark" className="w-6 h-6 text-gray-600" />
-                </button>
-              </div>
-              <div className="space-y-4">
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50">
+            <div className="absolute right-0 top-0 h-full w-full max-w-2xl bg-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-white h-full overflow-y-auto p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {editingItem ? 'Modifier le coût' : 'Nouveau coût'}
+                  </h2>
+                  <button
+                    onClick={() => setIsOtherCostModalOpen(false)}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    <Icon icon="heroicons:x-mark" className="w-6 h-6 text-gray-600" />
+                  </button>
+                </div>
+                <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Nom du coût *</label>
                   <input
@@ -2351,11 +2843,12 @@ const CashFlow = () => {
                     Annuler
                   </button>
                 </div>
+                </div>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </>
     </AdminLayout>
   );
 };

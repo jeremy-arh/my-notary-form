@@ -171,7 +171,42 @@ serve(async (req) => {
       clientId = existingSubmission.client_id
       console.log('✅ [RETRY] Using existing submission and client_id:', clientId)
 
-    } else {
+    } else if (formData.sessionId) {
+      // Try to find existing submission by session_id to avoid duplicates
+      console.log('🔍 [SUBMISSION] Looking for existing submission with session_id:', formData.sessionId)
+      
+      // Search in all submissions (not just pending_payment) to find any submission with this session_id
+      const { data: existingSubmissions, error: searchError } = await supabase
+        .from('submission')
+        .select('*')
+        .in('status', ['pending', 'pending_payment', 'confirmed'])
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      if (!searchError && existingSubmissions && existingSubmissions.length > 0) {
+        const foundSubmission = existingSubmissions.find(sub => 
+          sub.data?.session_id === formData.sessionId
+        )
+        
+        if (foundSubmission) {
+          submission = foundSubmission
+          clientId = foundSubmission.client_id
+          submissionId = foundSubmission.id
+          console.log('✅ [SUBMISSION] Found existing submission by session_id:', submissionId, 'client_id:', clientId, 'status:', foundSubmission.status)
+        } else {
+          console.log('ℹ️ [SUBMISSION] No submission found with matching session_id, will create new one')
+        }
+      } else if (searchError) {
+        console.error('❌ [SUBMISSION] Error searching for existing submission:', searchError)
+        // Continue to create new submission
+      } else {
+        console.log('ℹ️ [SUBMISSION] No existing submissions found, will create new one')
+      }
+    }
+
+    // Only create new submission/user/client if we don't have one yet
+    if (!submission) {
+      console.log('🆕 [SUBMISSION] No existing submission found, creating new submission')
       // NEW SUBMISSION: Create user account if not authenticated
       let userId = user?.id || null
 
@@ -326,55 +361,165 @@ serve(async (req) => {
       // Service documents are already uploaded and converted to metadata in NotaryForm.jsx
       console.log('📁 [FILES] Received service documents:', JSON.stringify(formData.serviceDocuments, null, 2))
 
-      // Create temporary submission in database with status 'pending_payment'
-      const submissionData = {
-        client_id: clientId,
-        status: 'pending_payment',
-        appointment_date: formData.appointmentDate,
-        appointment_time: formData.appointmentTime,
-        timezone: formData.timezone,
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        email: formData.email,
-        // Ensure phone is never null to satisfy NOT NULL constraint in database
-        phone: formData.phone || '',
-        address: formData.address,
-        city: formData.city,
-        postal_code: formData.postalCode,
-        country: formData.country,
-        notes: formData.notes || null,
-        gclid: formData.gclid || null, // Google Click ID for conversion tracking
-        data: {
-          selectedServices: formData.selectedServices,
-          serviceDocuments: formData.serviceDocuments, // Already converted
-          signatories: formData.signatories || [], // Array of signatories
-          signatoriesCount: formData.signatoriesCount || 0, // Total number of signatories
-          additionalSignatoriesCount: formData.additionalSignatoriesCount || 0, // Number of additional signatories
-          signatoryCount: formData.signatoryCount || formData.signatoriesCount || null, // Legacy field for backward compatibility
-          currency: currency, // Stocker la devise dans les données de la submission
-        },
+      // Check if we already found a submission by session_id earlier
+      if (submission && submission.id) {
+        // Update existing submission with latest data
+        console.log('🔄 [SUBMISSION] Updating existing submission found by session_id:', submission.id)
+        
+        const submissionData = {
+          client_id: clientId,
+          status: 'pending_payment',
+          appointment_date: formData.appointmentDate,
+          appointment_time: formData.appointmentTime,
+          timezone: formData.timezone,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email,
+          phone: formData.phone || '',
+          address: formData.address,
+          city: formData.city,
+          postal_code: formData.postalCode,
+          country: formData.country,
+          notes: formData.notes || null,
+          gclid: formData.gclid || null,
+          data: {
+            session_id: formData.sessionId || null, // Keep session_id if exists
+            selectedServices: formData.selectedServices,
+            serviceDocuments: formData.serviceDocuments,
+            signatories: formData.signatories || [],
+            signatoriesCount: formData.signatoriesCount || 0,
+            additionalSignatoriesCount: formData.additionalSignatoriesCount || 0,
+            signatoryCount: formData.signatoryCount || formData.signatoriesCount || null,
+            currency: currency,
+          },
+        }
+
+        const { data: updatedSubmission, error: updateError } = await supabase
+          .from('submission')
+          .update(submissionData)
+          .eq('id', submission.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('❌ [SUBMISSION] Error updating submission:', updateError)
+          throw new Error('Failed to update submission: ' + updateError.message)
+        }
+
+        submission = updatedSubmission
+        console.log('✅ [SUBMISSION] Updated submission:', submission.id, 'with client_id:', submission.client_id)
+      } else if (submissionId) {
+        // submissionId was provided but we didn't find it earlier, try to fetch it
+        console.log('🔄 [SUBMISSION] Using provided submissionId:', submissionId)
+        
+        const { data: existingSubmission, error: fetchError } = await supabase
+          .from('submission')
+          .select('*')
+          .eq('id', submissionId)
+          .single()
+
+        if (fetchError) {
+          console.error('❌ [SUBMISSION] Error fetching submission by ID:', fetchError)
+          // Fall through to create new submission
+          submission = null
+        } else {
+          submission = existingSubmission
+          clientId = existingSubmission.client_id
+          
+          // Update existing submission with latest data
+          const submissionData = {
+            client_id: clientId,
+            status: 'pending_payment',
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            email: formData.email,
+            phone: formData.phone || '',
+            address: formData.address,
+            city: formData.city,
+            postal_code: formData.postalCode,
+            country: formData.country,
+            notes: formData.notes || null,
+            gclid: formData.gclid || null,
+            data: {
+              session_id: formData.sessionId || null,
+              selectedServices: formData.selectedServices,
+              serviceDocuments: formData.serviceDocuments,
+              signatories: formData.signatories || [],
+              signatoriesCount: formData.signatoriesCount || 0,
+              additionalSignatoriesCount: formData.additionalSignatoriesCount || 0,
+              signatoryCount: formData.signatoryCount || formData.signatoriesCount || null,
+              currency: currency,
+            },
+          }
+
+          const { data: updatedSubmission, error: updateError } = await supabase
+            .from('submission')
+            .update(submissionData)
+            .eq('id', submissionId)
+            .select()
+            .single()
+
+          if (updateError) {
+            console.error('❌ [SUBMISSION] Error updating submission:', updateError)
+            throw new Error('Failed to update submission: ' + updateError.message)
+          }
+
+          submission = updatedSubmission
+          console.log('✅ [SUBMISSION] Updated submission:', submission.id, 'with client_id:', submission.client_id)
+        }
       }
 
-      console.log('💾 [SUBMISSION] Creating submission with data:', JSON.stringify(submissionData, null, 2))
-      console.log('👥 [SIGNATORIES] Signatories in submission.data:', {
-        signatoriesCount: submissionData.data.signatoriesCount,
-        additionalSignatoriesCount: submissionData.data.additionalSignatoriesCount,
-        signatoriesArrayLength: submissionData.data.signatories?.length || 0
-      })
+      // Only create new submission if we don't have one yet
+      if (!submission) {
+        console.log('🆕 [SUBMISSION] Creating new submission (no existing submission found)')
+        // Create new submission if submissionId not provided
+        const submissionData = {
+          client_id: clientId,
+          status: 'pending_payment',
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email,
+          // Ensure phone is never null to satisfy NOT NULL constraint in database
+          phone: formData.phone || '',
+          address: formData.address,
+          city: formData.city,
+          postal_code: formData.postalCode,
+          country: formData.country,
+          notes: formData.notes || null,
+          gclid: formData.gclid || null, // Google Click ID for conversion tracking
+          data: {
+            session_id: formData.sessionId || null, // Store session_id for tracking
+            selectedServices: formData.selectedServices,
+            serviceDocuments: formData.serviceDocuments, // Already converted
+            signatories: formData.signatories || [], // Array of signatories
+            signatoriesCount: formData.signatoriesCount || 0, // Total number of signatories
+            additionalSignatoriesCount: formData.additionalSignatoriesCount || 0, // Number of additional signatories
+            signatoryCount: formData.signatoryCount || formData.signatoriesCount || null, // Legacy field for backward compatibility
+            currency: currency, // Stocker la devise dans les données de la submission
+          },
+        }
 
-      const { data: newSubmission, error: submissionError } = await supabase
-        .from('submission')
-        .insert([submissionData])
-        .select()
-        .single()
+        console.log('💾 [SUBMISSION] Creating new submission with data:', JSON.stringify(submissionData, null, 2))
+        console.log('👥 [SIGNATORIES] Signatories in submission.data:', {
+          signatoriesCount: submissionData.data.signatoriesCount,
+          additionalSignatoriesCount: submissionData.data.additionalSignatoriesCount,
+          signatoriesArrayLength: submissionData.data.signatories?.length || 0
+        })
 
-      if (submissionError) {
-        console.error('❌ [SUBMISSION] Error creating submission:', submissionError)
-        throw new Error('Failed to create submission: ' + submissionError.message)
+        const { data: newSubmission, error: submissionError } = await supabase
+          .from('submission')
+          .insert([submissionData])
+          .select()
+          .single()
+
+        if (submissionError) {
+          console.error('❌ [SUBMISSION] Error creating submission:', submissionError)
+          throw new Error('Failed to create submission: ' + submissionError.message)
+        }
+
+        submission = newSubmission
+        console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
       }
-
-      submission = newSubmission
-      console.log('✅ [SUBMISSION] Created submission:', submission.id, 'with client_id:', submission.client_id)
 
       // NOTE: Notifications to notaries are now sent only after payment is successful
       // See verify-payment function for notification logic
@@ -886,6 +1031,79 @@ serve(async (req) => {
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams)
+    console.log('✅ [STRIPE] Checkout session created:', session.id)
+
+    // Update submission funnel_status to 'payment_pending' when payment is initiated
+    console.log('🔄 [FUNNEL] Checking submission before update:', {
+      hasSubmission: !!submission,
+      submissionId: submission?.id,
+      submissionStatus: submission?.status,
+      currentFunnelStatus: submission?.funnel_status
+    })
+
+    if (submission && submission.id) {
+      // Helper function to get funnel status order (higher = more advanced)
+      const getFunnelStatusOrder = (status: string | null): number => {
+        if (!status) return 0;
+        const orderMap: Record<string, number> = {
+          'started': 1,
+          'services_selected': 2,
+          'documents_uploaded': 3,
+          'delivery_method_selected': 4,
+          'personal_info_completed': 5,
+          'summary_viewed': 6,
+          'payment_pending': 7,
+          'payment_completed': 8,
+          'submission_completed': 9,
+        };
+        return orderMap[status] || 0;
+      };
+
+      const currentStatus = submission.funnel_status || null;
+      const currentOrder = getFunnelStatusOrder(currentStatus);
+      const paymentPendingOrder = getFunnelStatusOrder('payment_pending');
+
+      console.log('🔄 [FUNNEL] Checking if update needed:', {
+        submissionId: submission.id,
+        currentStatus: currentStatus,
+        currentOrder: currentOrder,
+        paymentPendingOrder: paymentPendingOrder,
+        shouldUpdate: paymentPendingOrder > currentOrder
+      });
+
+      // Only update if payment_pending is higher than current status
+      if (paymentPendingOrder > currentOrder) {
+        console.log('🔄 [FUNNEL] Updating submission funnel_status from', currentStatus, 'to payment_pending for submission:', submission.id)
+        
+        const { data: updatedSubmission, error: funnelUpdateError } = await supabase
+          .from('submission')
+          .update({ funnel_status: 'payment_pending' })
+          .eq('id', submission.id)
+          .select('id, funnel_status')
+          .single()
+
+        if (funnelUpdateError) {
+          console.error('❌ [FUNNEL] Error updating funnel_status:', funnelUpdateError)
+          console.error('❌ [FUNNEL] Error details:', JSON.stringify(funnelUpdateError, null, 2))
+          // Don't throw - payment session was created successfully
+        } else if (updatedSubmission) {
+          console.log('✅ [FUNNEL] Submission funnel_status updated successfully:', {
+            submissionId: updatedSubmission.id,
+            oldStatus: currentStatus,
+            newFunnelStatus: updatedSubmission.funnel_status
+          })
+        } else {
+          console.warn('⚠️ [FUNNEL] Update returned no error but no data either')
+        }
+      } else {
+        console.log(`ℹ️ [FUNNEL] Skipping update - current status '${currentStatus}' (order: ${currentOrder}) is higher or equal to 'payment_pending' (order: ${paymentPendingOrder})`)
+      }
+    } else {
+      console.error('❌ [FUNNEL] Cannot update funnel_status: submission is missing or has no id', {
+        submission: submission,
+        submissionId: submission?.id
+      })
+    }
 
     // Vérifier que la session a bien été créée avec le discount
     try {
@@ -920,6 +1138,24 @@ serve(async (req) => {
       console.error('❌ [SESSION] Erreur lors de la récupération de la session:', retrieveError.message)
     }
 
+    // Final verification: Check if funnel_status was updated
+    if (submission && submission.id) {
+      const { data: finalCheck, error: checkError } = await supabase
+        .from('submission')
+        .select('id, funnel_status')
+        .eq('id', submission.id)
+        .single()
+      
+      if (!checkError && finalCheck) {
+        console.log('✅ [FUNNEL] Final verification - Current funnel_status:', finalCheck.funnel_status)
+        if (finalCheck.funnel_status !== 'payment_pending') {
+          console.error('❌ [FUNNEL] WARNING: funnel_status was not updated correctly! Expected: payment_pending, Got:', finalCheck.funnel_status)
+        }
+      } else {
+        console.error('❌ [FUNNEL] Could not verify funnel_status update:', checkError)
+      }
+    }
+
     return new Response(
       JSON.stringify({ url: session.url, submissionId: submission.id }),
       {
@@ -940,7 +1176,6 @@ serve(async (req) => {
           selectedServices: formData.selectedServices,
           serviceDocumentsKeys: formData.serviceDocuments ? Object.keys(formData.serviceDocuments) : null,
           hasEmail: !!formData.email,
-          hasAppointmentDate: !!formData.appointmentDate,
         })
       }
     } catch (logError) {

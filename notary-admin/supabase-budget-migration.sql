@@ -47,3 +47,4 @@ CREATE POLICY "Budget is insertable by authenticated users"
   ON budget FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
+

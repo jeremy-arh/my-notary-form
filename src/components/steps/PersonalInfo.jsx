@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
 
-const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
+const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, isCreatingUser }) => {
   const [errors, setErrors] = useState({});
 
   const handleChange = (field, value) => {
@@ -50,7 +50,12 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
 
   const handleNext = () => {
     if (validate()) {
-      nextStep();
+      // Use handleContinueClick if provided (it will create client/user and then call nextStep)
+      if (handleContinueClick) {
+        handleContinueClick();
+      } else {
+        nextStep();
+      }
     }
   };
 
@@ -269,9 +274,12 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep }) => {
           <button
             type="button"
             onClick={handleNext}
-            className="btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+            disabled={isCreatingUser}
+            className={`btn-glassy px-6 md:px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 ${
+              isCreatingUser ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            Continue
+            {isCreatingUser ? 'Création du compte...' : 'Continue'}
           </button>
         </div>
       </div>

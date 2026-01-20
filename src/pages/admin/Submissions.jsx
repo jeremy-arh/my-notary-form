@@ -23,16 +23,23 @@ const Submissions = () => {
 
   const fetchSubmissions = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('submission')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching submissions:', error);
+        setSubmissions([]);
+        setLoading(false);
+        return;
+      }
 
       setSubmissions(data || []);
     } catch (error) {
       console.error('Error fetching submissions:', error);
+      setSubmissions([]);
     } finally {
       setLoading(false);
     }
@@ -86,13 +93,18 @@ const Submissions = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -182,9 +194,6 @@ const Submissions = () => {
                     Email
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Appointment
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -198,7 +207,7 @@ const Submissions = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredSubmissions.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-gray-600">
+                    <td colSpan="5" className="px-6 py-12 text-center text-gray-600">
                       No submissions found
                     </td>
                   </tr>
@@ -211,17 +220,14 @@ const Submissions = () => {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="font-semibold text-gray-900">
-                          {submission.first_name} {submission.last_name}
+                          {submission.first_name || ''} {submission.last_name || ''}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {submission.email}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {submission.appointment_date ? formatDate(submission.appointment_date) : 'N/A'}
+                        {submission.email || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(submission.status)}
+                        {getStatusBadge(submission.status || 'pending')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {formatDate(submission.created_at)}

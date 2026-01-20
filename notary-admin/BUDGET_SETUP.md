@@ -86,3 +86,4 @@ Les politiques RLS permettent :
 - **Lecture** : Tous les utilisateurs peuvent voir le budget
 - **Modification** : Seuls les utilisateurs authentifiés peuvent modifier le budget
 
+

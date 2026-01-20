@@ -37,11 +37,25 @@ serve(async (req) => {
 
     // Handle different event types
     switch (event.type) {
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent
+        console.log('💳 [WEBHOOK] Payment intent succeeded:', paymentIntent.id)
+        // Les données sont automatiquement synchronisées dans stripe.balance_transactions par Supabase
+        // Pas besoin d'insérer manuellement
+        break
+      }
+
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        // Payment success is handled by verify-payment function
-        // But we can also handle it here if needed
+        // Payment success is handled by payment_intent.succeeded
         console.log('Checkout session completed:', session.id)
+        break
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge
+        console.log('💳 [WEBHOOK] Charge refunded:', charge.id)
+        // Les données sont automatiquement synchronisées dans stripe.balance_transactions par Supabase
         break
       }
 

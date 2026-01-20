@@ -1,5 +1,5 @@
 -- Setup cron job for abandoned cart email sequence
--- This script sets up a cron job to send abandoned cart emails to clients who haven't completed their form_draft
+-- This script sets up a cron job to send abandoned cart emails to submissions with status 'pending_payment'
 
 -- Enable required extensions (if not already enabled)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
@@ -14,7 +14,7 @@ BEGIN
 END $$;
 
 -- Schedule cron job to run every hour
--- This will check for form_draft entries that need to receive abandoned cart emails
+-- This will check for submissions with status 'pending_payment' that need to receive abandoned cart emails
 -- Replace YOUR_PROJECT_REF and YOUR_SERVICE_ROLE_KEY with your actual values
 SELECT cron.schedule(
   'send-abandoned-cart-emails',                    -- Job name

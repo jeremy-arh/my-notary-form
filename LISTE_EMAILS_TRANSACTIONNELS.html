@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liste des Emails Transactionnels - send-transactional-email</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #000;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #555;
+      margin-top: 40px;
+      padding: 10px;
+      background-color: #e0e0e0;
+      border-left: 4px solid #000;
+    }
+    .email-type {
+      background-color: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .email-subject {
+      font-weight: bold;
+      color: #000;
+      margin-bottom: 10px;
+      font-size: 1.1em;
+    }
+    .email-html {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .info {
+      background-color: #e3f2fd;
+      padding: 10px;
+      border-left: 4px solid #2196F3;
+      margin-bottom: 15px;
+    }
+    .toc {
+      background-color: white;
+      padding: 20px;
+      margin-bottom: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .toc ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    .toc li {
+      margin: 8px 0;
+    }
+    .toc a {
+      color: #000;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .toc a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>📧 Liste Complète des Emails Transactionnels</h1>
+  <p><strong>Fonction:</strong> send-transactional-email</p>
+  <p><strong>Fichier source:</strong> supabase/functions/send-transactional-email/index.ts</p>
+  
+  <div class="info">
+    <strong>Note:</strong> Tous les emails utilisent la même structure de base (baseHTML) avec le logo MY NOTARY en haut à gauche, un fond blanc, et des boutons noirs arrondis. La police utilisée est Geist.
+  </div>
+
+  <div class="toc">
+    <h2>Table des matières</h2>
+    <ul>
+      <li><a href="#payment_success">1. payment_success - Confirmation de paiement</a></li>
+      <li><a href="#payment_failed">2. payment_failed - Échec de paiement</a></li>
+      <li><a href="#notary_assigned">3. notary_assigned - Notaire assigné</a></li>
+      <li><a href="#notarized_file_uploaded">4. notarized_file_uploaded - Document notarié disponible</a></li>
+      <li><a href="#message_received">5. message_received - Nouveau message</a></li>
+      <li><a href="#new_submission_available">6. new_submission_available - Nouvelle soumission disponible</a></li>
+      <li><a href="#appointment_reminder_day_before">7. appointment_reminder_day_before - Rappel rendez-vous (jour avant)</a></li>
+      <li><a href="#appointment_reminder_one_hour_before">8. appointment_reminder_one_hour_before - Rappel rendez-vous (1h avant)</a></li>
+      <li><a href="#submission_updated">9. submission_updated - Soumission mise à jour</a></li>
+      <li><a href="#default">10. default - Notification par défaut</a></li>
+    </ul>
+  </div>
+
+  <!-- EMAIL 1: payment_success -->
+  <div class="email-type" id="payment_success">
+    <h2>1. payment_success - Confirmation de paiement</h2>
+    <div class="email-subject">Sujet: ✅ Payment Confirmed - Submission #[numéro]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client<br>
+      <strong>Pièces jointes:</strong> PDF de facture (si fourni en base64)
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>✅ Payment Confirmed - Submission #[numéro]</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <!-- Google Fonts - Geist -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style type="text/css">
+    /* Geist Font for email clients that support web fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&display=swap');
+    
+    /* Fallback for email clients */
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    /* Outlook specific fixes */
+    table {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {
+      font-family: Arial, sans-serif !important;
+    }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F8F7F5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  <!-- Main Container -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #F8F7F5; padding: 40px 20px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <!-- Email Content Card -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 20px; overflow: hidden;">
+          <!-- Logo in top-left corner (no banner) -->
+          <tr>
+            <td style="padding: 50px 50px 0 50px; background-color: #ffffff;">
+              <!-- Logo - Black version, positioned top-left like Papers -->
+              <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="MY NOTARY" width="130" style="width: 130px; max-width: 130px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 60px 50px 50px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <!-- Body Content - Left Aligned -->
+              <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Hi [recipient_name],
+              </p>
+              <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Your payment for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong> has been confirmed successfully.
+              </p>
+              <!-- Montant payé si disponible -->
+              <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                Amount paid: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">$[amount]</strong> on [date].
+              </p>
+              <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                You can download your invoice using the link below.
+              </p>
+              
+              <!-- Call to Action Button - Download Invoice (si disponible) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 50px;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="border-radius: 30px; background-color: #000000;">
+                          <a href="[invoice_url]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            Download Invoice
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Call to Action Button - View Submission Details -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="border-radius: 30px; background-color: #000000;">
+                          <a href="[dashboard_url]/submission/[submission_id]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                            View Submission Details
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 0 50px 40px 50px; background-color: #ffffff; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+              <!-- Footer Separator -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #E5E5E5; padding: 0;"></td>
+                </tr>
+              </table>
+              
+              <!-- Footer Content with Logo and Text -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 20px 0;">
+                <tr>
+                  <td style="padding: 0;">
+                    <!-- Logo and Text -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding: 0 12px 0 0; vertical-align: middle;">
+                          <img src="https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png" alt="MY NOTARY" width="100" style="width: 100px; max-width: 100px; height: auto; display: block; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;">
+                        </td>
+                        <td style="padding: 0; vertical-align: middle;">
+                          <p style="margin: 0; font-size: 18px; font-weight: 700; color: #000000; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                            MY NOTARY
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0 0 20px; font-size: 14px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
+                This is an automated email from <strong style="color: #000000; font-weight: 600;">MY NOTARY</strong>.<br>
+                Please do not reply to this email.
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #666666; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <a href="[dashboard_url]" style="color: #000000; text-decoration: underline; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Visit Dashboard</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 2: payment_failed -->
+  <div class="email-type" id="payment_failed">
+    <h2>2. payment_failed - Échec de paiement</h2>
+    <div class="email-subject">Sujet: ❌ Payment Failed - Submission #[numéro]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client<br>
+      <strong>Contenu:</strong> Message d'erreur si disponible
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head que payment_success -->
+</head>
+<body>
+  <!-- Même structure body que payment_success -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    The payment for your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong> has failed.
+  </p>
+  <!-- Message d'erreur si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Reason: [error_message]
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Please try the payment again using the link below. If you have any questions, our team is here to help.
+  </p>
+  
+  <!-- Call to Action Button - Retry Payment -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                Retry Payment
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique à payment_success -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 3: notary_assigned -->
+  <div class="email-type" id="notary_assigned">
+    <h2>3. notary_assigned - Notaire assigné</h2>
+    <div class="email-subject">Sujet: 👤 Notary Assigned - Submission #[numéro]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client<br>
+      <strong>Contenu:</strong> Nom du notaire assigné
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    A notary has been assigned to your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong>.
+  </p>
+  <!-- Nom du notaire si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Assigned notary: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">[notary_name]</strong>.
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    You can now communicate with the notary and track the progress of your submission. If you have any questions, our team is here to help.
+  </p>
+  
+  <!-- Call to Action Button - View Submission -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Submission
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 4: notarized_file_uploaded -->
+  <div class="email-type" id="notarized_file_uploaded">
+    <h2>4. notarized_file_uploaded - Document notarié disponible</h2>
+    <div class="email-subject">Sujet: 📄 Notarized Document Available - Submission #[numéro]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client<br>
+      <strong>Contenu:</strong> Nom du fichier notarié
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    A new notarized document has been added to your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong>.
+  </p>
+  <!-- Nom du fichier si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Document: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">[file_name]</strong>
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    You can view and download your notarized documents using the link below. If you have any questions, our team is here to help.
+  </p>
+  
+  <!-- Call to Action Button - View Notarized Documents -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]?tab=notarized" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Notarized Documents
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 5: message_received -->
+  <div class="email-type" id="message_received">
+    <h2>5. message_received - Nouveau message</h2>
+    <div class="email-subject">Sujet: 💬 New Message - Submission #[numéro]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client ou Notaire<br>
+      <strong>Contenu:</strong> Aperçu du message
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    You have received a new message regarding your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong>.
+  </p>
+  <!-- Aperçu du message si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-style: italic; padding-left: 16px; border-left: 2px solid #E5E5E5;">
+    "[message_preview]"
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    You can view and respond to the message using the link below. If you have any questions, our team is here to help.
+  </p>
+  
+  <!-- Call to Action Button - View Conversation -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Conversation
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 6: new_submission_available -->
+  <div class="email-type" id="new_submission_available">
+    <h2>6. new_submission_available - Nouvelle soumission disponible</h2>
+    <div class="email-subject">Sujet: 📋 New Submission Available - Submission #[numéro]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Notaire<br>
+      <strong>Contenu:</strong> Nom du client, date/heure du rendez-vous (convertie dans le fuseau horaire du notaire)
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    A new notary submission has been registered and is now available for assignment.
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Submission #[submission_number]</strong>
+  </p>
+  <!-- Nom du client si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">[client_name]</strong>
+  </p>
+  <!-- Date/heure du rendez-vous (convertie) si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Appointment: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">[appointment_date] at [appointment_time] ([timezone])</strong>
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    You can view and accept this submission from your dashboard. If you have any questions, our team is here to help.
+  </p>
+  
+  <!-- Call to Action Button - View Submission (bouton plus petit) -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 280px;">
+          <tr>
+            <td align="center" style="border-radius: 25px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]" style="display: block; padding: 15px 30px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: 400; font-size: 15px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Submission
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 7: appointment_reminder_day_before -->
+  <div class="email-type" id="appointment_reminder_day_before">
+    <h2>7. appointment_reminder_day_before - Rappel rendez-vous (jour avant)</h2>
+    <div class="email-subject">Sujet: ⏰ Appointment Reminder - Tomorrow at [heure]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client ou Notaire<br>
+      <strong>Contenu:</strong> Date complète du rendez-vous, nom du client (si destinataire est notaire)
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    This is a reminder that you have an appointment <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">tomorrow</strong> for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong>.
+  </p>
+  <!-- Date complète du rendez-vous si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Date: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">[date_complete] at [time] ([timezone])</strong>
+  </p>
+  <!-- Nom du client si disponible (pour notaire) -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Client: <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">[client_name]</strong>
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Please make sure you are prepared for the appointment. If you have any questions or need to reschedule, please contact us as soon as possible.
+  </p>
+  
+  <!-- Call to Action Button - View Submission Details -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Submission Details
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 8: appointment_reminder_one_hour_before -->
+  <div class="email-type" id="appointment_reminder_one_hour_before">
+    <h2>8. appointment_reminder_one_hour_before - Rappel rendez-vous (1h avant)</h2>
+    <div class="email-subject">Sujet: ⏰ Appointment Reminder - [date complète]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client ou Notaire<br>
+      <strong>Contenu:</strong> Date, heure, adresse complète du rendez-vous
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    This is a reminder that your appointment for submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong> is scheduled in <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">1 hour</strong>.
+  </p>
+  <!-- Date et heure si disponibles -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Date:</strong> [date_complete]<br>
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Time:</strong> [time] ([timezone])
+  </p>
+  <!-- Adresse si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Location:</strong> [address], [city], [country]
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Please make sure you're ready for your appointment. If you need to reschedule or have any questions, please contact us.
+  </p>
+  
+  <!-- Call to Action Button - View Submission Details -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Submission Details
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 9: submission_updated -->
+  <div class="email-type" id="submission_updated">
+    <h2>9. submission_updated - Soumission mise à jour</h2>
+    <div class="email-subject">Sujet: 📝 Submission Updated - #[numéro]</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client ou Notaire<br>
+      <strong>Contenu:</strong> Liste des champs mis à jour, changement de prix, services, rendez-vous
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Your submission <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">#[submission_number]</strong> has been updated.
+  </p>
+  
+  <!-- Liste des champs mis à jour -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Updated fields:</strong> [liste des champs: Personal information, Address, Services, Appointment date/time, Price]
+  </p>
+  
+  <!-- Changement de prix si applicable -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Price change:</strong> $[old_price] → <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">$[new_price]</strong>
+  </p>
+  
+  <!-- Services si disponibles -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Services:</strong> [services]
+  </p>
+  
+  <!-- Rendez-vous si disponible -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <strong style="color: #222222; font-weight: 600; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">Appointment:</strong> [date_complete] at [time] ([timezone])
+  </p>
+  
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Please review the updated details in your dashboard. If you have any questions or concerns, please don't hesitate to contact us.
+  </p>
+  
+  <!-- Call to Action Button - View Updated Submission -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]/submission/[submission_id]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Updated Submission
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <!-- EMAIL 10: default -->
+  <div class="email-type" id="default">
+    <h2>10. default - Notification par défaut</h2>
+    <div class="email-subject">Sujet: 📧 MY NOTARY Notification</div>
+    <div class="info">
+      <strong>Destinataire:</strong> Client ou Notaire<br>
+      <strong>Usage:</strong> Template par défaut si le type d'email n'est pas reconnu
+    </div>
+    <div class="email-html"><!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Même structure head -->
+</head>
+<body>
+  <!-- Même structure body -->
+  <!-- Content -->
+  <p style="margin: 0 0 20px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    Hi [recipient_name],
+  </p>
+  <p style="margin: 0 0 50px; font-size: 17px; line-height: 1.7; color: #444444; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    You have a new notification. If you have any questions, our team is here to help.
+  </p>
+  
+  <!-- Call to Action Button - View Dashboard -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="border-radius: 30px; background-color: #000000;">
+              <a href="[dashboard_url]" style="display: inline-block; padding: 18px 45px; background-color: #000000; color: #ffffff; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 18px; font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.2;">
+                View Dashboard
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!-- Footer identique -->
+</body>
+</html></div>
+  </div>
+
+  <div class="info" style="margin-top: 40px;">
+    <h2>Structure commune de base (baseHTML)</h2>
+    <p>Tous les emails utilisent la même structure HTML de base avec :</p>
+    <ul>
+      <li><strong>Logo MY NOTARY</strong> en haut à gauche (noir, 130px de largeur)</li>
+      <li><strong>Fond blanc</strong> avec bordure arrondie (20px)</li>
+      <li><strong>Police Geist</strong> avec fallback vers les polices système</li>
+      <li><strong>Boutons noirs</strong> arrondis (30px de border-radius)</li>
+      <li><strong>Footer</strong> avec logo, texte et lien vers le dashboard</li>
+      <li><strong>Couleurs principales:</strong> Noir (#000000), Gris (#444444, #666666), Fond (#F8F7F5)</li>
+    </ul>
+    <p><strong>URL du logo:</strong> https://jlizwheftlnhoifbqeex.supabase.co/storage/v1/object/public/assets/logo/mynotary-logo-noir.png</p>
+  </div>
+
+</body>
+</html>

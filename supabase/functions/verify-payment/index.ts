@@ -474,9 +474,9 @@ serve(async (req) => {
       // Don't throw - payment is successful, just log the error
     }
 
-    // Note: form_draft entries are kept in the database for analytics purposes
-    // The abandoned cart email function will check for paid submissions and skip sending emails
-    console.log('ℹ️ [FORM_DRAFT] Keeping form_draft entries in database (will not receive abandoned cart emails due to paid submission)')
+    // Note: The abandoned cart email sequence automatically stops when submission status changes from 'pending_payment'
+    // No need to manually delete or update anything - the sequence query filters by status = 'pending_payment'
+    console.log('ℹ️ [SUBMISSION] Payment completed - abandoned cart email sequence will stop automatically (status changed from pending_payment)')
 
     // Notify all active notaries about the new paid submission
     try {

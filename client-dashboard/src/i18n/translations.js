@@ -180,6 +180,7 @@ export const translations = {
         backCancelButton: 'Cancel',
         step: 'Step',
         creatingAccount: 'Creating account...',
+        processing: 'Processing...',
         uploading: 'Uploading...',
       },
       errors: {
@@ -428,6 +429,7 @@ export const translations = {
         backCancelButton: 'Annuler',
         step: 'Étape',
         creatingAccount: 'Création du compte...',
+        processing: 'Traitement en cours...',
         uploading: 'Téléchargement...',
       },
       errors: {
@@ -674,6 +676,7 @@ export const translations = {
         stepsRemaining: 'pasos restantes',
         step: 'Paso',
         creatingAccount: 'Creando cuenta...',
+        processing: 'Procesando...',
         uploading: 'Subiendo...',
       },
       errors: {
@@ -910,6 +913,7 @@ export const translations = {
         stepsRemaining: 'Schritte verbleibend',
         step: 'Schritt',
         creatingAccount: 'Konto wird erstellt...',
+        processing: 'Wird verarbeitet...',
         uploading: 'Hochladen...',
       },
       errors: {
@@ -1147,6 +1151,7 @@ export const translations = {
         stepsRemaining: 'passi rimanenti',
         step: 'Passo',
         creatingAccount: 'Creazione account...',
+        processing: 'Elaborazione in corso...',
         uploading: 'Caricamento...',
       },
       errors: {
@@ -1380,6 +1385,7 @@ export const translations = {
         stepsRemaining: 'etapas restantes',
         step: 'Etapa',
         creatingAccount: 'Criando conta...',
+        processing: 'Processando...',
         uploading: 'Enviando...',
       },
       errors: {

@@ -19,6 +19,8 @@ import OptionEdit from './pages/admin/OptionEdit'
 import Messages from './pages/admin/Messages'
 import Profile from './pages/admin/Profile'
 import Analytics from './pages/admin/Analytics'
+import CRM from './pages/admin/CRM'
+import ClientDetail from './pages/admin/ClientDetail'
 import './index.css'
 
 function App() {
@@ -52,7 +54,7 @@ function App() {
           path="/submissions"
           element={
             <PrivateRoute>
-              <Submissions />
+              <Navigate to="/crm?tab=submissions" replace />
             </PrivateRoute>
           }
         />
@@ -189,6 +191,22 @@ function App() {
           element={
             <PrivateRoute>
               <Analytics />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/crm"
+          element={
+            <PrivateRoute>
+              <CRM />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/crm/client/:id"
+          element={
+            <PrivateRoute>
+              <ClientDetail />
             </PrivateRoute>
           }
         />

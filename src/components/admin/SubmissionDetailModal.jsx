@@ -196,23 +196,6 @@ const SubmissionDetailModal = ({ submission, onClose, onUpdateStatus, onRefresh 
                 </div>
               </div>
 
-              {/* Appointment */}
-              <div className="bg-[#F3F4F6] rounded-2xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Appointment Details</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Date & Time</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {formatDate(submission.appointment_date)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Timezone</span>
-                    <span className="text-sm font-medium text-gray-900">{submission.timezone || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-
               {/* Services */}
               {services.length > 0 && (
                 <div className="bg-[#F3F4F6] rounded-2xl p-6">
