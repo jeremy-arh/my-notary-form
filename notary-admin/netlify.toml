@@ -2,7 +2,8 @@
 
 [build]
   # Build command - use npm install to ensure optional dependencies are installed
-  command = "npm install && npm run build"
+  # Note: Netlify may run npm ci automatically, so we need to ensure package-lock.json is in sync
+  command = "npm install --legacy-peer-deps && npm run build"
   
   # Directory with the build output (Vite outputs to 'dist')
   publish = "dist"
