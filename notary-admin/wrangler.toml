@@ -1,0 +1,11 @@
+# Cloudflare Pages configuration for Notary Admin Dashboard
+
+name = "notary-admin"
+compatibility_date = "2024-01-01"
+
+[build]
+  command = "npm cache clean --force && npm install --legacy-peer-deps --no-audit --no-fund && npm run build"
+  cwd = "."
+
+[build.environment_variables]
+  NODE_VERSION = "22"
