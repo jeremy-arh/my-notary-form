@@ -1,8 +1,8 @@
 # Netlify configuration for Notary Admin Dashboard
 
 [build]
-  # Build command - use npm ci for more reliable builds
-  command = "npm ci && npm run build"
+  # Build command - use npm install to ensure optional dependencies are installed
+  command = "npm install && npm run build"
   
   # Directory with the build output (Vite outputs to 'dist')
   publish = "dist"
