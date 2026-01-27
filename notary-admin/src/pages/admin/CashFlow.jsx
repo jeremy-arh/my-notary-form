@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay, endOfDay, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale/fr';
 import { Line, Doughnut } from 'react-chartjs-2';
 import '../../lib/chartConfig'; // Register Chart.js components
@@ -22,6 +22,7 @@ const CashFlow = () => {
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dailyView, setDailyView] = useState('table'); // 'table' or 'calendar'
   const [syncingGoogleAds, setSyncingGoogleAds] = useState(false);
+  const [syncingStripe, setSyncingStripe] = useState(false);
   const [budget, setBudget] = useState({ initial_budget: 0, id: null });
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [budgetForm, setBudgetForm] = useState({ initial_budget: '', description: '' });
@@ -176,33 +177,177 @@ const CashFlow = () => {
     }
   };
 
+  const syncStripeRevenues = async () => {
+    setSyncingStripe(true);
+    try {
+      // Appeler la Supabase Edge Function pour synchroniser les balance transactions
+      const { data, error } = await supabase.functions.invoke('sync-stripe-balance-transactions', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      // Rafraîchir les données après synchronisation
+      await fetchStripeRevenues();
+      
+      alert('Synchronisation Stripe terminée avec succès !');
+    } catch (error) {
+      console.error('Error syncing Stripe revenues:', error);
+      alert('Erreur lors de la synchronisation: ' + (error.message || 'Vérifiez que la fonction Edge est déployée et configurée'));
+    } finally {
+      setSyncingStripe(false);
+    }
+  };
+
   const fetchStripeRevenues = async () => {
     try {
-      // Récupérer les revenus depuis la table stripe.balance_transactions via une fonction SQL
-      // Cette table contient automatiquement les transactions Stripe avec les montants nets en EUR
+      // Utiliser la vue stripe_balance_transactions_view qui accède à stripe.balance_transactions
+      // NE JAMAIS utiliser la table submission pour les prix
       const { data: balanceTransactions, error } = await supabase
-        .rpc('get_stripe_revenues');
+        .from('stripe_balance_transactions_view')
+        .select('id, amount, net, fee, currency, created, description, type')
+        .order('created', { ascending: false })
+        .limit(10000);
 
       if (error) {
-        console.error('Error fetching Stripe revenues:', error);
-        throw error;
+        console.error('Error fetching Stripe revenues from view:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        alert('Erreur lors de la récupération des revenus Stripe. Vérifiez que la vue stripe_balance_transactions_view est correctement configurée.');
+        setStripeRevenues([]);
+        return;
       }
 
-      console.log('Balance transactions fetched:', balanceTransactions?.length || 0);
+      if (!balanceTransactions || balanceTransactions.length === 0) {
+        console.warn('No balance transactions returned from view');
+        setStripeRevenues([]);
+        return;
+      }
 
-      // Transformer les données pour correspondre au format attendu
-      const formattedRevenues = (balanceTransactions || []).map(bt => ({
-        id: bt.id,
-        amount: bt.net / 100, // Montant net en EUR (converti depuis centimes)
-        originalAmount: bt.amount / 100, // Montant brut dans la devise d'origine
-        originalCurrency: bt.currency?.toUpperCase() || 'EUR',
-        date: bt.created ? new Date(bt.created * 1000).toISOString() : new Date().toISOString(),
-        customer: bt.description || 'Client',
-        fee: bt.fee / 100, // Frais Stripe en EUR
-        balance_transaction_id: bt.id
-      }));
+      console.log('Balance transactions fetched from view:', balanceTransactions.length);
+      
+      // DEBUG: Vérifier la structure des données retournées
+      if (balanceTransactions.length > 0) {
+        console.log('DEBUG - First transaction structure:', balanceTransactions[0]);
+        console.log('DEBUG - First transaction net value:', {
+          net: balanceTransactions[0].net,
+          netType: typeof balanceTransactions[0].net,
+          netDiv100: balanceTransactions[0].net / 100,
+          amount: balanceTransactions[0].amount,
+          created: balanceTransactions[0].created
+        });
+      }
 
-      console.log('Formatted revenues:', formattedRevenues.length);
+      // Transformer les données : utiliser net / 100 directement depuis stripe.balance_transactions
+      const formattedRevenues = (balanceTransactions || [])
+        .map(bt => {
+        // Convertir la date created (timestamp PostgreSQL)
+        let dateObj;
+        if (bt.created instanceof Date) {
+          dateObj = bt.created;
+        } else if (typeof bt.created === 'number') {
+          // Si c'est un nombre, vérifier si c'est en secondes ou millisecondes
+          dateObj = bt.created < 10000000000 
+            ? new Date(bt.created * 1000) // Secondes
+            : new Date(bt.created); // Millisecondes
+        } else if (typeof bt.created === 'string') {
+          // String ISO ou timestamp string
+          const parsed = Date.parse(bt.created);
+          if (!isNaN(parsed)) {
+            dateObj = new Date(parsed);
+          } else {
+            // Peut-être un timestamp numérique en string
+            const num = parseInt(bt.created);
+            if (!isNaN(num)) {
+              dateObj = num < 10000000000 
+                ? new Date(num * 1000) // Secondes
+                : new Date(num); // Millisecondes
+            } else {
+              console.warn('Could not parse date:', bt.created);
+              dateObj = new Date();
+            }
+          }
+        } else {
+          console.warn('Unexpected date type:', typeof bt.created, bt.created);
+          dateObj = new Date();
+        }
+        
+        // Normaliser la date au début du jour en UTC pour éviter les problèmes de fuseau horaire
+        const normalizedDate = startOfDay(dateObj);
+        const dateStr = normalizedDate.toISOString();
+        
+        // S'assurer que bt.net existe et est un nombre
+        if (bt.net === undefined || bt.net === null || isNaN(bt.net)) {
+          console.error('ERROR: bt.net is missing or invalid for transaction', bt.id, bt);
+        }
+        
+        return {
+          id: bt.id,
+          amount: bt.net / 100, // STRICTEMENT net / 100 depuis stripe.balance_transactions.net
+          originalAmount: bt.amount / 100, // Montant brut dans la devise d'origine
+          originalCurrency: bt.currency?.toUpperCase() || 'EUR',
+          date: dateStr, // String ISO normalisée au début du jour UTC
+          customer: bt.description || 'Client',
+          fee: bt.fee / 100, // Frais Stripe en EUR
+          balance_transaction_id: bt.id,
+          type: bt.type
+        };
+        })
+        .filter(bt => bt !== null); // Filtrer les transactions invalides
+
+      console.log('Formatted revenues (charges only):', formattedRevenues.length);
+      
+      // DEBUG: Vérifier les transactions du 25 janvier AVANT formatage
+      const jan25Raw = balanceTransactions.filter(bt => {
+        try {
+          let dateObj;
+          if (bt.created instanceof Date) {
+            dateObj = bt.created;
+          } else if (typeof bt.created === 'string') {
+            dateObj = new Date(bt.created);
+          } else {
+            dateObj = new Date(bt.created);
+          }
+          const dateStr = format(startOfDay(dateObj), 'yyyy-MM-dd');
+          return dateStr === '2026-01-25';
+        } catch (e) {
+          return false;
+        }
+      });
+      console.log('DEBUG - Raw transactions on 2026-01-25:', jan25Raw.length);
+      jan25Raw.forEach(bt => {
+        console.log('  RAW - ID:', bt.id, 'net:', bt.net, 'net/100:', bt.net / 100, 'amount:', bt.amount, 'fee:', bt.fee);
+      });
+      
+      // DEBUG: Vérifier les transactions du 25 janvier APRÈS formatage
+      const jan25Revenues = formattedRevenues.filter(r => {
+        try {
+          const dateStr = format(parseISO(r.date), 'yyyy-MM-dd');
+          return dateStr === '2026-01-25';
+        } catch (e) {
+          return false;
+        }
+      });
+      console.log('DEBUG - Formatted transactions on 2026-01-25:', jan25Revenues.length);
+      jan25Revenues.forEach(r => {
+        console.log('  FORMATTED - ID:', r.id, 'amount:', r.amount, '€', 'originalAmount:', r.originalAmount, '€');
+      });
+      
+      // Calculer le total pour le 25/01
+      const totalJan25 = jan25Revenues.reduce((sum, r) => sum + r.amount, 0);
+      console.log('DEBUG - Total for 2026-01-25:', totalJan25, '€');
+      
+      // DEBUG: Afficher toutes les dates uniques
+      const allDates = formattedRevenues.map(r => {
+        try {
+          return format(parseISO(r.date), 'yyyy-MM-dd');
+        } catch (e) {
+          return 'ERROR';
+        }
+      });
+      const uniqueDates = [...new Set(allDates)].sort();
+      console.log('DEBUG - Unique dates:', uniqueDates);
+      console.log('DEBUG - Date range:', uniqueDates[0], 'to', uniqueDates[uniqueDates.length - 1]);
+      
       setStripeRevenues(formattedRevenues);
     } catch (error) {
       console.error('Error fetching Stripe revenues:', error);
@@ -327,15 +472,23 @@ const CashFlow = () => {
 
     // Revenues (Stripe)
     const periodRevenues = stripeRevenues.filter(r => {
-      const revenueDate = parseISO(r.date);
-      return revenueDate >= periodStart && revenueDate <= periodEnd;
+      try {
+        const revenueDate = startOfDay(parseISO(r.date));
+        return revenueDate >= periodStart && revenueDate <= periodEnd;
+      } catch (e) {
+        return false;
+      }
     });
     const totalRevenue = periodRevenues.reduce((sum, r) => sum + r.amount, 0);
     
     // Revenues pour le calcul du budget (à partir du 05/01/2026)
     const budgetRevenues = stripeRevenues.filter(r => {
-      const revenueDate = parseISO(r.date);
-      return revenueDate >= budgetReferenceDate;
+      try {
+        const revenueDate = startOfDay(parseISO(r.date));
+        return revenueDate >= startOfDay(budgetReferenceDate);
+      } catch (e) {
+        return false;
+      }
     });
     const totalBudgetRevenue = budgetRevenues.reduce((sum, r) => sum + r.amount, 0);
 
@@ -498,9 +651,14 @@ const CashFlow = () => {
         let weekOtherCosts = 0;
         
         weekDays.forEach(day => {
+          const dayStart = startOfDay(day);
           const dayRevenues = stripeRevenues.filter(r => {
-            const revenueDate = parseISO(r.date);
-            return isSameDay(revenueDate, day);
+            try {
+              const revenueDate = startOfDay(parseISO(r.date));
+              return isEqual(revenueDate, dayStart);
+            } catch (e) {
+              return false;
+            }
           });
           weekRevenue += dayRevenues.reduce((sum, r) => sum + r.amount, 0);
 
@@ -551,22 +709,35 @@ const CashFlow = () => {
     
     return days.map(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
+      const dayStart = startOfDay(day);
       
       const dayRevenues = stripeRevenues.filter(r => {
-        const revenueDate = parseISO(r.date);
-        return isSameDay(revenueDate, day);
+        try {
+          const revenueDate = startOfDay(parseISO(r.date));
+          return isEqual(revenueDate, dayStart);
+        } catch (e) {
+          return false;
+        }
       });
       const dayRevenue = dayRevenues.reduce((sum, r) => sum + r.amount, 0);
 
       const dayGoogleAds = googleAdsCosts.filter(c => {
-        const costDate = parseISO(c.cost_date);
-        return isSameDay(costDate, day);
+        try {
+          const costDate = startOfDay(parseISO(c.cost_date));
+          return isEqual(costDate, dayStart);
+        } catch (e) {
+          return false;
+        }
       });
       const dayGoogleAdsCost = dayGoogleAds.reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
 
       const dayNotary = notaryPayments.filter(p => {
-        const paymentDate = parseISO(p.payment_date);
-        return isSameDay(paymentDate, day);
+        try {
+          const paymentDate = startOfDay(parseISO(p.payment_date));
+          return isEqual(paymentDate, dayStart);
+        } catch (e) {
+          return false;
+        }
       });
       const dayNotaryCost = dayNotary.reduce((sum, p) => sum + parseFloat(p.payment_amount || 0), 0);
 
@@ -727,22 +898,35 @@ const CashFlow = () => {
 
     return days.map(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
+      const dayStart = startOfDay(day);
       
       const dayRevenues = stripeRevenues.filter(r => {
-        const revenueDate = parseISO(r.date);
-        return isSameDay(revenueDate, day);
+        try {
+          const revenueDate = startOfDay(parseISO(r.date));
+          return isEqual(revenueDate, dayStart);
+        } catch (e) {
+          return false;
+        }
       });
       const dayRevenue = dayRevenues.reduce((sum, r) => sum + r.amount, 0);
 
       const dayGoogleAds = googleAdsCosts.filter(c => {
-        const costDate = parseISO(c.cost_date);
-        return isSameDay(costDate, day);
+        try {
+          const costDate = startOfDay(parseISO(c.cost_date));
+          return isEqual(costDate, dayStart);
+        } catch (e) {
+          return false;
+        }
       });
       const dayGoogleAdsCost = dayGoogleAds.reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
 
       const dayNotary = notaryPayments.filter(p => {
-        const paymentDate = parseISO(p.payment_date);
-        return isSameDay(paymentDate, day);
+        try {
+          const paymentDate = startOfDay(parseISO(p.payment_date));
+          return isEqual(paymentDate, dayStart);
+        } catch (e) {
+          return false;
+        }
       });
       const dayNotaryCost = dayNotary.reduce((sum, p) => sum + parseFloat(p.payment_amount || 0), 0);
 
@@ -764,29 +948,58 @@ const CashFlow = () => {
     const { start: periodStart, end: periodEnd } = getPeriodDates();
     const days = eachDayOfInterval({ start: periodStart, end: periodEnd });
 
+
     return days.map(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
+      const dayStart = startOfDay(day); // Normaliser le jour au début de la journée
       
-      // Revenus du jour
+      // Revenus du jour - comparer les dates normalisées
       const dayRevenues = stripeRevenues.filter(r => {
-        const revenueDate = parseISO(r.date);
-        return isSameDay(revenueDate, day);
+        try {
+          const revenueDate = startOfDay(parseISO(r.date));
+          return isEqual(revenueDate, dayStart);
+        } catch (e) {
+          console.error('Error parsing revenue date:', r.date, e);
+          return false;
+        }
       });
+      
+      // DEBUG: Afficher les détails des revenus pour le 25 janvier
+      if (dayStr === '2026-01-25' && dayRevenues.length > 0) {
+        console.log('DEBUG - Revenues for 2026-01-25:', dayRevenues.map(r => ({
+          id: r.id,
+          amount: r.amount,
+          originalAmount: r.originalAmount,
+          fee: r.fee,
+          date: r.date
+        })));
+      }
+      
       const dayRevenue = dayRevenues.reduce((sum, r) => sum + r.amount, 0);
       const numberOfSales = dayRevenues.length;
       const averageUnitRevenue = numberOfSales > 0 ? dayRevenue / numberOfSales : 0;
 
       // Coûts Google Ads du jour
       const dayGoogleAds = googleAdsCosts.filter(c => {
-        const costDate = parseISO(c.cost_date);
-        return isSameDay(costDate, day);
+        try {
+          const costDate = startOfDay(parseISO(c.cost_date));
+          return isEqual(costDate, dayStart);
+        } catch (e) {
+          console.error('Error parsing Google Ads cost date:', c.cost_date, e);
+          return false;
+        }
       });
       const dayGoogleAdsCost = dayGoogleAds.reduce((sum, c) => sum + parseFloat(c.cost_amount || 0), 0);
 
       // Coûts notaires du jour
       const dayNotary = notaryPayments.filter(p => {
-        const paymentDate = parseISO(p.payment_date);
-        return isSameDay(paymentDate, day);
+        try {
+          const paymentDate = startOfDay(parseISO(p.payment_date));
+          return isEqual(paymentDate, dayStart);
+        } catch (e) {
+          console.error('Error parsing notary payment date:', p.payment_date, e);
+          return false;
+        }
       });
       const dayNotaryCost = dayNotary.reduce((sum, p) => sum + parseFloat(p.payment_amount || 0), 0);
 
