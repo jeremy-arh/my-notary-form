@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServices } from '../../contexts/ServicesContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { getServicePrice, getServicePriceCurrency } from '../../utils/pricing';
 
 const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
@@ -90,7 +91,7 @@ const ChooseOption = ({ formData, updateFormData, nextStep, handleContinueClick,
                       {getServiceName(service)}
                     </h3>
                     <p key={`price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm font-semibold text-gray-900 mt-0.5">
-                      {formatPriceSync(service.base_price || 0)} {t('form.steps.documents.perDocument')}
+                      {formatPriceSync(getServicePrice(service, currency) || 0, getServicePriceCurrency(service, currency))} {t('form.steps.documents.perDocument')}
                     </p>
                   </div>
                   {isSelected && (

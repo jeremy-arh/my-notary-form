@@ -9,6 +9,8 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import PriceDetails from '../PriceDetails';
 import Notification from '../Notification';
 import { updateFunnelStatusToSummaryViewed } from '../../utils/updateFunnelStatus';
+import { getServicePrice, getServicePriceCurrency, getOptionPrice, getOptionPriceCurrency } from '../../utils/pricing';
+import { convertPriceSync } from '../../utils/currency';
 
 const DELIVERY_POSTAL_PRICE_EUR = 29.95;
 
@@ -239,7 +241,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     const convertDeliveryPrice = async () => {
       if (formData.deliveryMethod === 'postal') {
         // Set initial price synchronously from cache if available
-        const syncPrice = formatPriceSync(DELIVERY_POSTAL_PRICE_EUR);
+        const syncPrice = formatPriceSync(DELIVERY_POSTAL_PRICE_EUR, 'EUR');
         setConvertedDeliveryPrice(syncPrice);
         
         // Then convert asynchronously for accurate rate
@@ -360,7 +362,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             item_id: service.service_id || serviceId,
             item_name: getServiceName(service) || serviceId,
             item_category: 'Notarization Service',
-            price: service.base_price || 0,
+            price: getServicePrice(service, currency) || 0,
             quantity: documents.length
           });
 
@@ -374,7 +376,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     item_id: option.option_id || optionId,
                     item_name: getOptionName(option) || optionId,
                     item_category: 'Additional Service',
-                    price: option.additional_price || 0,
+                    price: getOptionPrice(option, currency) || 0,
                     quantity: 1
                   });
                 }
@@ -389,13 +391,23 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         const service = servicesMap[serviceId];
         const documents = formData.serviceDocuments?.[serviceId] || [];
         if (service) {
-          total += documents.length * (service.base_price || 0);
+          const servicePrice = getServicePrice(service, currency);
+          const servicePriceCurrency = getServicePriceCurrency(service, currency);
+          const servicePriceInCurrency = servicePriceCurrency === currency
+            ? servicePrice
+            : convertPriceSync(servicePrice, currency);
+          total += documents.length * (servicePriceInCurrency || 0);
           documents.forEach(doc => {
             if (doc.selectedOptions && doc.selectedOptions.length > 0) {
               doc.selectedOptions.forEach(optionId => {
                 const option = optionsMap[optionId];
                 if (option) {
-                  total += option.additional_price || 0;
+                  const optionPrice = getOptionPrice(option, currency);
+                  const optionPriceCurrency = getOptionPriceCurrency(option, currency);
+                  const optionPriceInCurrency = optionPriceCurrency === currency
+                    ? optionPrice
+                    : convertPriceSync(optionPrice, currency);
+                  total += optionPriceInCurrency || 0;
                 }
               });
             }
@@ -406,7 +418,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
 
     // Add delivery method cost if postal delivery selected
     if (formData.deliveryMethod === 'postal') {
-      total += DELIVERY_POSTAL_PRICE_EUR;
+      const deliveryPrice = currency === 'EUR' 
+        ? DELIVERY_POSTAL_PRICE_EUR 
+        : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+      total += deliveryPrice;
       items.push({
         item_id: 'delivery_postal',
         item_name: 'Physical Delivery (DHL Express)',
@@ -607,7 +622,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-xs sm:text-sm lg:text-base text-gray-900 break-words">{getServiceName(service) || serviceId}</h4>
                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 break-words">
-                          {documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')} × {formatPriceSync(service?.base_price || 0)}
+                          {documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')} × {formatPriceSync(getServicePrice(service, currency) || 0, getServicePriceCurrency(service, currency))}
                         </p>
                       </div>
                     </div>
@@ -737,7 +752,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
             </p>
             {formData.deliveryMethod === 'postal' && (
               <p className="text-[10px] sm:text-xs font-semibold text-gray-900 mt-1">
-                {t('form.steps.summary.deliveryPrice') || 'Delivery cost'}: {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR)}
+                {t('form.steps.summary.deliveryPrice') || 'Delivery cost'}: {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR, 'EUR')}
               </p>
             )}
           </div>
@@ -785,7 +800,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       )}
                       {index > 0 && (
                         <span className="ml-2 text-xs text-gray-600 font-normal">
-                          (+{formatPriceSync(45)})
+                          (+{formatPriceSync(45, 'EUR')})
                         </span>
                       )}
                     </p>
@@ -838,7 +853,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   if (!service) return null;
 
                   const documents = formData.serviceDocuments?.[serviceId] || [];
-                  const serviceTotal = documents.length * (service.base_price || 0);
+                  const servicePrice = getServicePrice(service, currency);
+                  const servicePriceCurrency = getServicePriceCurrency(service, currency);
+                  const servicePriceInCurrency = servicePriceCurrency === currency
+                    ? servicePrice
+                    : convertPriceSync(servicePrice, currency);
+                  const serviceTotal = documents.length * servicePriceInCurrency;
 
                   // Calculate options total for this service
                   const optionCounts = {};
@@ -861,7 +881,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                           {getServiceName(service)} ({documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                         </span>
                         <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                          {formatPriceSync(serviceTotal)}
+                          {formatPriceSync(serviceTotal, currency)}
                         </span>
                       </div>
                       {/* Show options breakdown */}
@@ -870,14 +890,19 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                           {Object.entries(optionCounts).map(([optionId, count]) => {
                             const option = optionsMap[optionId];
                             if (!option) return null;
-                            const optionTotal = count * (option.additional_price || 0);
+                            const optionPrice = getOptionPrice(option, currency);
+                            const optionPriceCurrency = getOptionPriceCurrency(option, currency);
+                            const optionPriceInCurrency = optionPriceCurrency === currency
+                              ? optionPrice
+                              : convertPriceSync(optionPrice, currency);
+                            const optionTotal = count * optionPriceInCurrency;
                             return (
                               <div key={optionId} className="flex justify-between items-center">
                                 <span className="text-[10px] sm:text-xs text-gray-500 italic">
                                   + {getOptionName(option)} ({count} {count > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                                 </span>
                                 <span className="text-[10px] sm:text-xs font-semibold text-gray-700">
-                                  {formatPriceSync(optionTotal)}
+                                  {formatPriceSync(optionTotal, currency)}
                                 </span>
                               </div>
                             );
@@ -907,7 +932,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   + {t('form.steps.summary.delivery')}
                 </span>
                 <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                  {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR)}
+                  {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR, 'EUR')}
                 </span>
               </div>
             )}
@@ -919,7 +944,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   + {t('form.priceDetails.additionalSignatories')} ({formData.signatories.length - 1})
                 </span>
                 <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                  {formatPriceSync((formData.signatories.length - 1) * 45)}
+                  {formatPriceSync((formData.signatories.length - 1) * 45, 'EUR')}
                 </span>
               </div>
             )}
@@ -934,13 +959,23 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     const service = servicesMap[serviceId];
                     const documents = formData.serviceDocuments?.[serviceId] || [];
                     if (service) {
-                      let serviceTotal = documents.length * (service.base_price || 0);
+                      const servicePrice = getServicePrice(service, currency);
+                      const servicePriceCurrency = getServicePriceCurrency(service, currency);
+                      const servicePriceInCurrency = servicePriceCurrency === currency
+                        ? servicePrice
+                        : convertPriceSync(servicePrice, currency);
+                      let serviceTotal = documents.length * servicePriceInCurrency;
                       documents.forEach(doc => {
                         if (doc.selectedOptions && doc.selectedOptions.length > 0) {
                           doc.selectedOptions.forEach(optionId => {
                             const option = optionsMap[optionId];
                             if (option) {
-                              serviceTotal += option.additional_price || 0;
+                              const optionPrice = getOptionPrice(option, currency);
+                              const optionPriceCurrency = getOptionPriceCurrency(option, currency);
+                              const optionPriceInCurrency = optionPriceCurrency === currency
+                                ? optionPrice
+                                : convertPriceSync(optionPrice, currency);
+                              serviceTotal += optionPriceInCurrency || 0;
                             }
                           });
                         }
@@ -949,9 +984,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     }
                     return total;
                   }, 0) || 0) + 
-                  (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0)
+                  (formData.deliveryMethod === 'postal' 
+                    ? (currency === 'EUR' ? DELIVERY_POSTAL_PRICE_EUR : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency))
+                    : 0)
                   // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
-                )}
+                , currency)}
               </span>
             </div>
 
@@ -1072,13 +1109,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       const service = servicesMap[serviceId];
                       const documents = formData.serviceDocuments?.[serviceId] || [];
                       if (service) {
-                        let serviceTotal = documents.length * (service.base_price || 0);
+                        const servicePrice = getServicePrice(service, currency);
+                      let serviceTotal = documents.length * servicePrice;
                         documents.forEach(doc => {
                           if (doc.selectedOptions && doc.selectedOptions.length > 0) {
                             doc.selectedOptions.forEach(optionId => {
                               const option = optionsMap[optionId];
                               if (option) {
-                                serviceTotal += option.additional_price || 0;
+                                serviceTotal += getOptionPrice(option, currency) || 0;
                               }
                             });
                           }
@@ -1087,9 +1125,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       }
                       return total;
                     }, 0) || 0) + 
-                    (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0)
+                    (formData.deliveryMethod === 'postal' 
+                      ? (currency === 'EUR' ? DELIVERY_POSTAL_PRICE_EUR : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency))
+                      : 0)
                     // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
-                  )}
+                  , currency)}
                 </span>
               )}
               {/* Toggle icon on mobile */}
@@ -1113,7 +1153,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       if (!service) return null;
 
                       const documents = formData.serviceDocuments?.[serviceId] || [];
-                      const serviceTotal = documents.length * (service.base_price || 0);
+                      const servicePrice = getServicePrice(service, currency);
+                      const servicePriceCurrency = getServicePriceCurrency(service, currency);
+                      const servicePriceInCurrency = servicePriceCurrency === currency
+                        ? servicePrice
+                        : convertPriceSync(servicePrice, currency);
+                      const serviceTotal = documents.length * servicePriceInCurrency;
 
                       // Calculate options total for this service
                       const optionCounts = {};
@@ -1136,7 +1181,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                               {getServiceName(service)} ({documents.length} {documents.length > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                             </span>
                             <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                              {formatPriceSync(serviceTotal)}
+                              {formatPriceSync(serviceTotal, currency)}
                             </span>
                           </div>
                           {/* Show options breakdown */}
@@ -1145,14 +1190,19 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                               {Object.entries(optionCounts).map(([optionId, count]) => {
                                 const option = optionsMap[optionId];
                                 if (!option) return null;
-                                const optionTotal = count * (option.additional_price || 0);
+                                const optionPrice = getOptionPrice(option, currency);
+                            const optionPriceCurrency = getOptionPriceCurrency(option, currency);
+                            const optionPriceInCurrency = optionPriceCurrency === currency
+                              ? optionPrice
+                              : convertPriceSync(optionPrice, currency);
+                            const optionTotal = count * optionPriceInCurrency;
                                 return (
                                   <div key={optionId} className="flex justify-between items-center">
                                     <span className="text-[10px] sm:text-xs text-gray-500 italic">
                                       + {getOptionName(option)} ({count} {count > 1 ? t('form.steps.summary.documentPlural') : t('form.steps.summary.document')})
                                     </span>
                                     <span className="text-[10px] sm:text-xs font-semibold text-gray-700">
-                                      {formatPriceSync(optionTotal)}
+                                      {formatPriceSync(optionTotal, currency)}
                                     </span>
                                   </div>
                                 );
@@ -1176,7 +1226,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       + {t('form.steps.summary.delivery')}
                     </span>
                     <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                      {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR)}
+                      {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR, 'EUR')}
                     </span>
                   </div>
                 )}
@@ -1188,7 +1238,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       + {t('form.priceDetails.additionalSignatories')} ({formData.signatories.length - 1})
                     </span>
                     <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                      {formatPriceSync((formData.signatories.length - 1) * 45)}
+                      {formatPriceSync((formData.signatories.length - 1) * 45, 'EUR')}
                     </span>
                   </div>
                 )}
@@ -1203,13 +1253,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                         const service = servicesMap[serviceId];
                         const documents = formData.serviceDocuments?.[serviceId] || [];
                         if (service) {
-                          let serviceTotal = documents.length * (service.base_price || 0);
+                          const servicePrice = getServicePrice(service, currency);
+                      let serviceTotal = documents.length * servicePrice;
                           documents.forEach(doc => {
                             if (doc.selectedOptions && doc.selectedOptions.length > 0) {
                               doc.selectedOptions.forEach(optionId => {
                                 const option = optionsMap[optionId];
                                 if (option) {
-                                  serviceTotal += option.additional_price || 0;
+                                  serviceTotal += getOptionPrice(option, currency) || 0;
                                 }
                               });
                             }
@@ -1218,9 +1269,11 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                         }
                         return total;
                       }, 0) || 0) + 
-                      (formData.deliveryMethod === 'postal' ? DELIVERY_POSTAL_PRICE_EUR : 0)
+                      (formData.deliveryMethod === 'postal' 
+                        ? (currency === 'EUR' ? DELIVERY_POSTAL_PRICE_EUR : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency))
+                        : 0)
                       // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
-                    )}
+                    , currency)}
                   </span>
                 </div>
 

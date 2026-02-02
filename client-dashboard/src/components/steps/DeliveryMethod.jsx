@@ -19,7 +19,7 @@ const DeliveryMethod = ({ formData, updateFormData, nextStep, prevStep, handleCo
     console.log('💰 [DeliveryMethod] Converting delivery price, currency:', currency, 'cacheVersion:', cacheVersion);
     const convertDeliveryPrice = async () => {
       // Set initial price synchronously from cache if available
-      const syncPrice = formatPriceSync(DELIVERY_POSTAL_PRICE_EUR);
+        const syncPrice = formatPriceSync(DELIVERY_POSTAL_PRICE_EUR, 'EUR');
       console.log('💰 [DeliveryMethod] Sync price:', syncPrice);
       setConvertedDeliveryPrice(syncPrice);
       

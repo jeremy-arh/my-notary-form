@@ -315,7 +315,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
               {t('form.steps.signatories.subtitle')}
               {signatories.length > 1 && (
                 <span className="block mt-1">
-                  {t('form.steps.signatories.firstSignatoryIncluded')} {formatPriceSync(45)}.
+                  {t('form.steps.signatories.firstSignatoryIncluded')} {formatPriceSync(45, 'EUR')}.
                 </span>
               )}
             </p>
@@ -507,7 +507,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                               
                               // Afficher le prix pour les signataires supplémentaires
                               return (
-                                <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPriceSync(45)})</span>
+                                <span className="ml-2 text-xs text-orange-600 font-medium">(+{formatPriceSync(45, 'EUR')})</span>
                               );
                             })()}
                           </h3>
@@ -557,7 +557,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     {signatories.length === 0 
                       ? t('form.steps.signatories.addAnotherSignatory')
-                      : `${t('form.steps.signatories.addAnotherSignatory')} (+${formatPriceSync(45)})`
+                      : `${t('form.steps.signatories.addAnotherSignatory')} (+${formatPriceSync(45, 'EUR')})`
                     }
                   </p>
                 </div>

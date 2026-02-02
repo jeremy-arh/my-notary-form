@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { useServices } from '../contexts/ServicesContext';
+import { getServicePrice, getServicePriceCurrency, getOptionPrice, getOptionPriceCurrency } from '../utils/pricing';
+import { convertPriceSync } from '../utils/currency';
 
 const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
   const { formatPriceSync, formatPrice: formatPriceAsync, currency } = useCurrency();
@@ -20,15 +22,15 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
   const setIsPriceDetailsOpen = onToggle || setInternalIsOpen;
 
   // Format price helper that uses the currency context
-  const formatPrice = (eurAmount) => {
+  const formatPrice = (amount, sourceCurrency = 'EUR') => {
     // Check local cache first
-    const cacheKey = `${eurAmount}_${currency}`;
+    const cacheKey = `${amount}_${currency}_${sourceCurrency}`;
     if (priceCache[cacheKey]) {
       return priceCache[cacheKey];
     }
     
     // Try sync from context cache
-    const syncResult = formatPriceSync(eurAmount);
+    const syncResult = formatPriceSync(amount, sourceCurrency);
     
     // If sync result is not in EUR format, use it (already converted)
     if (!syncResult.endsWith('€') || currency === 'EUR') {
@@ -36,7 +38,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
     }
     
     // If still in EUR format and currency is not EUR, trigger async conversion
-    formatPriceAsync(eurAmount).then(formatted => {
+    formatPriceAsync(amount, sourceCurrency).then(formatted => {
       if (formatted && formatted !== syncResult) {
         setPriceCache(prev => ({ ...prev, [cacheKey]: formatted }));
         setForceUpdate(prev => prev + 1);
@@ -67,7 +69,8 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
           const service = servicesMap[serviceId];
           const documents = formData.serviceDocuments?.[serviceId] || [];
           if (service) {
-            const serviceTotal = documents.length * (service.base_price || 0);
+            const servicePrice = getServicePrice(service, currency);
+            const serviceTotal = documents.length * servicePrice;
             pricesToConvert.add(serviceTotal);
             
             // Collect option prices
@@ -76,7 +79,8 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                 doc.selectedOptions.forEach(optionId => {
                   const option = optionsMap[optionId];
                   if (option) {
-                    pricesToConvert.add(option.additional_price || 0);
+                    const optionPrice = getOptionPrice(option, currency);
+                    pricesToConvert.add(optionPrice);
                   }
                 });
               }
@@ -129,13 +133,29 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
         const service = servicesMap[serviceId];
         const documents = formData.serviceDocuments?.[serviceId] || [];
         if (service) {
-          total += documents.length * (service.base_price || 0);
+          const servicePrice = getServicePrice(service, currency);
+          const servicePriceCurrency = getServicePriceCurrency(service, currency);
+          
+          // Convert price to target currency if needed
+          const servicePriceInCurrency = servicePriceCurrency === currency
+            ? servicePrice
+            : convertPriceSync(servicePrice, currency);
+          
+          total += documents.length * servicePriceInCurrency;
           documents.forEach(doc => {
             if (doc.selectedOptions && doc.selectedOptions.length > 0) {
               doc.selectedOptions.forEach(optionId => {
                 const option = optionsMap[optionId];
                 if (option) {
-                  total += option.additional_price || 0;
+                  const optionPrice = getOptionPrice(option, currency);
+                  const optionPriceCurrency = getOptionPriceCurrency(option, currency);
+                  
+                  // Convert price to target currency if needed
+                  const optionPriceInCurrency = optionPriceCurrency === currency
+                    ? optionPrice
+                    : convertPriceSync(optionPrice, currency);
+                  
+                  total += optionPriceInCurrency;
                 }
               });
             }
@@ -143,6 +163,16 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
         }
       });
     }
+    
+    // Add delivery cost if postal delivery selected
+    const DELIVERY_POSTAL_PRICE_EUR = 29.95;
+    if (formData.deliveryMethod === 'postal') {
+      const deliveryPrice = currency === 'EUR' 
+        ? DELIVERY_POSTAL_PRICE_EUR 
+        : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+      total += deliveryPrice;
+    }
+    
     // Signatories pricing - Temporarily disabled
     // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
     //   total += (formData.signatories.length - 1) * 45;
@@ -235,7 +265,12 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                       if (!service) return null;
 
                       const documents = formData.serviceDocuments?.[serviceId] || [];
-                      const serviceTotal = documents.length * (service.base_price || 0);
+                      const servicePrice = getServicePrice(service, currency);
+                      const servicePriceCurrency = getServicePriceCurrency(service, currency);
+                      const servicePriceInCurrency = servicePriceCurrency === currency
+                        ? servicePrice
+                        : convertPriceSync(servicePrice, currency);
+                      const serviceTotal = documents.length * servicePriceInCurrency;
 
                       // Calculate options total for this service
                       const optionCounts = {}; // Track count per option
@@ -260,7 +295,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                               {getServiceName(service)} ({documents.length} {documents.length > 1 ? t('form.priceDetails.documentPlural') : t('form.priceDetails.document')})
                             </span>
                             <span className="text-[10px] sm:text-xs font-semibold text-gray-900 flex-shrink-0">
-                              {formatPrice(serviceTotal)}
+                              {formatPrice(serviceTotal, currency)}
                             </span>
                           </div>
                           {/* Show options breakdown */}
@@ -269,14 +304,19 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                               {Object.entries(optionCounts).map(([optionId, count]) => {
                                 const option = optionsMap[optionId];
                                 if (!option) return null;
-                                const optionTotal = count * (option.additional_price || 0);
+                                const optionPrice = getOptionPrice(option, currency);
+                                const optionPriceCurrency = getOptionPriceCurrency(option, currency);
+                                const optionPriceInCurrency = optionPriceCurrency === currency
+                                  ? optionPrice
+                                  : convertPriceSync(optionPrice, currency);
+                                const optionTotal = count * optionPriceInCurrency;
                                 return (
                                   <div key={optionId} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5">
                                     <span className="text-[9px] sm:text-[10px] text-gray-500 italic break-words">
                                       + {option.name} ({count} {count > 1 ? t('form.priceDetails.documentPlural') : t('form.priceDetails.document')})
                                     </span>
                                     <span className="text-[9px] sm:text-[10px] font-semibold text-gray-700 flex-shrink-0">
-                                      {formatPrice(optionTotal)}
+                                      {formatPrice(optionTotal, currency)}
                                     </span>
                                   </div>
                                 );
@@ -314,7 +354,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-1.5 sm:pt-2 border-t-2 border-gray-300 gap-0.5 sm:gap-1">
                   <span className="text-xs sm:text-sm font-bold text-gray-900 flex-shrink-0">{t('form.priceDetails.total')}</span>
                   <span className="text-sm sm:text-base font-bold text-gray-900 flex-shrink-0">
-                    {formatPrice(calculateTotal())}
+                    {formatPrice(calculateTotal(), currency)}
                   </span>
                 </div>
               </div>

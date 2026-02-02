@@ -234,6 +234,78 @@ const fetchExchangeRates = async () => {
 };
 
 /**
+ * Convert EUR amount to target currency synchronously using cached rates
+ * This is a synchronous version that uses cached exchange rates
+ * @param {number} eurAmount - The amount in EUR
+ * @param {string} targetCurrency - The target currency
+ * @returns {number} - The converted amount
+ */
+export const convertPriceSync = (eurAmount, targetCurrency) => {
+  if (!eurAmount || !targetCurrency || targetCurrency === 'EUR') {
+    return eurAmount;
+  }
+
+  // Try to get cached exchange rates
+  const cached = getCachedExchangeRates();
+  if (cached && cached[targetCurrency]) {
+    const rate = cached[targetCurrency];
+    return Math.round(eurAmount * rate * 100) / 100;
+  }
+
+  // Fallback to approximate rates if cache not available
+  const fallbackRates = {
+    'USD': 1.10,
+    'GBP': 0.85,
+    'CAD': 1.50,
+    'AUD': 1.65,
+    'CHF': 0.95,
+    'JPY': 165,
+    'CNY': 7.80,
+  };
+
+  const rate = fallbackRates[targetCurrency] || 1;
+  return Math.round(eurAmount * rate * 100) / 100;
+};
+
+/**
+ * Format a price that is already in the target currency (no conversion)
+ * @param {number} amount - The amount already in the target currency
+ * @param {string} targetCurrency - The currency of the amount
+ * @returns {object} - Formatted price object
+ */
+export const formatPriceDirect = (amount, targetCurrency) => {
+  if (!amount && amount !== 0) {
+    return {
+      amount: 0,
+      currency: targetCurrency || 'EUR',
+      symbol: '€',
+      formatted: '0€'
+    };
+  }
+
+  const symbol = CURRENCY_SYMBOLS[targetCurrency] || targetCurrency;
+  const currenciesWithSpace = ['CHF', 'GBP', 'CAD', 'AUD', 'CNY', 'INR', 'BRL', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'RUB', 'TRY', 'ZAR', 'KRW', 'SGD', 'HKD', 'NZD', 'THB', 'MYR', 'PHP', 'IDR', 'VND'];
+  const needsSpace = currenciesWithSpace.includes(targetCurrency);
+  const space = needsSpace ? ' ' : '';
+
+  let formatted;
+  if (targetCurrency === 'EUR') {
+    formatted = `${amount.toFixed(2)}€`;
+  } else if (targetCurrency === 'JPY' || targetCurrency === 'KRW' || targetCurrency === 'VND') {
+    formatted = `${symbol}${space}${Math.round(amount)}`;
+  } else {
+    formatted = `${symbol}${space}${amount.toFixed(2)}`;
+  }
+
+  return {
+    amount,
+    currency: targetCurrency,
+    symbol,
+    formatted
+  };
+};
+
+/**
  * Convert EUR price to target currency
  */
 export const convertPrice = async (eurPrice, targetCurrency = null) => {

@@ -6,6 +6,8 @@ import Chat from '../../components/Chat';
 import SignatoriesList from '../../components/SignatoriesList';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
+import { getServicePrice, getServicePriceCurrency, getOptionPrice, getOptionPriceCurrency } from '../../utils/pricing';
+import { formatPriceDirect } from '../../utils/currency';
 
 const SubmissionDetail = () => {
   const { id } = useParams();
@@ -292,13 +294,16 @@ const SubmissionDetail = () => {
           const service = servicesMap[serviceId];
           const documents = serviceDocuments[serviceId] || [];
           if (service) {
-            totalEUR += documents.length * (service.base_price || 0);
+            const currency = getCurrency();
+            const servicePrice = getServicePrice(service, currency);
+            totalEUR += documents.length * servicePrice;
             documents.forEach(doc => {
               if (doc.selectedOptions && Object.keys(optionsMap).length > 0) {
                 doc.selectedOptions.forEach(optionId => {
                   const option = optionsMap[optionId];
                   if (option) {
-                    totalEUR += option.additional_price || 0;
+                    const optionPrice = getOptionPrice(option, getCurrency());
+                    totalEUR += optionPrice;
                   }
                 });
               }
@@ -343,9 +348,17 @@ const SubmissionDetail = () => {
   };
 
   // Format price according to submission currency
-  const formatPrice = (eurAmount) => {
+  const formatPrice = (amount, sourceCurrency = 'EUR') => {
     const currency = getCurrency();
-    const convertedAmount = convertPrice(eurAmount);
+    
+    // If price is already in target currency, format directly without conversion
+    if (sourceCurrency === currency) {
+      const formatted = formatPriceDirect(amount, currency);
+      return formatted.formatted;
+    }
+    
+    // Otherwise, convert from sourceCurrency (assumed EUR for now) to target currency
+    const convertedAmount = convertPrice(amount);
     const locale = currency === 'USD' ? 'en-US' : currency === 'GBP' ? 'en-GB' : currency === 'CAD' ? 'en-CA' : currency === 'AUD' ? 'en-AU' : currency === 'CHF' ? 'de-CH' : currency === 'JPY' ? 'ja-JP' : currency === 'CNY' ? 'zh-CN' : 'fr-FR';
     
     return new Intl.NumberFormat(locale, {
@@ -709,7 +722,9 @@ const SubmissionDetail = () => {
 
                     if (!service) return null;
 
-                    const serviceTotal = documents.length * (service.base_price || 0);
+                    const currency = getCurrency();
+                    const servicePrice = getServicePrice(service, currency);
+                    const serviceTotal = documents.length * servicePrice;
 
                     return (
                       <div key={serviceId} className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200">
@@ -717,8 +732,8 @@ const SubmissionDetail = () => {
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-base sm:text-lg text-gray-900">{service.name}</h3>
                             <p className="text-xs sm:text-sm text-gray-700 mt-1 sm:mt-2">
-                              {documents.length} document{documents.length > 1 ? 's' : ''} × {formatPrice(service.base_price)} =
-                              <span className="font-bold text-gray-900"> {formatPrice(serviceTotal)}</span>
+                              {documents.length} document{documents.length > 1 ? 's' : ''} × {formatPrice(getServicePrice(service, getCurrency()), getServicePriceCurrency(service, getCurrency()))} =
+                              <span className="font-bold text-gray-900"> {formatPrice(serviceTotal, getServicePriceCurrency(service, getCurrency()))}</span>
                             </p>
                           </div>
                         </div>
@@ -764,7 +779,8 @@ const SubmissionDetail = () => {
                                           const option = optionsMap[optionId];
                                           if (!option) return null;
 
-                                          optionsTotal += option.additional_price || 0;
+                                          const optionPrice = getOptionPrice(option, getCurrency());
+                                          optionsTotal += optionPrice;
 
                                           return (
                                             <span
@@ -773,14 +789,14 @@ const SubmissionDetail = () => {
                                             >
                                               <Icon icon={option.icon || "heroicons:plus-circle"} className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />
                                               <span className="truncate max-w-[80px] sm:max-w-none">{option.name}</span>
-                                              <span className="hidden sm:inline ml-1">(+{formatPrice(option.additional_price)})</span>
+                                              <span className="hidden sm:inline ml-1">(+{formatPrice(getOptionPrice(option, getCurrency()), getOptionPriceCurrency(option, getCurrency()))})</span>
                                             </span>
                                           );
                                         })}
                                       </div>
                                       {optionsTotal > 0 && (
                                         <p className="text-[10px] sm:text-xs text-gray-700 mt-1 font-semibold">
-                                          Options total: {formatPrice(optionsTotal)}
+                                          Options total: {formatPrice(optionsTotal, (getCurrency() === 'USD' || getCurrency() === 'GBP') ? getCurrency() : 'EUR')}
                                         </p>
                                       )}
                                     </div>
@@ -799,7 +815,8 @@ const SubmissionDetail = () => {
                               doc.selectedOptions.forEach(optionId => {
                                 const option = optionsMap[optionId];
                                 if (option) {
-                                  totalWithOptions += option.additional_price || 0;
+                                  const optionPrice = getOptionPrice(option, getCurrency());
+                                  totalWithOptions += optionPrice;
                                 }
                               });
                             }
@@ -810,7 +827,7 @@ const SubmissionDetail = () => {
                               <div className="mt-3 pt-3 border-t border-gray-200">
                                 <div className="flex justify-between items-center">
                                   <span className="text-xs sm:text-sm font-semibold text-gray-900">Total (with options):</span>
-                                  <span className="text-base sm:text-lg font-bold text-gray-900">{formatPrice(totalWithOptions)}</span>
+                                  <span className="text-base sm:text-lg font-bold text-gray-900">{formatPrice(totalWithOptions, (getCurrency() === 'USD' || getCurrency() === 'GBP') ? getCurrency() : 'EUR')}</span>
                                 </div>
                               </div>
                             );
@@ -835,13 +852,16 @@ const SubmissionDetail = () => {
                           const service = servicesMap[serviceId];
                           const documents = serviceDocuments[serviceId] || [];
                           if (service) {
-                            grandTotal += documents.length * (service.base_price || 0);
+                            const currency = getCurrency();
+                            const servicePrice = getServicePrice(service, currency);
+                            grandTotal += documents.length * servicePrice;
                             documents.forEach(doc => {
                               if (doc.selectedOptions) {
                                 doc.selectedOptions.forEach(optionId => {
                                   const option = optionsMap[optionId];
                                   if (option) {
-                                    grandTotal += option.additional_price || 0;
+                                    const optionPrice = getOptionPrice(option, getCurrency());
+                                    grandTotal += optionPrice;
                                   }
                                 });
                               }
@@ -888,7 +908,7 @@ const SubmissionDetail = () => {
                           }
                         }
                         
-                        return formatPrice(grandTotal);
+                        return formatPrice(grandTotal, (getCurrency() === 'USD' || getCurrency() === 'GBP') ? getCurrency() : 'EUR');
                       })()}
                     </span>
                   </div>
@@ -1021,7 +1041,7 @@ const SubmissionDetail = () => {
                             <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
                               Signatory {sigIndex + 1}
                               {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                              {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPrice(10)})</span>}
+                              {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPrice(10, 'EUR')})</span>}
                             </span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">

@@ -17,6 +17,28 @@ const corsHeaders = {
 let exchangeRatesCache: { [key: string]: { rates: any, timestamp: number } } = {}
 const EXCHANGE_RATE_CACHE_TTL = 60 * 60 * 1000 // 1 heure
 
+// Liste des devises sans décimales (zero decimal currencies) selon Stripe
+// Ces devises n'utilisent pas de centimes dans Stripe
+const ZERO_DECIMAL_CURRENCIES = [
+  'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 
+  'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF'
+]
+
+// Fonction pour vérifier si une devise est zero decimal
+function isZeroDecimalCurrency(currency: string): boolean {
+  return ZERO_DECIMAL_CURRENCIES.includes(currency.toUpperCase())
+}
+
+// Fonction pour convertir un montant en unit_amount pour Stripe
+// Pour les devises zero decimal, retourne le montant arrondi directement
+// Pour les autres devises, multiplie par 100 pour convertir en centimes
+function getStripeUnitAmount(amount: number, currency: string): number {
+  if (isZeroDecimalCurrency(currency)) {
+    return Math.round(amount)
+  }
+  return Math.round(amount * 100)
+}
+
 // Fonction pour récupérer les taux de change depuis l'API
 async function fetchExchangeRates(): Promise<any> {
   const now = Date.now()
@@ -63,6 +85,90 @@ async function fetchExchangeRates(): Promise<any> {
   }
 }
 
+// Fonction pour obtenir le prix du service selon la devise
+// Pour USD et GBP, utilise les colonnes price_usd et price_gbp si disponibles
+// Pour les autres devises, utilise base_price (sera converti dynamiquement)
+function getServicePrice(service: any, currency: string): number {
+  if (!service) return 0
+  
+  const upperCurrency = currency.toUpperCase()
+  
+  // Pour USD, utiliser price_usd si disponible, sinon fallback sur base_price
+  if (upperCurrency === 'USD' && service.price_usd != null) {
+    return service.price_usd
+  }
+  
+  // Pour GBP, utiliser price_gbp si disponible, sinon fallback sur base_price
+  if (upperCurrency === 'GBP' && service.price_gbp != null) {
+    return service.price_gbp
+  }
+  
+  // Pour toutes les autres devises, utiliser base_price (sera converti dynamiquement)
+  return service.base_price || 0
+}
+
+// Fonction pour obtenir la devise source du prix retourné par getServicePrice
+function getServicePriceCurrency(service: any, targetCurrency: string): string {
+  if (!service) return 'EUR'
+  
+  const upperCurrency = targetCurrency.toUpperCase()
+  
+  // Si on utilise price_usd, le prix est en USD
+  if (upperCurrency === 'USD' && service.price_usd != null) {
+    return 'USD'
+  }
+  
+  // Si on utilise price_gbp, le prix est en GBP
+  if (upperCurrency === 'GBP' && service.price_gbp != null) {
+    return 'GBP'
+  }
+  
+  // Sinon, le prix est en EUR (base_price)
+  return 'EUR'
+}
+
+// Fonction pour obtenir le prix de l'option selon la devise
+// Pour USD et GBP, utilise les colonnes price_usd et price_gbp si disponibles
+// Pour les autres devises, utilise additional_price (sera converti dynamiquement)
+function getOptionPrice(option: any, currency: string): number {
+  if (!option) return 0
+  
+  const upperCurrency = currency.toUpperCase()
+  
+  // Pour USD, utiliser price_usd si disponible, sinon fallback sur additional_price
+  if (upperCurrency === 'USD' && option.price_usd != null) {
+    return option.price_usd
+  }
+  
+  // Pour GBP, utiliser price_gbp si disponible, sinon fallback sur additional_price
+  if (upperCurrency === 'GBP' && option.price_gbp != null) {
+    return option.price_gbp
+  }
+  
+  // Pour toutes les autres devises, utiliser additional_price (sera converti dynamiquement)
+  return option.additional_price || 0
+}
+
+// Fonction pour obtenir la devise source du prix retourné par getOptionPrice
+function getOptionPriceCurrency(option: any, targetCurrency: string): string {
+  if (!option) return 'EUR'
+  
+  const upperCurrency = targetCurrency.toUpperCase()
+  
+  // Si on utilise price_usd, le prix est en USD
+  if (upperCurrency === 'USD' && option.price_usd != null) {
+    return 'USD'
+  }
+  
+  // Si on utilise price_gbp, le prix est en GBP
+  if (upperCurrency === 'GBP' && option.price_gbp != null) {
+    return 'GBP'
+  }
+  
+  // Sinon, le prix est en EUR (additional_price)
+  return 'EUR'
+}
+
 // Fonction de conversion de devises (EUR vers autres devises)
 // Les prix dans la base de données sont stockés en EUR
 // Utilise maintenant l'API exchangerate-api.com pour avoir les mêmes taux que le frontend
@@ -71,14 +177,24 @@ async function convertCurrency(amountEUR: number, targetCurrency: string): Promi
     return amountEUR
   }
   
+  const upperCurrency = targetCurrency.toUpperCase()
   const rates = await fetchExchangeRates()
-  const rate = rates[targetCurrency.toUpperCase()] || 1.0
+  const rate = rates[upperCurrency]
   
-  // Arrondir à 2 décimales (sauf pour JPY qui n'a pas de décimales)
-  if (targetCurrency.toUpperCase() === 'JPY') {
+  // Si le taux n'est pas trouvé, logger un avertissement et utiliser 1.0 comme fallback
+  if (rate === undefined) {
+    console.warn(`⚠️ [EXCHANGE] Exchange rate not found for ${upperCurrency}, using 1.0 as fallback`)
+    // Retourner le montant EUR si le taux n'est pas disponible (mieux que de multiplier par 1.0)
+    return amountEUR
+  }
+  
+  // Arrondir selon le type de devise
+  // Pour les devises zero decimal, arrondir à l'unité entière
+  if (isZeroDecimalCurrency(targetCurrency)) {
     return Math.round(amountEUR * rate)
   }
   
+  // Pour les autres devises, arrondir à 2 décimales
   return Math.round(amountEUR * rate * 100) / 100
 }
 
@@ -465,13 +581,28 @@ serve(async (req) => {
           const documentCount = documentsForService.length
 
           if (documentCount > 0) {
-            // Convertir le prix depuis EUR vers la devise demandée
-            const priceInCurrency = await convertCurrency(service.base_price || 0, currency)
-            // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
-            // Pour les autres devises, convertir en centimes
-            const unitAmount = currency === 'JPY' 
-              ? Math.round(priceInCurrency) 
-              : Math.round(priceInCurrency * 100)
+            // Obtenir le prix du service selon la devise (USD/GBP direct ou base_price pour conversion)
+            const servicePrice = getServicePrice(service, currency)
+            const servicePriceCurrency = getServicePriceCurrency(service, currency)
+            
+            // Convertir le prix vers la devise demandée si nécessaire
+            // Si le prix est déjà dans la devise cible, pas besoin de conversion
+            // Sinon, convertir depuis la devise source vers la devise cible
+            let priceInCurrency: number
+            if (servicePriceCurrency.toUpperCase() === currency.toUpperCase()) {
+              priceInCurrency = servicePrice
+            } else {
+              priceInCurrency = await convertCurrency(servicePrice, currency)
+              // Arrondir à 2 décimales pour cohérence avec le frontend (sauf devises zero decimal)
+              if (!isZeroDecimalCurrency(currency)) {
+                priceInCurrency = Math.round(priceInCurrency * 100) / 100
+              }
+            }
+            
+            // Convertir en unit_amount pour Stripe (gère les devises zero decimal)
+            const unitAmount = getStripeUnitAmount(priceInCurrency, currency)
+            
+            console.log(`💰 [PRICE DEBUG] Service ${serviceId}: ${servicePrice} ${servicePriceCurrency} → ${priceInCurrency} ${currency} (unit_amount: ${unitAmount})`)
             
             // Utiliser le nom traduit si disponible, sinon fallback sur le nom de la DB
             const serviceNameKey = `service_${serviceId}`
@@ -488,7 +619,11 @@ serve(async (req) => {
               },
               quantity: documentCount,
             })
-            console.log(`✅ [SERVICES] Added service: ${localizedServiceName} × ${documentCount} documents = ${currency}${(priceInCurrency * documentCount).toFixed(currency === 'JPY' ? 0 : 2)} (${service.base_price} EUR converted)`)
+            const priceSource = servicePriceCurrency.toUpperCase() === currency.toUpperCase()
+              ? `${servicePrice} ${servicePriceCurrency} (direct)`
+              : `${servicePrice} ${servicePriceCurrency} converted to ${currency}`
+            const decimalPlaces = isZeroDecimalCurrency(currency) ? 0 : 2
+            console.log(`✅ [SERVICES] Added service: ${localizedServiceName} × ${documentCount} documents = ${currency}${(priceInCurrency * documentCount).toFixed(decimalPlaces)} (${priceSource})`)
             console.log(`🌐 [TRANSLATION] Service name: ${localizedServiceName} (language: ${language})`)
 
             // Count options for this service
@@ -553,13 +688,29 @@ serve(async (req) => {
         const optionCount = Number(count) || 0
         console.log(`📋 [OPTIONS] Processing option ${optionId}:`, option ? option.name : 'NOT FOUND')
 
-        if (option && option.additional_price) {
-          // Convertir le prix depuis EUR vers la devise demandée
-          const priceInCurrency = await convertCurrency(option.additional_price || 0, currency)
-          // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
-          const unitAmount = currency === 'JPY' 
-            ? Math.round(priceInCurrency) 
-            : Math.round(priceInCurrency * 100)
+        if (option) {
+          // Obtenir le prix de l'option selon la devise (USD/GBP direct ou additional_price pour conversion)
+          const optionPrice = getOptionPrice(option, currency)
+          const optionPriceCurrency = getOptionPriceCurrency(option, currency)
+          
+          // Convertir le prix vers la devise demandée si nécessaire
+          // Si le prix est déjà dans la devise cible, pas besoin de conversion
+          // Sinon, convertir depuis la devise source vers la devise cible
+          let priceInCurrency: number
+          if (optionPriceCurrency.toUpperCase() === currency.toUpperCase()) {
+            priceInCurrency = optionPrice
+          } else {
+            priceInCurrency = await convertCurrency(optionPrice, currency)
+            // Arrondir à 2 décimales pour cohérence avec le frontend (sauf devises zero decimal)
+            if (!isZeroDecimalCurrency(currency)) {
+              priceInCurrency = Math.round(priceInCurrency * 100) / 100
+            }
+          }
+          
+          // Convertir en unit_amount pour Stripe (gère les devises zero decimal)
+          const unitAmount = getStripeUnitAmount(priceInCurrency, currency)
+          
+          console.log(`💰 [PRICE DEBUG] Option ${optionId}: ${optionPrice} ${optionPriceCurrency} → ${priceInCurrency} ${currency} (unit_amount: ${unitAmount})`)
           
           // Utiliser le nom traduit si disponible, sinon fallback sur le nom de la DB
           const optionNameKey = `option_${optionId}`
@@ -577,7 +728,11 @@ serve(async (req) => {
             },
             quantity: optionCount,
           })
-          console.log(`✅ [OPTIONS] Added option: ${localizedOptionName} × ${optionCount} documents = ${currency}${(priceInCurrency * optionCount).toFixed(currency === 'JPY' ? 0 : 2)} (${option.additional_price} EUR converted)`)
+            const optionPriceSource = optionPriceCurrency.toUpperCase() === currency.toUpperCase()
+              ? `${optionPrice} ${optionPriceCurrency} (direct)`
+              : `${optionPrice} ${optionPriceCurrency} converted to ${currency}`
+            const decimalPlaces = isZeroDecimalCurrency(currency) ? 0 : 2
+            console.log(`✅ [OPTIONS] Added option: ${localizedOptionName} × ${optionCount} documents = ${currency}${(priceInCurrency * optionCount).toFixed(decimalPlaces)} (${optionPriceSource})`)
           console.log(`🌐 [TRANSLATION] Option name: ${localizedOptionName} (language: ${language})`)
         } else {
           console.warn(`⚠️ [OPTIONS] Option ${optionId} not found or has no price`)
@@ -597,10 +752,14 @@ serve(async (req) => {
     if (deliveryMethod === 'postal' && deliveryPostalCostEUR > 0) {
       console.log(`📦 [DELIVERY] Processing postal delivery at ${deliveryPostalCostEUR} EUR`)
 
-      const deliveryCostInCurrency = await convertCurrency(deliveryPostalCostEUR, currency)
-      const unitAmountDelivery = currency === 'JPY'
-        ? Math.round(deliveryCostInCurrency)
-        : Math.round(deliveryCostInCurrency * 100)
+      let deliveryCostInCurrency = await convertCurrency(deliveryPostalCostEUR, currency)
+      // Arrondir à 2 décimales pour cohérence avec le frontend (sauf devises zero decimal)
+      if (!isZeroDecimalCurrency(currency)) {
+        deliveryCostInCurrency = Math.round(deliveryCostInCurrency * 100) / 100
+      }
+      const unitAmountDelivery = getStripeUnitAmount(deliveryCostInCurrency, currency)
+      
+      console.log(`💰 [PRICE DEBUG] Delivery: ${deliveryPostalCostEUR} EUR → ${deliveryCostInCurrency} ${currency} (unit_amount: ${unitAmountDelivery})`)
 
       // Utiliser le nom traduit si disponible, sinon fallback sur le nom par défaut
       const localizedDeliveryName = localizedNames['delivery_postal'] || 'Physical Delivery (DHL Express)'
@@ -610,7 +769,6 @@ serve(async (req) => {
           currency: stripeCurrency,
           product_data: {
             name: localizedDeliveryName,
-            description: `Postal delivery via DHL Express (${deliveryPostalCostEUR} EUR)`,
           },
           unit_amount: unitAmountDelivery,
         },
@@ -618,7 +776,8 @@ serve(async (req) => {
       }
 
       lineItems.push(deliveryLineItem)
-      console.log(`✅ [DELIVERY] Added postal delivery = ${currency}${deliveryCostInCurrency.toFixed(currency === 'JPY' ? 0 : 2)} (${deliveryPostalCostEUR} EUR converted)`)
+      const decimalPlaces = isZeroDecimalCurrency(currency) ? 0 : 2
+      console.log(`✅ [DELIVERY] Added postal delivery = ${currency}${deliveryCostInCurrency.toFixed(decimalPlaces)} (${deliveryPostalCostEUR} EUR converted)`)
       console.log(`🌐 [TRANSLATION] Delivery name: ${localizedDeliveryName} (language: ${language})`)
     } else {
       console.log('ℹ️ [DELIVERY] No paid postal delivery selected')
@@ -644,10 +803,8 @@ serve(async (req) => {
       // Calculate unit price (total cost divided by quantity)
       const unitPrice = additionalSignatoriesCost / additionalSignatoriesCount
       
-      // Pour JPY, Stripe n'accepte pas les centimes (utiliser des unités entières)
-      const unitAmount = currency === 'JPY' 
-        ? Math.round(unitPrice) 
-        : Math.round(unitPrice * 100)
+      // Convertir en unit_amount pour Stripe (gère les devises zero decimal)
+      const unitAmount = getStripeUnitAmount(unitPrice, currency)
       
       // Utiliser le nom traduit si disponible, sinon fallback sur le nom par défaut
       const baseSignatoriesName = localizedNames['additional_signatories'] || 'Additional Signatories'
@@ -667,7 +824,8 @@ serve(async (req) => {
       
       console.log('🔍 [SIGNATORIES DEBUG] Line item to add:', JSON.stringify(signatoriesLineItem, null, 2))
       lineItems.push(signatoriesLineItem)
-      console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = ${currency}${additionalSignatoriesCost.toFixed(currency === 'JPY' ? 0 : 2)} (${additionalSignatoriesCostEUR} EUR converted)`)
+      const decimalPlaces = isZeroDecimalCurrency(currency) ? 0 : 2
+      console.log(`✅ [SIGNATORIES] Added ${additionalSignatoriesCount} additional signatories = ${currency}${additionalSignatoriesCost.toFixed(decimalPlaces)} (${additionalSignatoriesCostEUR} EUR converted)`)
       console.log(`🌐 [TRANSLATION] Signatories name: ${localizedSignatoriesName} (language: ${language})`)
       console.log(`🔍 [SIGNATORIES DEBUG] Total lineItems count after adding signatories:`, lineItems.length)
     } else {

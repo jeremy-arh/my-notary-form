@@ -20,7 +20,7 @@ const SignatoriesList = ({ signatories, documentKey, documentName }) => {
               <span className="text-[10px] sm:text-xs font-semibold text-gray-900">
                 Signatory {sigIndex + 1}
                 {sigIndex === 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-gray-500">(included)</span>}
-                {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPriceSync(45)})</span>}
+                {sigIndex > 0 && <span className="ml-1.5 text-[9px] sm:text-[10px] text-orange-600 font-medium">(+{formatPriceSync(45, 'EUR')})</span>}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">

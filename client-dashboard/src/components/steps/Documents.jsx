@@ -8,6 +8,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { uploadDocument, deleteDocument } from '../../utils/formDraft';
 import { pushGTMEvent } from '../../utils/gtm';
 import Notification from '../Notification';
+import { getServicePrice, getServicePriceCurrency, getOptionPrice, getOptionPriceCurrency } from '../../utils/pricing';
 
 const APOSTILLE_SERVICE_ID = '473fb677-4dd3-4766-8221-0250ea3440cd';
 
@@ -408,21 +409,28 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
 
   const getTotalPrice = (service) => {
     const files = formData.serviceDocuments?.[service.service_id] || [];
-    let totalEUR = 0;
+    let total = 0;
 
     files.forEach(file => {
-      totalEUR += service.base_price;
+      const servicePrice = getServicePrice(service, currency);
+      total += servicePrice;
+      
       if (file.selectedOptions && file.selectedOptions.length > 0) {
         file.selectedOptions.forEach(optionId => {
           const option = options.find(o => o.option_id === optionId);
           if (option) {
-            totalEUR += option.additional_price || 0;
+            const optionPrice = getOptionPrice(option, currency);
+            total += optionPrice;
           }
         });
       }
     });
 
-    return formatPriceSync(totalEUR);
+    // Determine the currency of the total
+    // If target currency is USD or GBP, and we're using direct prices, the total is in that currency
+    // Otherwise, it's in EUR
+    const totalCurrency = (currency === 'USD' || currency === 'GBP') ? currency : 'EUR';
+    return formatPriceSync(total, totalCurrency);
   };
 
   // Get file type icon and color based on file extension or MIME type
@@ -496,7 +504,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                   <div className="mb-3 sm:mb-4">
                     <h3 className="font-semibold text-sm sm:text-base text-gray-900 break-words">{getServiceName(service)}</h3>
                     <p key={`service-price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
-                      {formatPriceSync(service.base_price)} {t('form.steps.documents.perDocument')}
+                      {formatPriceSync(getServicePrice(service, currency), getServicePriceCurrency(service, currency))} {t('form.steps.documents.perDocument')}
                     </p>
                     {fileCount > 0 && (
                       <p key={`total-price-${service.service_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm font-semibold text-black mt-0.5 sm:mt-1">
@@ -677,7 +685,7 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
                                             {option.name}
                                           </span>
                                           <span key={`option-price-${option.option_id}-${currency}-${cacheVersion}`} className="text-gray-500 font-normal text-[10px] sm:text-xs whitespace-nowrap">
-                                            (+{formatPriceSync(option.additional_price || 0)})
+                                            (+{formatPriceSync(getOptionPrice(option, currency) || 0, getOptionPriceCurrency(option, currency))})
                                           </span>
                                         </div>
                                         {option.description && (
@@ -730,10 +738,10 @@ const Documents = ({ formData, updateFormData, nextStep, prevStep, handleContinu
             <div className="space-y-3 sm:space-y-4 text-gray-700">
               <p className="text-sm sm:text-base break-words">{showOptionInfo.description}</p>
 
-              {showOptionInfo.additional_price && (
+              {showOptionInfo && (getOptionPrice(showOptionInfo, currency) > 0) && (
                 <div className="border-t border-gray-200 pt-3 sm:pt-4">
                   <p key={`option-info-price-${showOptionInfo?.option_id}-${currency}-${cacheVersion}`} className="text-xs sm:text-sm text-gray-600">
-                    <strong>{t('form.steps.documents.additionalFee')}</strong> {formatPriceSync(showOptionInfo.additional_price)} {t('form.steps.documents.perDocument')}
+                    <strong>{t('form.steps.documents.additionalFee')}</strong> {formatPriceSync(getOptionPrice(showOptionInfo, currency), getOptionPriceCurrency(showOptionInfo, currency))} {t('form.steps.documents.perDocument')}
                   </p>
                 </div>
               )}

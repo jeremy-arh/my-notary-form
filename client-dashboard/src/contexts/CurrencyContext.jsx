@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { initializeCurrency, convertPrice } from '../utils/currency';
+import { initializeCurrency, convertPrice, formatPriceDirect } from '../utils/currency';
 
 const CurrencyContext = createContext({
   currency: 'EUR',
@@ -123,13 +123,24 @@ export const CurrencyProvider = ({ children }) => {
     return symbolMap[targetCurrency] || `0 ${targetCurrency}`;
   };
 
-  const formatPrice = useCallback(async (eurPrice) => {
+  const formatPrice = useCallback(async (price, sourceCurrency = 'EUR') => {
     // Handle 0 explicitly - it should always display
-    if (eurPrice === 0 || eurPrice === '0') {
-      const cacheKey = `0_${currency}`;
+    if (price === 0 || price === '0') {
+      const cacheKey = `0_${currency}_${sourceCurrency}`;
       // Check cache first using ref
       if (conversionCacheRef.current[cacheKey]) {
         return conversionCacheRef.current[cacheKey];
+      }
+      
+      // If price is already in target currency, format directly
+      if (sourceCurrency === currency) {
+        const formatted = formatPriceDirect(0, currency).formatted;
+        setConversionCache(prev => ({
+          ...prev,
+          [cacheKey]: formatted
+        }));
+        setCacheVersion(prev => prev + 1);
+        return formatted;
       }
       
       try {
@@ -146,17 +157,31 @@ export const CurrencyProvider = ({ children }) => {
         return formatZero(currency);
       }
     }
-    if (!eurPrice && eurPrice !== 0) return '';
+    if (!price && price !== 0) return '';
     
     // Check cache first using ref
-    const cacheKey = `${eurPrice}_${currency}`;
+    const cacheKey = `${price}_${currency}_${sourceCurrency}`;
     if (conversionCacheRef.current[cacheKey]) {
       return conversionCacheRef.current[cacheKey];
     }
 
-    // Trigger async conversion
+    // If price is already in target currency, format directly without conversion
+    if (sourceCurrency === currency) {
+      const formatted = formatPriceDirect(price, currency).formatted;
+      setConversionCache(prev => ({
+        ...prev,
+        [cacheKey]: formatted
+      }));
+      setCacheVersion(prev => prev + 1);
+      return formatted;
+    }
+
+    // Trigger async conversion (price is in sourceCurrency, need to convert to currency)
     try {
-      const converted = await convertPrice(eurPrice, currency);
+      // If sourceCurrency is EUR, use convertPrice directly
+      // Otherwise, we need to convert from sourceCurrency to EUR first, then to target currency
+      // For now, we'll assume sourceCurrency is EUR for backward compatibility
+      const converted = await convertPrice(price, currency);
       const formatted = converted.formatted;
       
       // Cache the result
@@ -169,35 +194,44 @@ export const CurrencyProvider = ({ children }) => {
       return formatted;
     } catch (error) {
       console.warn('Error formatting price:', error);
-      return `${eurPrice}€`;
+      return `${price}€`;
     }
   }, [currency]);
 
   // Synchronous version for immediate use (may return EUR if not converted yet)
   // This function triggers async conversion if price is not in cache
-  const formatPriceSync = useCallback((eurPrice) => {
+  const formatPriceSync = useCallback((price, sourceCurrency = 'EUR') => {
     // Handle 0 explicitly - it should always display
-    if (eurPrice === 0 || eurPrice === '0') {
-      const cacheKey = `0_${currency}`;
+    if (price === 0 || price === '0') {
+      const cacheKey = `0_${currency}_${sourceCurrency}`;
       if (conversionCacheRef.current[cacheKey]) {
         return conversionCacheRef.current[cacheKey];
       }
+      // If price is already in target currency, format directly
+      if (sourceCurrency === currency) {
+        return formatPriceDirect(0, currency).formatted;
+      }
       // Trigger async conversion if not in cache
       if (currency !== 'EUR') {
-        formatPrice(0).catch(() => {}); // Fire and forget
+        formatPrice(0, sourceCurrency).catch(() => {}); // Fire and forget
       }
       // Return formatted 0 for current currency
       return formatZero(currency);
     }
-    if (!eurPrice && eurPrice !== 0) return '';
-    const cacheKey = `${eurPrice}_${currency}`;
+    if (!price && price !== 0) return '';
+    const cacheKey = `${price}_${currency}_${sourceCurrency}`;
+    
+    // If price is already in target currency, format directly
+    if (sourceCurrency === currency) {
+      return formatPriceDirect(price, currency).formatted;
+    }
     
     // If not in cache and currency is not EUR, trigger async conversion
     if (!conversionCacheRef.current[cacheKey] && currency !== 'EUR') {
-      formatPrice(eurPrice).catch(() => {}); // Fire and forget
+      formatPrice(price, sourceCurrency).catch(() => {}); // Fire and forget
     }
     
-    return conversionCacheRef.current[cacheKey] || `${eurPrice}€`;
+    return conversionCacheRef.current[cacheKey] || `${price}€`;
   }, [currency, formatPrice]);
 
   return (
