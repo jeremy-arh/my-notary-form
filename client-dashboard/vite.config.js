@@ -22,7 +22,13 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // Don't externalize tiptap packages - they should be bundled
+      // Externalize tiptap packages to prevent Rollup from trying to bundle them
+      // They are loaded dynamically at runtime via import()
+      external: (id) => {
+        return id === '@tiptap/react' || 
+               id === '@tiptap/starter-kit' || 
+               id === '@tiptap/extension-link';
+      },
       output: {
         manualChunks: undefined,
       },

@@ -24,10 +24,15 @@ const MessageEditor = ({ value, onChange, placeholder = 'Type your message...', 
     
     const loadTiptap = async () => {
       try {
+        // Use dynamic string imports to prevent Rollup from trying to resolve them at build time
+        const tiptapReactPath = '@tiptap/react';
+        const tiptapStarterKitPath = '@tiptap/starter-kit';
+        const tiptapLinkPath = '@tiptap/extension-link';
+        
         const [reactModule, starterKitModule, linkModule] = await Promise.all([
-          import(/* @vite-ignore */ '@tiptap/react'),
-          import(/* @vite-ignore */ '@tiptap/starter-kit'),
-          import(/* @vite-ignore */ '@tiptap/extension-link')
+          import(/* @vite-ignore */ tiptapReactPath),
+          import(/* @vite-ignore */ tiptapStarterKitPath),
+          import(/* @vite-ignore */ tiptapLinkPath)
         ]);
         
         if (mounted && reactModule && starterKitModule && linkModule) {
