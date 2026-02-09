@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
+    "@tiptap/extension-link": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
     "@supabase/supabase-js": "^2.76.1",
     "@tailwindcss/postcss": "^4.1.15",
     "emoji-picker-react": "^4.12.0",
