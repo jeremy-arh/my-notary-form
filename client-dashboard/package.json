@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "preinstall": "node scripts/fix-lockfile.js || true",
     "prebuild": "node scripts/check-env.js",
     "build": "vite build",
     "lint": "eslint .",
