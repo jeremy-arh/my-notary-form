@@ -5,15 +5,16 @@ import ClientLayout from '../../components/ClientLayout';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const { confirm, ConfirmComponent } = useConfirm();
+  const { t } = useTranslation();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [clientInfo, setClientInfo] = useState(null);
-  const [retryingPaymentId, setRetryingPaymentId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [stats, setStats] = useState({
@@ -58,7 +59,17 @@ const Dashboard = () => {
           created_at,
           appointment_date,
           appointment_time,
+          timezone,
           status,
+          first_name,
+          last_name,
+          email,
+          phone,
+          address,
+          city,
+          postal_code,
+          country,
+          notes,
           assigned_notary_id,
           data,
           notary:assigned_notary_id (
@@ -234,56 +245,75 @@ const Dashboard = () => {
     }
   }, [currentPage, selectedStatus, fetchClientData, confirm, toast]);
 
-  const retryPayment = useCallback(async (submission) => {
-    setRetryingPaymentId(submission.id);
+  const retryPayment = useCallback((submission) => {
     try {
+      console.log('🔄 Retrying payment for submission:', submission.id);
+      console.log('📋 [RETRY] submission.data:', submission.data);
+
+      const d = submission.data || {};
+
+      // Handle both camelCase (edge function) and snake_case (submissionSave) formats
+      const selectedServices = d.selectedServices || d.selected_services || [];
+      const serviceDocuments = d.serviceDocuments || d.documents || {};
+      const deliveryMethod = d.deliveryMethod || d.delivery_method || 'digital';
+      const currency = d.currency || 'EUR';
+
+      // Build formData matching the localStorage format the form expects
       const formData = {
-        firstName: submission.first_name,
-        lastName: submission.last_name,
-        email: submission.email,
-        phone: submission.phone,
-        address: submission.address,
-        city: submission.city,
-        postalCode: submission.postal_code,
-        country: submission.country,
-        notes: submission.notes,
-        appointmentDate: submission.appointment_date,
-        appointmentTime: submission.appointment_time,
-        timezone: submission.timezone,
-        selectedServices: submission.data?.selectedServices || [],
-        serviceDocuments: submission.data?.serviceDocuments || {},
-        currency: submission.data?.currency || 'EUR', // Récupérer la devise depuis les données de soumission
+        // Services (step 1)
+        selectedServices,
+        // Documents (step 2)
+        serviceDocuments,
+        // Delivery (step 3)
+        deliveryMethod,
+        postalDelivery: d.postalDelivery || d.postal_delivery || false,
+        // Personal info (step 4) — top-level submission fields
+        firstName: submission.first_name || d.firstName || d.first_name || '',
+        lastName: submission.last_name || d.lastName || d.last_name || '',
+        email: submission.email || d.email || '',
+        phone: submission.phone || d.phone || '',
+        address: submission.address || d.address || '',
+        city: submission.city || d.city || '',
+        postalCode: submission.postal_code || d.postalCode || d.postal_code || '',
+        country: submission.country || d.country || '',
+        notes: submission.notes || d.notes || '',
+        // Appointment
+        appointmentDate: submission.appointment_date || d.appointmentDate || d.appointment_date || '',
+        appointmentTime: submission.appointment_time || d.appointmentTime || d.appointment_time || '',
+        timezone: submission.timezone || d.timezone || '',
+        // Signatories
+        signatories: d.signatories || [],
+        signatoriesCount: d.signatoriesCount || d.signatories_count || 0,
+        additionalSignatoriesCount: d.additionalSignatoriesCount || 0,
+        isSignatory: d.isSignatory || d.is_signatory || false,
+        // Currency
+        currency,
       };
 
-      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
-      const currency = (formData.currency || 'EUR').toUpperCase();
-      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
-
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
-          formData,
-          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
-          submissionId: submission.id
-        }
+      console.log('📋 [RETRY] Prepared formData:', {
+        services: formData.selectedServices.length,
+        documents: Object.keys(formData.serviceDocuments).length,
+        delivery: formData.deliveryMethod,
+        email: formData.email,
+        currency: formData.currency,
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // Save to localStorage so the form can pick it up
+      localStorage.setItem('notaryFormData', JSON.stringify(formData));
+      // Mark all steps as completed so user can access summary directly
+      localStorage.setItem('notaryCompletedSteps', JSON.stringify([0, 1, 2, 3, 4]));
+      // Save currency
+      localStorage.setItem('notaryCurrency', formData.currency);
 
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('No checkout URL received from payment service');
-      }
+      console.log('✅ [RETRY] Form data saved to localStorage, redirecting to summary');
+
+      // Redirect to the summary page
+      navigate('/form/summary');
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Error retrying payment:', error);
-      }
-      toast.error(`Failed to create payment session. ${error.message}. Please try again or contact support.`);
-    } finally {
-      setRetryingPaymentId(null);
+      console.error('❌ Error preparing retry payment:', error);
+      toast.error('Failed to prepare payment. Please try again.');
     }
-  }, [toast]);
+  }, [navigate, toast]);
 
   // Filter submissions by selected status
   const filteredSubmissions = useMemo(() => {
@@ -306,6 +336,22 @@ const Dashboard = () => {
   // Reset to page 1 when status filter changes
   useEffect(() => {
     setCurrentPage(1);
+  }, [selectedStatus]);
+
+  // Update page title based on active tab
+  useEffect(() => {
+    const tabTitles = {
+      'all': 'All Requests',
+      'pending': 'Pending Requests',
+      'pending_payment': 'Pending Payment',
+      'confirmed': 'Confirmed Requests',
+      'completed': 'Completed Requests',
+      'cancelled': 'Cancelled Requests',
+    };
+    
+    const tabTitle = tabTitles[selectedStatus] || 'Dashboard';
+    document.title = tabTitle;
+    console.log('📄 [DASHBOARD-TITLE] Titre mis à jour:', tabTitle, 'pour l\'onglet:', selectedStatus);
   }, [selectedStatus]);
 
   const goToPage = useCallback((page) => {
@@ -502,18 +548,10 @@ const Dashboard = () => {
                                         e.stopPropagation();
                                         retryPayment(submission);
                                       }}
-                                      disabled={retryingPaymentId === submission.id}
-                                      className="p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors font-medium text-xs flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors font-medium text-xs flex items-center"
                                       title="Retry Payment"
                                     >
-                                      {retryingPaymentId === submission.id ? (
-                                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                      ) : (
-                                        <Icon icon="heroicons:arrow-path" className="w-4 h-4" />
-                                      )}
+                                      <Icon icon="heroicons:arrow-path" className="w-4 h-4" />
                                     </button>
                                     <button
                                       onClick={(e) => {

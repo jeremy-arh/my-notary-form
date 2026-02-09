@@ -27,6 +27,18 @@ const Profile = () => {
     fetchClientInfo();
   }, []);
 
+  // Update page title based on active tab
+  useEffect(() => {
+    const tabTitles = {
+      'profile': 'Profile',
+      'invoices': 'Invoices',
+    };
+    
+    const tabTitle = tabTitles[activeTab] || 'Settings';
+    document.title = tabTitle;
+    console.log('📄 [PROFILE-TITLE] Titre mis à jour:', tabTitle, 'pour l\'onglet:', activeTab);
+  }, [activeTab]);
+
   const fetchClientInfo = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();

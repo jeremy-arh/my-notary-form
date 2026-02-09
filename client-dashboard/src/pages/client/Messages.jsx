@@ -22,6 +22,12 @@ const Messages = () => {
     fetchClientAndConversations();
   }, []);
 
+  // Update page title
+  useEffect(() => {
+    document.title = 'Messages';
+    console.log('📄 [MESSAGES-TITLE] Titre mis à jour: Messages');
+  }, []);
+
   const fetchClientAndConversations = async () => {
     setLoading(true);
     try {

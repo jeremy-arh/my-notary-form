@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import ClientLayout from '../../components/ClientLayout';
-import Chat from '../../components/Chat';
 import SignatoriesList from '../../components/SignatoriesList';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
@@ -22,7 +21,6 @@ const SubmissionDetail = () => {
   const [notarizedFiles, setNotarizedFiles] = useState([]);
   const [fileComments, setFileComments] = useState({});
   const [signatories, setSignatories] = useState([]);
-  const [isRetryingPayment, setIsRetryingPayment] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('services');
@@ -45,14 +43,32 @@ const SubmissionDetail = () => {
     }
   }, [activeTab, id]);
 
+  // Update page title based on active tab
+  useEffect(() => {
+    const tabTitles = {
+      'services': 'Services & Documents',
+      'signatories': 'Signatories',
+      'transactions': 'Transactions',
+      'notarized': 'Notarized Documents',
+    };
+    
+    const tabTitle = tabTitles[activeTab] || 'Submission Details';
+    document.title = tabTitle;
+    console.log('📄 [SUBMISSION-DETAIL-TITLE] Titre mis à jour:', tabTitle, 'pour l\'onglet:', activeTab);
+  }, [activeTab]);
+
   const fetchSubmissionDetail = async () => {
+    setLoading(true);
     try {
+      console.log('🔍 [SUBMISSION DETAIL] Fetching submission:', id);
       // Get current user and client info
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.log('❌ [SUBMISSION DETAIL] No user found, redirecting to login');
         navigate('/login');
         return;
       }
+      console.log('✅ [SUBMISSION DETAIL] User found:', user.id);
 
       const { data: client, error: clientError } = await supabase
         .from('client')
@@ -98,22 +114,38 @@ const SubmissionDetail = () => {
       console.log('📋 [SUBMISSION] Loaded submission:', {
         id: submissionData?.id,
         status: submissionData?.status,
-        data: submissionData?.data,
+        hasData: !!submissionData?.data,
+        selectedServices: submissionData?.data?.selectedServices,
+        serviceDocuments: submissionData?.data?.serviceDocuments,
         signatories: submissionData?.data?.signatories
       });
+
+      if (!submissionData) {
+        console.error('❌ [SUBMISSION DETAIL] No submission data returned');
+        throw new Error('Submission not found');
+      }
 
       setSubmission(submissionData);
 
       // Fetch all services to create a map
-      const { data: servicesData } = await supabase
+      const { data: servicesData, error: servicesError } = await supabase
         .from('services')
         .select('*');
 
+      if (servicesError) {
+        console.error('❌ [SUBMISSION DETAIL] Error fetching services:', servicesError);
+      }
+
       const sMap = {};
-      if (servicesData) {
+      if (servicesData && Array.isArray(servicesData)) {
         servicesData.forEach(service => {
-          sMap[service.service_id] = service;
+          if (service && service.service_id) {
+            sMap[service.service_id] = service;
+          }
         });
+        console.log('✅ [SUBMISSION DETAIL] Loaded services map:', Object.keys(sMap).length, 'services');
+      } else {
+        console.warn('⚠️ [SUBMISSION DETAIL] No services data or invalid format');
       }
       setServicesMap(sMap);
 
@@ -162,14 +194,20 @@ const SubmissionDetail = () => {
         }
       }
 
-      // Fetch signatories
+      // Fetch signatories (ignore 403 errors - may not have permission)
       const { data: signatoriesData, error: signatoriesError } = await supabase
         .from('signatories')
         .select('*')
         .eq('submission_id', id)
         .order('created_at', { ascending: true });
 
-      if (!signatoriesError && signatoriesData) {
+      if (signatoriesError) {
+        // 403 Forbidden is expected if signatories table is not accessible
+        if (signatoriesError.code !== 'PGRST116' && signatoriesError.status !== 403) {
+          console.warn('⚠️ [SUBMISSION DETAIL] Error fetching signatories:', signatoriesError);
+        }
+        setSignatories([]);
+      } else if (signatoriesData) {
         setSignatories(signatoriesData || []);
       }
 
@@ -527,54 +565,73 @@ const SubmissionDetail = () => {
     }
   };
 
-  const retryPayment = async () => {
-    setIsRetryingPayment(true);
+  const retryPayment = () => {
     try {
       console.log('🔄 Retrying payment for submission:', submission.id);
+      console.log('📋 [RETRY] submission.data:', submission.data);
 
+      const d = submission.data || {};
+
+      // Handle both camelCase (edge function) and snake_case (submissionSave) formats
+      const selectedServices = d.selectedServices || d.selected_services || [];
+      const serviceDocuments = d.serviceDocuments || d.documents || {};
+      const deliveryMethod = d.deliveryMethod || d.delivery_method || 'digital';
+      const currency = d.currency || 'EUR';
+
+      // Build formData matching the localStorage format the form expects
       const formData = {
-        firstName: submission.first_name,
-        lastName: submission.last_name,
-        email: submission.email,
-        phone: submission.phone,
-        address: submission.address,
-        city: submission.city,
-        postalCode: submission.postal_code,
-        country: submission.country,
-        notes: submission.notes,
-        appointmentDate: submission.appointment_date,
-        appointmentTime: submission.appointment_time,
-        timezone: submission.timezone,
-        selectedServices: submission.data?.selectedServices || [],
-        serviceDocuments: submission.data?.serviceDocuments || {},
-        currency: submission.data?.currency || 'EUR', // Récupérer la devise depuis les données de soumission
+        // Services (step 1)
+        selectedServices,
+        // Documents (step 2)
+        serviceDocuments,
+        // Delivery (step 3)
+        deliveryMethod,
+        postalDelivery: d.postalDelivery || d.postal_delivery || false,
+        // Personal info (step 4) — top-level submission fields
+        firstName: submission.first_name || d.firstName || d.first_name || '',
+        lastName: submission.last_name || d.lastName || d.last_name || '',
+        email: submission.email || d.email || '',
+        phone: submission.phone || d.phone || '',
+        address: submission.address || d.address || '',
+        city: submission.city || d.city || '',
+        postalCode: submission.postal_code || d.postalCode || d.postal_code || '',
+        country: submission.country || d.country || '',
+        notes: submission.notes || d.notes || '',
+        // Appointment
+        appointmentDate: submission.appointment_date || d.appointmentDate || d.appointment_date || '',
+        appointmentTime: submission.appointment_time || d.appointmentTime || d.appointment_time || '',
+        timezone: submission.timezone || d.timezone || '',
+        // Signatories
+        signatories: d.signatories || [],
+        signatoriesCount: d.signatoriesCount || d.signatories_count || 0,
+        additionalSignatoriesCount: d.additionalSignatoriesCount || 0,
+        isSignatory: d.isSignatory || d.is_signatory || false,
+        // Currency
+        currency,
       };
 
-      // S'assurer que la devise est en majuscules (EUR, USD, etc.) comme attendu par Stripe
-      const currency = (formData.currency || 'EUR').toUpperCase();
-      console.log('💰 [CURRENCY] Devise finale envoyée:', currency);
-
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
-          formData,
-          currency: currency, // Envoyer la devise comme paramètre séparé et explicite
-          submissionId: submission.id  // Pass existing submission ID for retry
-        }
+      console.log('📋 [RETRY] Prepared formData:', {
+        services: formData.selectedServices.length,
+        documents: Object.keys(formData.serviceDocuments).length,
+        delivery: formData.deliveryMethod,
+        email: formData.email,
+        currency: formData.currency,
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // Save to localStorage so the form can pick it up
+      localStorage.setItem('notaryFormData', JSON.stringify(formData));
+      // Mark all steps as completed so user can access summary directly
+      localStorage.setItem('notaryCompletedSteps', JSON.stringify([0, 1, 2, 3, 4]));
+      // Save currency
+      localStorage.setItem('notaryCurrency', formData.currency);
 
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('No checkout URL received from payment service');
-      }
+      console.log('✅ [RETRY] Form data saved to localStorage, redirecting to summary');
+
+      // Redirect to the summary page
+      navigate('/form/summary');
     } catch (error) {
-      console.error('❌ Error retrying payment:', error);
-      toast.error(`Failed to create payment session. ${error.message}. Please try again or contact support.`);
-    } finally {
-      setIsRetryingPayment(false);
+      console.error('❌ Error preparing retry payment:', error);
+      toast.error('Failed to prepare payment. Please try again.');
     }
   };
 
@@ -632,82 +689,87 @@ const SubmissionDetail = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 lg:gap-8">
+        {/* Tabs Navigation */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex space-x-4 sm:space-x-6 border-b border-gray-200 overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <button
+              onClick={() => setActiveTab('services')}
+              className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
+                activeTab === 'services'
+                  ? 'text-black'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Icon icon="heroicons:document-text" className="w-4 h-4" />
+              <span>Services & Documents</span>
+              {activeTab === 'services' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('signatories')}
+              className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
+                activeTab === 'signatories'
+                  ? 'text-black'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Icon icon="heroicons:users" className="w-4 h-4" />
+              <span>Signatories</span>
+              {activeTab === 'signatories' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('transactions')}
+              className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
+                activeTab === 'transactions'
+                  ? 'text-black'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Icon icon="heroicons:credit-card" className="w-4 h-4" />
+              <span>Transactions</span>
+              {transactions.length > 0 && (
+                <span className="px-2 py-0.5 bg-gray-200 rounded-full text-xs">
+                  {transactions.length}
+                </span>
+              )}
+              {activeTab === 'transactions' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('notarized')}
+              className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
+                activeTab === 'notarized'
+                  ? 'text-black'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Icon icon="heroicons:document-check" className="w-4 h-4" />
+              <span>Notarized Documents</span>
+              {notarizedFiles.length > 0 && (
+                <span className="px-2 py-0.5 bg-gray-200 rounded-full text-xs">
+                  {notarizedFiles.length}
+                </span>
+              )}
+              {activeTab === 'notarized' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="w-full">
           {/* Main Content - Takes remaining space */}
           <div className="w-full min-w-0">
-            {/* Tabs */}
-            <div className="flex space-x-4 sm:space-x-6 mb-4 sm:mb-6 border-b border-gray-200 overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-              <button
-                onClick={() => setActiveTab('services')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
-                  activeTab === 'services'
-                    ? 'text-black'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Icon icon="heroicons:document-text" className="w-4 h-4" />
-                <span>Services & Documents</span>
-                {activeTab === 'services' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('signatories')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
-                  activeTab === 'signatories'
-                    ? 'text-black'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Icon icon="heroicons:users" className="w-4 h-4" />
-                <span>Signatories</span>
-                {activeTab === 'signatories' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('transactions')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
-                  activeTab === 'transactions'
-                    ? 'text-black'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Icon icon="heroicons:credit-card" className="w-4 h-4" />
-                <span>Transactions</span>
-                {transactions.length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 bg-gray-200 rounded-full text-xs">
-                    {transactions.length}
-                  </span>
-                )}
-                {activeTab === 'transactions' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('notarized')}
-                className={`pb-3 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap flex items-center gap-2 ${
-                  activeTab === 'notarized'
-                    ? 'text-black'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Icon icon="heroicons:document-check" className="w-4 h-4" />
-                <span>Notarized Documents</span>
-                {notarizedFiles.length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
-                    {notarizedFiles.length}
-                  </span>
-                )}
-                {activeTab === 'notarized' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                )}
-              </button>
-            </div>
-
             <div className="space-y-4 sm:space-y-6">
               {/* Services & Documents Tab */}
-              {activeTab === 'services' && selectedServices.length > 0 && (
+              {activeTab === 'services' && (
               <div className="bg-[#F3F4F6] rounded-2xl p-4 sm:p-6 border border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3 flex-shrink-0">
@@ -715,6 +777,9 @@ const SubmissionDetail = () => {
                   </div>
                   <span className="text-base sm:text-xl">Services & Documents</span>
                 </h2>
+                {selectedServices.length === 0 ? (
+                  <p className="text-sm sm:text-base text-gray-600">No services selected for this submission.</p>
+                ) : (
                 <div className="space-y-3 sm:space-y-4">
                   {selectedServices.map((serviceId) => {
                     const service = servicesMap[serviceId];
@@ -838,8 +903,10 @@ const SubmissionDetail = () => {
                     );
                   })}
                 </div>
+                )}
 
                 {/* Total */}
+                {selectedServices.length > 0 && (
                 <div className="mt-4 pt-4 border-t-2 border-gray-300">
                   <div className="flex justify-between items-center">
                     <span className="text-base sm:text-lg font-bold text-gray-900">Total:</span>
@@ -913,6 +980,7 @@ const SubmissionDetail = () => {
                     </span>
                   </div>
                 </div>
+                )}
               </div>
               )}
 
@@ -1104,23 +1172,10 @@ const SubmissionDetail = () => {
                       {submission.status === 'pending_payment' && (
                         <button
                           onClick={retryPayment}
-                          disabled={isRetryingPayment}
-                          className="w-full flex items-center justify-center bg-black text-white hover:bg-gray-800 font-medium text-xs sm:text-sm py-2 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full flex items-center justify-center bg-black text-white hover:bg-gray-800 font-medium text-xs sm:text-sm py-2 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors"
                         >
-                          {isRetryingPayment ? (
-                            <>
-                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <Icon icon="heroicons:arrow-path" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                              Retry Payment
-                            </>
-                          )}
+                          <Icon icon="heroicons:arrow-path" className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                          Retry Payment
                         </button>
                       )}
                     </div>
@@ -1339,18 +1394,6 @@ const SubmissionDetail = () => {
                 <p className="text-sm sm:text-base text-gray-700 whitespace-pre-wrap">{submission.notes}</p>
               </div>
             )}
-            </div>
-          </div>
-
-          {/* Right Column - Chat */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-4 sm:top-8">
-              <Chat
-                submissionId={submission.id}
-                currentUserType="client"
-                currentUserId={clientInfo?.id}
-                recipientName={submission.notary?.name || 'Support'}
-              />
             </div>
           </div>
         </div>

@@ -94,22 +94,7 @@ const NotaryForm = () => {
 
   // Load form data from localStorage
   const [formData, setFormData] = useLocalStorage('notaryFormData', {
-    // Services (step 1)
-    selectedServices: [], // Array of service IDs
-
-    // Documents (step 2) - organized by service
-    serviceDocuments: {}, // { serviceId: [files] }
-
-    // Signatories (step 4) - global list for the entire order
-    signatories: [], // [signatories] - global list for all documents
-    isSignatory: false, // Whether the user is one of the signatories (unchecked by default to avoid auto-adding)
-
-    timezone: 'UTC-5',
-
-    // Delivery method
-    deliveryMethod: null,
-
-    // Personal Info
+    // Personal Info (step 1)
     firstName: '',
     lastName: '',
     email: '',
@@ -120,6 +105,21 @@ const NotaryForm = () => {
     city: '',
     postalCode: '',
     country: '',
+
+    // Services (step 2)
+    selectedServices: [], // Array of service IDs
+
+    // Documents (step 3) - organized by service
+    serviceDocuments: {}, // { serviceId: [files] }
+
+    // Delivery method (step 4)
+    deliveryMethod: null,
+
+    // Signatories - global list for the entire order
+    signatories: [], // [signatories] - global list for all documents
+    isSignatory: false, // Whether the user is one of the signatories (unchecked by default to avoid auto-adding)
+
+    timezone: 'UTC-5',
 
     // Currency from URL parameter or localStorage
     currency: getInitialCurrency(),
@@ -289,10 +289,10 @@ const NotaryForm = () => {
   // The formDraft is saved but never loaded/restored
 
   const steps = [
-    { id: 1, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
-    { id: 2, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 3, name: 'Delivery method', icon: 'heroicons:envelope', path: '/form/delivery' },
-    { id: 4, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
+    { id: 1, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
+    { id: 2, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
+    { id: 3, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
+    { id: 4, name: 'Delivery method', icon: 'heroicons:envelope', path: '/form/delivery' },
     // { id: 5, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' }, // Temporarily hidden
     { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
@@ -300,14 +300,14 @@ const NotaryForm = () => {
   // Function to get validation error message for current step
   const getValidationErrorMessage = () => {
     switch (currentStep) {
-      case 1: // Choose Services
-        return 'Please select at least one service';
-      case 2: // Upload Documents
-        return 'Please upload at least one document for each selected service';
-      case 3: // Delivery method
-        return 'Please select a delivery method';
-      case 4: // Personal informations
+      case 1: // Personal informations
         return 'Please complete all required personal information fields';
+      case 2: // Choose Services
+        return 'Please select at least one service';
+      case 3: // Upload Documents
+        return 'Please upload at least one document for each selected service';
+      case 4: // Delivery method
+        return 'Please select a delivery method';
       // case 5: // Add Signatories - Temporarily hidden
       //   return 'Please add at least one signatory';
       default:
@@ -318,10 +318,16 @@ const NotaryForm = () => {
   // Validation function to check if current step can proceed
   const canProceedFromCurrentStep = () => {
     switch (currentStep) {
-      case 1: // Choose Services
+      case 1: // Personal informations
+        if (!formData.firstName?.trim() || !formData.lastName?.trim()) return false;
+        if (!isAuthenticated && !formData.email?.trim()) return false;
+        if (!formData.address?.trim()) return false;
+        return true;
+
+      case 2: // Choose Services
         return formData.selectedServices && formData.selectedServices.length > 0;
 
-      case 2: // Upload Documents
+      case 3: // Upload Documents
         // Check that each selected service has at least one file
         if (!formData.selectedServices || formData.selectedServices.length === 0) return false;
         if (!formData.serviceDocuments) return false;
@@ -331,15 +337,9 @@ const NotaryForm = () => {
           return docs && docs.length > 0;
         });
 
-      case 3: // Delivery method
+      case 4: // Delivery method
         // Always valid as long as a method is selected
         return !!formData.deliveryMethod;
-
-      case 4: // Personal informations
-        if (!formData.firstName?.trim() || !formData.lastName?.trim()) return false;
-        if (!isAuthenticated && (!formData.email?.trim() || !formData.password?.trim())) return false;
-        if (!formData.address?.trim()) return false;
-        return true;
 
       // case 5: // Add Signatories - Temporarily hidden
       //   // Check that there is at least one signatory
@@ -384,15 +384,102 @@ const NotaryForm = () => {
 
   const currentStep = getCurrentStepFromPath();
 
-  // Update page title with current step name
+  // Update page title and meta tags for sharing - This effect runs immediately on mount and on pathname changes
   useEffect(() => {
-    const currentStepData = steps.find(s => s.path === location.pathname);
-    if (currentStepData) {
-      document.title = currentStepData.name;
-    } else {
-      document.title = 'Client dashboard';
-    }
-  }, [location.pathname]);
+    // Function to update title and meta tags based on current pathname
+    const updateTitleAndMeta = () => {
+      const isFormRoute = location.pathname.startsWith('/form');
+      
+      if (isFormRoute) {
+        // For form pages, use "Submit your request" as the main title for sharing
+        const shareTitle = 'Submit your request';
+        
+        // Adapt description based on service parameter if available
+        const serviceParam = searchParams.get('service');
+        let shareDescription = 'Submit your notary service request online. Fast, secure, and professional notarization services available 24/7. Get your documents notarized quickly and easily.';
+        
+        if (serviceParam && services && services.length > 0) {
+          // Try to find the service name to personalize the description
+          const normalizedServiceParam = serviceParam.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const matchedService = services.find(service => {
+            const candidates = [
+              service.slug,
+              service.code,
+              service.key,
+              service.url_key,
+              service.name
+            ]
+              .filter(Boolean)
+              .map(s => s.toString().toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+            return candidates.some(c => c === normalizedServiceParam || c.includes(normalizedServiceParam));
+          });
+          
+          if (matchedService) {
+            shareDescription = `Get your ${matchedService.name} notarized online. Fast, secure, and professional notarization service. Complete your request in minutes with our easy-to-use platform.`;
+          }
+        }
+        
+        // Update document title (for browser tab)
+        const currentStepData = steps.find(s => s.path === location.pathname);
+        if (currentStepData) {
+          // Map step paths to translation keys
+          const stepTitleMap = {
+            '/form/personal-info': t('form.steps.personalInfo.title', 'Your Personal Information'),
+            '/form/choose-services': t('form.steps.chooseOption.title', 'Choose Your Services'),
+            '/form/documents': t('form.steps.documents.title', 'Upload Documents'),
+            '/form/delivery': t('form.steps.delivery.title', 'Delivery of your notarized documents'),
+            '/form/summary': t('form.steps.summary.title', 'Summary'),
+          };
+          
+          const translatedTitle = stepTitleMap[location.pathname] || currentStepData.name;
+          document.title = translatedTitle;
+          console.log('📄 [TITLE] Titre mis à jour:', translatedTitle, 'pour le chemin:', location.pathname);
+        } else {
+          document.title = shareTitle;
+        }
+        
+        // Update meta tags for sharing (Open Graph, Twitter, etc.)
+        updateMetaTag('og:title', shareTitle);
+        updateMetaTag('og:description', shareDescription);
+        updateMetaTag('twitter:title', shareTitle);
+        updateMetaTag('twitter:description', shareDescription);
+        updateMetaTag('description', shareDescription);
+        
+        // Update og:url to current URL
+        const currentUrl = window.location.origin + location.pathname + location.search;
+        updateMetaTag('og:url', currentUrl);
+        
+        console.log('📄 [META] Métadonnées mises à jour pour le partage:', { shareTitle, shareDescription });
+      } else {
+        // Reset to default for non-form pages
+        document.title = 'Client dashboard';
+        updateMetaTag('og:title', 'Client dashboard');
+        updateMetaTag('og:description', 'Manage your notary service requests');
+        updateMetaTag('twitter:title', 'Client dashboard');
+        updateMetaTag('twitter:description', 'Manage your notary service requests');
+        updateMetaTag('description', 'Manage your notary service requests');
+      }
+    };
+    
+    // Helper function to update or create meta tags
+    const updateMetaTag = (property, content) => {
+      // Handle both property (og:) and name attributes
+      const isProperty = property.startsWith('og:') || property.startsWith('twitter:');
+      const attribute = isProperty ? 'property' : 'name';
+      const selector = isProperty ? `meta[property="${property}"]` : `meta[name="${property}"]`;
+      
+      let meta = document.querySelector(selector);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute(attribute, property);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', content);
+    };
+    
+    // Update title and meta tags immediately - this ensures they are set even on direct URL access
+    updateTitleAndMeta();
+  }, [location.pathname, location.search, t, steps, services, searchParams]);
 
   // Map step names to GTM format
   const getStepNameForGTM = (stepName) => {
@@ -409,13 +496,13 @@ const NotaryForm = () => {
 
   // Validate step access and track page views
   useEffect(() => {
-    // Redirect to /form/choose-services if at /form root (en conservant la query)
+    // Redirect to /form/personal-info if at /form root (en conservant la query)
     if (location.pathname === '/form' || location.pathname === '/form/') {
       // Si un param service existe, on laisse l'autre effet gérer la navigation directe
       if (serviceParam && !hasAppliedServiceParam) {
         return;
       }
-      navigate({ pathname: '/form/choose-services', search: location.search }, { replace: true });
+      navigate({ pathname: '/form/personal-info', search: location.search }, { replace: true });
       return;
     }
 
@@ -426,20 +513,25 @@ const NotaryForm = () => {
     if (isObsoleteRoute) {
       console.log('⚠️ [REDIRECT] Route obsolète ou inconnue détectée:', location.pathname);
       // Determine the best route based on completed steps
-      let targetPath = '/form/choose-services';
+      let targetPath = '/form/personal-info';
       
       if (completedSteps.length >= steps.length - 1) {
         // User has completed all steps (4 steps), redirect to summary (step 5)
         targetPath = '/form/summary';
       } else if (completedSteps.length >= 3) {
-        // User has completed steps 1-3, redirect to personal-info (step 4)
-        targetPath = '/form/personal-info';
-      } else if (completedSteps.length >= 2) {
-        // User has completed steps 1-2, redirect to delivery (step 3)
+        // User has completed steps 1-3, redirect to delivery (step 4)
         targetPath = '/form/delivery';
-      } else if (completedSteps.length >= 1) {
-        // User has completed step 1, redirect to documents (step 2)
+      } else if (completedSteps.length >= 2) {
+        // User has completed steps 1-2, redirect to documents (step 3)
         targetPath = '/form/documents';
+      } else if (completedSteps.length >= 1) {
+        // User has completed step 1
+        // Si un service param est présent, aller directement à documents (étape 3) en sautant choose-services (étape 2)
+        if (serviceParam && hasAppliedServiceParam && formData.selectedServices && formData.selectedServices.length > 0) {
+          targetPath = '/form/documents';
+        } else {
+          targetPath = '/form/choose-services';
+        }
       }
       
       console.log('   -> Redirection vers:', targetPath);
@@ -462,6 +554,18 @@ const NotaryForm = () => {
     if (serviceParam && !hasAppliedServiceParam) {
       console.log('⏳ [GUARD] Service param présent mais pas encore appliqué, attente...');
       return;
+    }
+    
+    // Si un service param est présent et appliqué, empêcher l'accès à l'étape 2 (Choose Services)
+    // et rediriger vers Documents (étape 3)
+    if (serviceParam && hasAppliedServiceParam && formData.selectedServices && formData.selectedServices.length > 0) {
+      const requestedStep = getCurrentStepFromPath();
+      if (requestedStep === 2) {
+        // L'utilisateur essaie d'accéder à Choose Services alors qu'un service est déjà sélectionné via URL
+        console.log('🚫 [GUARD] Accès à Choose Services bloqué - service déjà sélectionné via URL, redirection vers Documents');
+        navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+        return;
+      }
     }
 
     // Check if user is trying to access a step they haven't completed yet
@@ -522,6 +626,10 @@ const NotaryForm = () => {
         } else {
           // Data is incomplete, redirect to appropriate step
           console.log('❌ [GUARD] Données incomplètes, redirection nécessaire');
+          if (!hasPersonalInfo) {
+            navigate('/form/personal-info', { replace: true });
+            return;
+          }
           if (!hasServices) {
             navigate('/form/choose-services', { replace: true });
             return;
@@ -532,10 +640,6 @@ const NotaryForm = () => {
           }
           if (!hasDelivery) {
             navigate('/form/delivery', { replace: true });
-            return;
-          }
-          if (!hasPersonalInfo) {
-            navigate('/form/personal-info', { replace: true });
             return;
           }
         }
@@ -999,13 +1103,13 @@ const NotaryForm = () => {
       return newData;
     });
 
-    // Marquer l'étape 1 comme complétée (stockée avec index 0-based: stepId - 1)
-    const stepIndex = 0; // Étape 1 -> index 0
+    // Marquer l'étape 2 (Choose Services) comme complétée (stockée avec index 0-based: stepId - 1)
+    const stepIndex = 1; // Étape 2 -> index 1
     setCompletedSteps((prev) => {
       if (prev.includes(stepIndex)) {
         return prev;
       }
-      console.log('✅ [SERVICE-PARAM] Marquage de l\'étape 1 comme complétée (index:', stepIndex, ')');
+      console.log('✅ [SERVICE-PARAM] Marquage de l\'étape 2 (Choose Services) comme complétée (index:', stepIndex, ')');
       return [...prev, stepIndex];
     });
     
@@ -1014,15 +1118,27 @@ const NotaryForm = () => {
     setAllowServiceParamBypass(true);
     setHasAppliedServiceParam(true);
 
-    // Naviguer immédiatement vers l'étape d'upload
-    console.log('🚀 [SERVICE-PARAM] Navigation immédiate vers /form/documents');
-    console.log('   Chemin actuel:', location.pathname);
-    console.log('   Services sélectionnés:', matchedServiceIds);
+    // Naviguer vers l'étape appropriée
+    // Si on est sur l'étape 1 (Personal Info) ou sur la racine, rester sur Personal Info
+    // Sinon, aller directement à Documents (étape 3) en sautant Choose Services (étape 2)
+    const currentStepFromPath = getCurrentStepFromPath();
+    const isOnPersonalInfo = location.pathname === '/form/personal-info' || location.pathname === '/form' || location.pathname === '/form/';
     
-    // Utiliser requestAnimationFrame pour s'assurer que les états sont mis à jour
-    requestAnimationFrame(() => {
-      navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
-    });
+    if (isOnPersonalInfo) {
+      // Rester sur Personal Info, l'utilisateur devra compléter cette étape d'abord
+      console.log('📍 [SERVICE-PARAM] Service appliqué, restant sur Personal Info (étape 1)');
+      console.log('   Services sélectionnés:', matchedServiceIds);
+    } else {
+      // Aller directement à Documents (étape 3) en sautant Choose Services (étape 2)
+      console.log('🚀 [SERVICE-PARAM] Navigation immédiate vers /form/documents (saut de l\'étape 2)');
+      console.log('   Chemin actuel:', location.pathname);
+      console.log('   Services sélectionnés:', matchedServiceIds);
+      
+      // Utiliser requestAnimationFrame pour s'assurer que les états sont mis à jour
+      requestAnimationFrame(() => {
+        navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
+      });
+    }
   }, [
     services,
     servicesLoading,
@@ -1035,19 +1151,20 @@ const NotaryForm = () => {
     hasAppliedServiceParam
   ]);
 
-  // Backup: Forcer la navigation vers l'upload si le service est appliqué mais qu'on n'est pas encore sur documents
+  // Backup: Forcer la navigation vers documents si le service est appliqué mais qu'on est sur choose-services
   useEffect(() => {
     if (!serviceParam) return;
     if (servicesLoading) return;
     if (!hasAppliedServiceParam) return;
     if (!formData.selectedServices || formData.selectedServices.length === 0) return;
     if (location.pathname === '/form/documents') return;
+    if (location.pathname === '/form/personal-info') return; // Ne pas rediriger depuis Personal Info
     
-    // Vérifier qu'on n'est pas en train de naviguer depuis le premier useEffect
-    const isOnChooseServices = location.pathname === '/form/choose-services' || location.pathname === '/form';
+    // Si on est sur Choose Services (étape 2), rediriger vers Documents (étape 3)
+    const isOnChooseServices = location.pathname === '/form/choose-services';
     
     if (isOnChooseServices) {
-      console.log('🚀 [SERVICE-PARAM-BACKUP] Navigation de backup vers /form/documents');
+      console.log('🚀 [SERVICE-PARAM-BACKUP] Navigation de backup vers /form/documents (saut de l\'étape 2)');
       console.log('   Services sélectionnés:', formData.selectedServices);
       setAllowServiceParamBypass(true);
       navigate({ pathname: '/form/documents', search: location.search }, { replace: true });
@@ -1156,24 +1273,24 @@ const NotaryForm = () => {
       
       // Track Plausible funnel events
       switch (stepId) {
-        case 1: // Services Selected
+        case 1: // Personal Info Completed
+          trackPersonalInfoCompleted(isAuthenticated);
+          break;
+        case 2: // Services Selected
           trackServicesSelected(
             formData.selectedServices?.length || 0,
             formData.selectedServices || []
           );
           break;
-        case 2: // Documents Uploaded
+        case 3: // Documents Uploaded
           const totalDocs = Object.values(formData.serviceDocuments || {}).reduce(
             (sum, docs) => sum + (docs?.length || 0), 0
           );
           const servicesWithDocs = Object.keys(formData.serviceDocuments || {}).length;
           trackDocumentsUploaded(totalDocs, servicesWithDocs);
           break;
-        case 3: // Delivery Method Selected
+        case 4: // Delivery Method Selected
           // Track delivery method selection if needed
-          break;
-        case 4: // Personal Info Completed
-          trackPersonalInfoCompleted(isAuthenticated);
           break;
       }
     }
@@ -1220,7 +1337,21 @@ const NotaryForm = () => {
       }
       
       // Track GTM events based on current step (utiliser stepFromPath pour être sûr)
-      if (stepFromPath === 2) {
+      if (stepFromPath === 1) {
+        // Étape Personal Info - Événement "personnal_info"
+        console.log('📊 [GTM] Déclenchement événement "personnal_info"');
+        pushGTMEvent('personnal_info', {
+          is_authenticated: isAuthenticated || false,
+          is_signatory: formData.isSignatory || false,
+          has_address: !!(formData.address && formData.address.trim()),
+          has_city: !!(formData.city && formData.city.trim()),
+          has_postal_code: !!(formData.postalCode && formData.postalCode.trim()),
+          has_country: !!(formData.country && formData.country.trim()),
+          has_phone: !!(formData.phone && formData.phone.trim()),
+          address_auto_filled: formData._addressAutoFilled || false
+        });
+        console.log('✅ [GTM] Événement "personnal_info" envoyé');
+      } else if (stepFromPath === 3) {
         // Étape Documents - Événement "documents"
         console.log('📊 [GTM] Déclenchement événement "documents"');
         const serviceDocuments = formData.serviceDocuments || {};
@@ -1244,7 +1375,7 @@ const NotaryForm = () => {
           documents_by_service: documentsByService
         });
         console.log('✅ [GTM] Événement "documents" envoyé:', { documents_count: totalDocuments, services_with_docs: servicesWithDocs.length });
-      } else if (stepFromPath === 3) {
+      } else if (stepFromPath === 4) {
         // Étape Delivery Method - Événement "delivery"
         console.log('📊 [GTM] Déclenchement événement "delivery"');
         const DELIVERY_POSTAL_PRICE_EUR = 29.95;
@@ -1257,27 +1388,13 @@ const NotaryForm = () => {
           has_delivery_cost: formData.deliveryMethod === 'postal'
         });
         console.log('✅ [GTM] Événement "delivery" envoyé:', { delivery_method: formData.deliveryMethod, delivery_price: deliveryPrice });
-      } else if (stepFromPath === 4) {
-        // Étape Personal Info - Événement "personnal_info"
-        console.log('📊 [GTM] Déclenchement événement "personnal_info"');
-        pushGTMEvent('personnal_info', {
-          is_authenticated: isAuthenticated || false,
-          is_signatory: formData.isSignatory || false,
-          has_address: !!(formData.address && formData.address.trim()),
-          has_city: !!(formData.city && formData.city.trim()),
-          has_postal_code: !!(formData.postalCode && formData.postalCode.trim()),
-          has_country: !!(formData.country && formData.country.trim()),
-          has_phone: !!(formData.phone && formData.phone.trim()),
-          address_auto_filled: formData._addressAutoFilled || false
-        });
-        console.log('✅ [GTM] Événement "personnal_info" envoyé');
       } else {
         console.log('⚠️ [GTM] Aucun événement GTM pour stepFromPath:', stepFromPath);
       }
 
       // Envoyer les données à Brevo dans la liste "Form abandonné" quand l'utilisateur passe l'étape Personal Info
       // Faire l'appel en arrière-plan pour ne pas bloquer l'interface
-      if (stepFromPath === 4) {
+      if (stepFromPath === 1) {
         // Ne pas attendre la réponse, laisser tourner en arrière-plan
         (async () => {
           try {
@@ -1327,25 +1444,25 @@ const NotaryForm = () => {
         })();
       }
 
-      // Create client/user and link to submission at Personal Info step (step 4)
+      // Create client/user and link to submission at Personal Info step (step 1)
       // This MUST happen before nextStep() to ensure client/user exist
-      if (stepFromPath === 4) {
+      if (stepFromPath === 1) {
         // FORCE LOGS TO APPEAR IN CONSOLE
-        console.log('%c🚨🚨🚨 STEP 4 DETECTED - STARTING CLIENT CREATION 🚨🚨🚨', 'background: red; color: white; font-size: 24px; padding: 15px; font-weight: bold;');
-        console.warn('🚨🚨🚨 STEP 4 - CLIENT CREATION STARTING 🚨🚨🚨');
-        console.error('🔴🔴🔴 STEP 4 - ERROR LOG TO MAKE IT VISIBLE 🔴🔴🔴');
+        console.log('%c🚨🚨🚨 STEP 1 DETECTED - STARTING CLIENT CREATION 🚨🚨🚨', 'background: red; color: white; font-size: 24px; padding: 15px; font-weight: bold;');
+        console.warn('🚨🚨🚨 STEP 1 - CLIENT CREATION STARTING 🚨🚨🚨');
+        console.error('🔴🔴🔴 STEP 1 - ERROR LOG TO MAKE IT VISIBLE 🔴🔴🔴');
         
         // Always show loader during processing (but message will differ based on auth status)
         setIsCreatingUser(true);
         try {
-          console.log('%c👤👤👤 STEP 4: Creating/updating client/user 👤👤👤', 'background: orange; color: white; font-size: 20px; padding: 10px;');
+          console.log('%c👤👤👤 STEP 1: Creating/updating client/user 👤👤👤', 'background: orange; color: white; font-size: 20px; padding: 10px;');
           console.log('👤 [NOTARY-FORM] Email:', formData.email);
           console.log('👤 [NOTARY-FORM] First name:', formData.firstName);
           console.log('👤 [NOTARY-FORM] Last name:', formData.lastName);
           
           // FORCE LOGS TO APPEAR
-          console.warn('⚠️⚠️⚠️ [NOTARY-FORM] STEP 4 - Creating client/user ⚠️⚠️⚠️');
-          console.error('🔴🔴🔴 [NOTARY-FORM] STEP 4 - ERROR LOG 🔴🔴🔴');
+          console.warn('⚠️⚠️⚠️ [NOTARY-FORM] STEP 1 - Creating client/user ⚠️⚠️⚠️');
+          console.error('🔴🔴🔴 [NOTARY-FORM] STEP 1 - ERROR LOG 🔴🔴🔴');
           
           // Validate required fields
           if (!formData.email || !formData.firstName || !formData.lastName) {
@@ -1413,7 +1530,7 @@ const NotaryForm = () => {
             currentStep: stepFromPath,
             sessionId: sessionId,
             submissionId: submissionId,
-            password: formData.password || null // Include password for new user creation
+            // Password removed - using magic link authentication
           };
           
           console.log('%c📤 CALLING EDGE FUNCTION', 'background: purple; color: white; font-size: 18px; padding: 8px;');
@@ -1464,27 +1581,10 @@ const NotaryForm = () => {
             console.log('✅ [NOTARY-FORM] Submission ID:', result.submission_id);
             console.log('✅ [NOTARY-FORM] User created:', result.user_created);
             
-            // Auto-login if a new user was created
-            if (result.user_created && result.password && formData.email) {
-              console.log('🔐 [NOTARY-FORM] Auto-logging in new user...');
-              try {
-                const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                  email: formData.email.trim().toLowerCase(),
-                  password: result.password
-                });
-
-                if (signInError) {
-                  console.error('❌ [NOTARY-FORM] Auto-login failed:', signInError);
-                  // Don't block the flow, just log the error
-                } else if (signInData?.user) {
-                  console.log('✅ [NOTARY-FORM] User auto-logged in successfully');
-                  // Update authentication state without reloading page
-                  setIsAuthenticated(true);
-                }
-              } catch (error) {
-                console.error('❌ [NOTARY-FORM] Error during auto-login:', error);
-                // Don't block the flow
-              }
+            // Note: User will need to sign in with magic link sent to their email
+            // No auto-login needed since we're using passwordless authentication
+            if (result.user_created) {
+              console.log('✅ [NOTARY-FORM] User created. Magic link will be sent to:', formData.email);
             }
             
             // Update formData with submission ID if it was created/updated
@@ -1511,7 +1611,7 @@ const NotaryForm = () => {
           setIsCreatingUser(false);
         }
       } else {
-        console.log('⚠️ [NOTARY-FORM] stepFromPath is not 4, skipping client creation. stepFromPath:', stepFromPath);
+        console.log('⚠️ [NOTARY-FORM] stepFromPath is not 1, skipping client creation. stepFromPath:', stepFromPath);
       }
       
       console.log('➡️ [NOTARY-FORM] Calling nextStep()');
@@ -1532,10 +1632,18 @@ const NotaryForm = () => {
 
     // Navigate to next step
     if (currentStep < steps.length) {
-      const nextStepData = steps.find(s => s.id === currentStep + 1);
+      let nextStepId = currentStep + 1;
+      
+      // Si on est sur l'étape 1 (Personal Info) et qu'un service param est présent,
+      // sauter l'étape 2 (Choose Services) et aller directement à l'étape 3 (Documents)
+      if (currentStep === 1 && serviceParam && hasAppliedServiceParam && formData.selectedServices && formData.selectedServices.length > 0) {
+        console.log('🚀 [NEXT-STEP] Service param présent, saut de l\'étape 2 (Choose Services)');
+        nextStepId = 3; // Aller directement à Documents (étape 3)
+      }
+      
+      const nextStepData = steps.find(s => s.id === nextStepId);
       if (nextStepData) {
         navigate(nextStepData.path);
-        
       }
     }
   };
@@ -2183,6 +2291,22 @@ const NotaryForm = () => {
         <div className="w-full max-w-full h-full animate-fade-in-up flex flex-col overflow-y-auto overflow-x-hidden relative">
           <Routes>
             <Route
+              path="personal-info"
+              element={
+                <PersonalInfo
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                  isAuthenticated={isAuthenticated}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
+                  isPriceDetailsOpen={isPriceDetailsOpen}
+                  setIsPriceDetailsOpen={setIsPriceDetailsOpen}
+                />
+              }
+            />
+            <Route
               path="choose-services"
               element={
                 <ChooseOption
@@ -2222,22 +2346,6 @@ const NotaryForm = () => {
                   prevStep={prevStep}
                   handleContinueClick={handleContinueClick}
                   getValidationErrorMessage={getValidationErrorMessage}
-                />
-              }
-            />
-            <Route
-              path="personal-info"
-              element={
-                <PersonalInfo
-                  formData={formData}
-                  updateFormData={updateFormData}
-                  nextStep={nextStep}
-                  prevStep={prevStep}
-                  isAuthenticated={isAuthenticated}
-                  handleContinueClick={handleContinueClick}
-                  getValidationErrorMessage={getValidationErrorMessage}
-                  isPriceDetailsOpen={isPriceDetailsOpen}
-                  setIsPriceDetailsOpen={setIsPriceDetailsOpen}
                 />
               }
             />
@@ -2319,8 +2427,8 @@ const NotaryForm = () => {
               disabled={isCreatingUser || isUploading}
               className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 ${
                 canProceedFromCurrentStep() && !isCreatingUser && !isUploading
-                  ? 'bg-[#3971ed] text-white border-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3]'
-                  : 'bg-[#3971ed]/50 text-white/60 border-[#3971ed]/30 opacity-60 cursor-not-allowed'
+                  ? 'bg-[#2563eb] text-white border-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af]'
+                  : 'bg-[#2563eb]/50 text-white/60 border-[#2563eb]/30 opacity-60 cursor-not-allowed'
               }`}
             >
               {isCreatingUser ? (
@@ -2363,8 +2471,8 @@ const NotaryForm = () => {
               disabled={isSubmitting}
               className={`px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center ${
                 isSubmitting
-                  ? 'bg-[#3971ed]/50 text-white/60 border-[#3971ed]/30 opacity-60 cursor-not-allowed'
-                  : 'bg-[#3971ed] text-white border-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3]'
+                  ? 'bg-[#2563eb]/50 text-white/60 border-[#2563eb]/30 opacity-60 cursor-not-allowed'
+                  : 'bg-[#2563eb] text-white border-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af]'
               }`}
             >
               {isSubmitting ? (
