@@ -1090,7 +1090,8 @@ const NotaryForm = () => {
         console.log('💾 [NotaryForm] Form data keys:', Object.keys(formData));
         
         // Calculate total amount (may be 0 if services not loaded yet)
-        const totalAmount = calculateTotalAmount(formData, servicesMap || {}, optionsMap || {});
+        const currencyToUse = formData.currency || contextCurrency || 'EUR';
+        const totalAmount = calculateTotalAmount(formData, servicesMap || {}, optionsMap || {}, currencyToUse);
         
         console.log('💰 [NotaryForm] Total amount calculated:', totalAmount);
         console.log('💰 [NotaryForm] Calling saveSubmission NOW...');

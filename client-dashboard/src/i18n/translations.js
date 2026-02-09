@@ -155,6 +155,7 @@ export const translations = {
           missingDelivery: 'Delivery method not selected',
           retryingPayment: 'Retrying payment...',
           clickToFix: 'Fix',
+          termsAcceptance: 'By proceeding with payment, you accept our <a href="https://www.mynotary.io/fr/terms-conditions" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>.',
         },
         delivery: {
           title: 'Delivery of your notarized documents',
@@ -404,6 +405,7 @@ export const translations = {
           missingDelivery: 'Méthode de livraison non sélectionnée',
           retryingPayment: 'Nouvelle tentative de paiement...',
           clickToFix: 'Corriger',
+          termsAcceptance: 'En procédant au paiement, vous acceptez nos <a href="https://www.mynotary.io/fr/terms-conditions" target="_blank" rel="noopener noreferrer">Conditions Générales d\'Utilisation</a>.',
         },
         delivery: {
           title: 'Livraison de vos documents notariés',
@@ -655,6 +657,7 @@ export const translations = {
           missingDelivery: 'Método de entrega no seleccionado',
           retryingPayment: 'Reintentando pago...',
           clickToFix: 'Corregir',
+          termsAcceptance: 'Al proceder con el pago, acepta nuestros <a href="https://www.mynotary.io/fr/terms-conditions" target="_blank" rel="noopener noreferrer">Términos y Condiciones</a>.',
         },
         delivery: {
           title: 'Entrega de sus documentos notariados',
@@ -892,6 +895,7 @@ export const translations = {
           missingDelivery: 'Liefermethode nicht ausgewählt',
           retryingPayment: 'Zahlungsversuch wird wiederholt...',
           clickToFix: 'Korrigieren',
+          termsAcceptance: 'Mit der Zahlung akzeptieren Sie unsere <a href="https://www.mynotary.io/fr/terms-conditions" target="_blank" rel="noopener noreferrer">Allgemeinen Geschäftsbedingungen</a>.',
         },
         delivery: {
           title: 'Zustellung Ihrer notariellen Dokumente',
@@ -1130,6 +1134,7 @@ export const translations = {
           missingDelivery: 'Metodo di consegna non selezionato',
           retryingPayment: 'Nuovo tentativo di pagamento...',
           clickToFix: 'Correggi',
+          termsAcceptance: 'Procedendo con il pagamento, accetti i nostri <a href="https://www.mynotary.io/fr/terms-conditions" target="_blank" rel="noopener noreferrer">Termini e Condizioni</a>.',
         },
         delivery: {
           title: 'Consegna dei tuoi documenti notarili',
@@ -1364,6 +1369,7 @@ export const translations = {
           missingDelivery: 'Método de entrega não selecionado',
           retryingPayment: 'Tentando novamente o pagamento...',
           clickToFix: 'Corrigir',
+          termsAcceptance: 'Ao prosseguir com o pagamento, você aceita nossos <a href="https://www.mynotary.io/fr/terms-conditions" target="_blank" rel="noopener noreferrer">Termos e Condições</a>.',
         },
         delivery: {
           title: 'Entrega dos seus documentos notariados',

@@ -759,6 +759,12 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </div>
       </div>
 
+      {/* Terms & Conditions acceptance */}
+            <p 
+              className="text-[10px] sm:text-xs text-gray-500 mt-2 px-1 [&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800"
+              dangerouslySetInnerHTML={{ __html: t('form.steps.summary.termsAcceptance') }}
+            />
+
       {/* Signatories - Temporarily hidden
       {formData.signatories && formData.signatories.length > 0 && (
         <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">

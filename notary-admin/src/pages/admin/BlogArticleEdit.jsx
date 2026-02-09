@@ -621,13 +621,13 @@ const BlogArticleEdit = () => {
     },
   });
 
-  // Mettre à jour le contenu de l'éditeur quand la langue active change
+  // Mettre à jour le contenu de l'éditeur quand la langue active change OU quand les données sont chargées
+  const currentContent = formData.languages[activeLanguage]?.content || '';
   useEffect(() => {
-    const currentContent = formData.languages[activeLanguage]?.content || '';
     if (editor && currentContent !== editor.getHTML()) {
       editor.commands.setContent(currentContent);
     }
-  }, [activeLanguage, editor]);
+  }, [activeLanguage, editor, currentContent]);
 
   if (loading && isEditing) {
     return (

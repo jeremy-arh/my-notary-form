@@ -200,8 +200,8 @@ const Users = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Search */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -247,7 +247,7 @@ const Users = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -295,25 +295,25 @@ const Users = () => {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-[#F3F4F6] rounded-2xl border border-gray-200 overflow-hidden">
+        {/* Table - Desktop */}
+        <div className="hidden md:block bg-[#F3F4F6] rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     User
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Email
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Inscription
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Dernière connexion
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -336,21 +336,21 @@ const Users = () => {
                   
                   return paginatedUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-semibold text-gray-900">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <div className="font-semibold text-gray-900 text-sm sm:text-base">
                           {user.user_metadata?.first_name || 'N/A'} {user.user_metadata?.last_name || ''}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-600">
                         {user.email}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-600">
                         {formatDate(user.created_at)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-600">
                         {formatDate(user.last_sign_in_at)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
                           {user.stripe_customer_id && (
                             <a
@@ -380,6 +380,66 @@ const Users = () => {
           </div>
         </div>
 
+        {/* Mobile Cards */}
+        <div className="md:hidden space-y-3">
+          {(() => {
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+            
+            if (paginatedUsers.length === 0) {
+              return (
+                <div className="bg-[#F3F4F6] rounded-xl p-6 text-center text-gray-600">
+                  Aucun utilisateur trouvé
+                </div>
+              );
+            }
+            
+            return paginatedUsers.map((user) => (
+              <div key={user.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 text-sm mb-1">
+                      {user.user_metadata?.first_name || 'N/A'} {user.user_metadata?.last_name || ''}
+                    </h3>
+                    <p className="text-xs text-gray-600 truncate">{user.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                    {user.stripe_customer_id && (
+                      <a
+                        href={`https://dashboard.stripe.com/test/customers/${user.stripe_customer_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-600 hover:text-gray-900 transition-colors"
+                        title="Voir sur Stripe Dashboard"
+                      >
+                        <Icon icon="heroicons:arrow-top-right-on-square" className="w-5 h-5" />
+                      </a>
+                    )}
+                    <button
+                      onClick={() => handleOpenMessageModal(user)}
+                      className="text-blue-600 hover:text-blue-900 transition-colors"
+                      title="Envoyer un message"
+                    >
+                      <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs text-gray-600">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Inscription:</span>
+                    <span>{formatDate(user.created_at)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Dernière connexion:</span>
+                    <span>{formatDate(user.last_sign_in_at)}</span>
+                  </div>
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
+
         {/* Pagination */}
         {(() => {
           const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
@@ -389,8 +449,8 @@ const Users = () => {
           if (totalPages <= 1) return null;
           
           return (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-gray-600">
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4">
+              <div className="text-xs sm:text-sm text-gray-600">
                 Showing {startIndex + 1} to {Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} users
               </div>
               <div className="flex gap-2">
@@ -442,10 +502,10 @@ const Users = () => {
 
         {/* Message Modal */}
         {messageModalOpen && selectedUserForMessage && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 sm:p-6">
+            <div className="bg-white rounded-xl sm:rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 className="text-lg sm:text-2xl font-bold text-gray-900 pr-2">
                   Message à {selectedUserForMessage.user_metadata?.first_name} {selectedUserForMessage.user_metadata?.last_name}
                 </h2>
                 <button
@@ -455,9 +515,10 @@ const Users = () => {
                     setSelectedSubmissionId('');
                     setUserSubmissions([]);
                   }}
-                  className="p-2 hover:bg-gray-100 rounded-full"
+                  className="p-2 hover:bg-gray-100 rounded-full flex-shrink-0"
+                  aria-label="Fermer"
                 >
-                  <Icon icon="heroicons:x-mark" className="w-6 h-6" />
+                  <Icon icon="heroicons:x-mark" className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </div>
               <div className="space-y-4">

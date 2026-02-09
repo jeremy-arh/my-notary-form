@@ -5,6 +5,7 @@ import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { playNotificationSoundIfNeeded } from '../../utils/soundNotification';
+import MessageEditor from './MessageEditor';
 
 /**
  * Reusable Chat component for messaging between clients, notaries, and admins
@@ -93,6 +94,14 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Helper function to extract plain text from HTML
+  const getPlainText = (html) => {
+    if (!html) return '';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -214,7 +223,8 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
 
   const sendMessage = async (e) => {
     e.preventDefault();
-    if ((!newMessage.trim() && attachments.length === 0) || sending) return;
+    const plainText = getPlainText(newMessage);
+    if ((!plainText.trim() && attachments.length === 0) || sending) return;
 
     if (!currentUserId) {
       console.error('No currentUserId provided');
@@ -239,58 +249,217 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
         throw error;
       }
 
-      // Send email notification to recipient (client or notary)
+      console.log('✅ Message sent successfully, now sending email notifications...');
+
+      // Send email notification to recipients (client, notary, and admins)
       try {
         // Get submission info
+        console.log('📧 Fetching submission data for email notification, submissionId:', submissionId);
         const { data: submissionData, error: subError } = await supabase
           .from('submission')
-          .select('id, client_id, assigned_notary_id, first_name, last_name')
+          .select('id, client_id, assigned_notary_id, first_name, last_name, email')
           .eq('id', submissionId)
           .single();
 
-        if (!subError && submissionData) {
-          // Determine recipient (client or notary)
-          let recipientEmail = null;
-          let recipientName = null;
-          let recipientType = null;
+        if (subError) {
+          console.error('❌ Error fetching submission data:', subError);
+        }
 
-          // Admin messages notify both client and notary (for now, we'll notify client)
+        if (!subError && submissionData) {
+          console.log('✅ Submission data fetched:', {
+            id: submissionData.id,
+            client_id: submissionData.client_id,
+            assigned_notary_id: submissionData.assigned_notary_id
+          });
+
+          const submissionNumber = submissionId.substring(0, 8);
+          const plainTextPreview = getPlainText(messageContent);
+          const messagePreview = plainTextPreview.length > 100 
+            ? plainTextPreview.substring(0, 100) + '...' 
+            : plainTextPreview;
+
+          const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
+
+          // Prepare email promises for parallel sending
+          const emailPromises = [];
+
+          // Notify client
+          let clientEmail = null;
+          let clientName = 'Client';
+
           if (submissionData.client_id) {
+            console.log('📧 Fetching client data, client_id:', submissionData.client_id);
             const { data: clientData, error: clientError } = await supabase
               .from('client')
               .select('email, first_name, last_name')
               .eq('id', submissionData.client_id)
               .single();
 
-            if (!clientError && clientData && clientData.email) {
-              recipientEmail = clientData.email;
-              recipientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
-              recipientType = 'client';
+            if (clientError) {
+              console.error('❌ Error fetching client data:', clientError);
+            }
+
+            if (!clientError && clientData) {
+              console.log('✅ Client data fetched:', {
+                email: clientData.email,
+                first_name: clientData.first_name,
+                last_name: clientData.last_name
+              });
+
+              if (clientData.email) {
+                clientEmail = clientData.email;
+                clientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
+              }
             }
           }
 
-          if (recipientEmail) {
-            const submissionNumber = submissionId.substring(0, 8);
-            const messagePreview = messageContent.length > 100 
-              ? messageContent.substring(0, 100) + '...' 
-              : messageContent;
+          // Fallback: use email from submission if no client_id
+          if (!clientEmail && submissionData.email) {
+            console.log('📧 Using email from submission directly:', submissionData.email);
+            clientEmail = submissionData.email;
+            clientName = `${submissionData.first_name || ''} ${submissionData.last_name || ''}`.trim() || 'Client';
+          }
 
-            const { sendTransactionalEmail } = await import('../../utils/sendTransactionalEmail');
-            await sendTransactionalEmail(supabase, {
-              email_type: 'message_received',
-              recipient_email: recipientEmail,
-              recipient_name: recipientName,
-              recipient_type: recipientType,
-              data: {
-                submission_id: submissionId,
-                submission_number: submissionNumber,
-                message_preview: messagePreview
+          if (clientEmail) {
+            console.log('📧 Adding client to email queue:', clientEmail);
+            emailPromises.push(
+              sendTransactionalEmail(supabase, {
+                email_type: 'message_received',
+                recipient_email: clientEmail,
+                recipient_name: clientName,
+                recipient_type: 'client',
+                data: {
+                  submission_id: submissionId,
+                  submission_number: submissionNumber,
+                  message_preview: messagePreview
+                }
+              }).catch(err => {
+                console.error(`❌ Error sending email to client ${clientEmail}:`, err);
+                return { success: false, error: err.message };
+              })
+            );
+          } else {
+            console.warn('⚠️ No client email found (neither from client_id nor submission.email)');
+          }
+
+          // Notify notary if assigned
+          if (submissionData.assigned_notary_id) {
+            console.log('📧 Fetching notary data, assigned_notary_id:', submissionData.assigned_notary_id);
+            const { data: notaryData, error: notaryError } = await supabase
+              .from('notary')
+              .select('email, full_name, name')
+              .eq('id', submissionData.assigned_notary_id)
+              .single();
+
+            if (notaryError) {
+              console.error('❌ Error fetching notary data:', notaryError);
+            }
+
+            if (!notaryError && notaryData) {
+              console.log('✅ Notary data fetched:', {
+                email: notaryData.email,
+                full_name: notaryData.full_name,
+                name: notaryData.name
+              });
+
+              if (notaryData.email) {
+                const notaryName = notaryData.full_name || notaryData.name || 'Notary';
+                console.log('📧 Adding notary to email queue:', notaryData.email);
+                emailPromises.push(
+                  sendTransactionalEmail(supabase, {
+                    email_type: 'message_received',
+                    recipient_email: notaryData.email,
+                    recipient_name: notaryName,
+                    recipient_type: 'notary',
+                    data: {
+                      submission_id: submissionId,
+                      submission_number: submissionNumber,
+                      message_preview: messagePreview
+                    }
+                  }).catch(err => {
+                    console.error(`❌ Error sending email to notary ${notaryData.email}:`, err);
+                    return { success: false, error: err.message };
+                  })
+                );
+              } else {
+                console.warn('⚠️ Notary data found but no email address');
+              }
+            } else {
+              console.warn('⚠️ No notary data found for assigned_notary_id:', submissionData.assigned_notary_id);
+            }
+          } else {
+            console.warn('⚠️ No assigned_notary_id in submission data');
+          }
+
+          // Always notify all admins when a message is sent
+          console.log('📧 Fetching all admin users for notification');
+          const { data: adminData, error: adminError } = await supabase
+            .from('admin_user')
+            .select('email, first_name, last_name');
+
+          if (adminError) {
+            console.error('❌ Error fetching admin data:', adminError);
+          }
+
+          if (!adminError && adminData && adminData.length > 0) {
+            console.log(`✅ Found ${adminData.length} admin(s) to notify`);
+            for (const admin of adminData) {
+              if (admin.email) {
+                const adminName = `${admin.first_name || ''} ${admin.last_name || ''}`.trim() || 'Admin';
+                console.log('📧 Adding admin to email queue:', admin.email);
+                emailPromises.push(
+                  sendTransactionalEmail(supabase, {
+                    email_type: 'message_received',
+                    recipient_email: admin.email,
+                    recipient_name: adminName,
+                    recipient_type: 'admin',
+                    data: {
+                      submission_id: submissionId,
+                      submission_number: submissionNumber,
+                      message_preview: messagePreview
+                    }
+                  }).catch(err => {
+                    console.error(`❌ Error sending email to admin ${admin.email}:`, err);
+                    return { success: false, error: err.message };
+                  })
+                );
+              }
+            }
+          } else {
+            console.warn('⚠️ No admin users found in database');
+          }
+
+          // Send all emails in parallel
+          if (emailPromises.length > 0) {
+            const results = await Promise.all(emailPromises);
+            let successCount = 0;
+            let failCount = 0;
+            
+            results.forEach((result, index) => {
+              if (result && !result.success) {
+                console.error(`❌ Failed to send email ${index + 1}:`, result.error);
+                failCount++;
+              } else if (result && result.success) {
+                console.log(`✅ Email sent successfully ${index + 1}`);
+                successCount++;
               }
             });
+            
+            if (failCount > 0) {
+              console.warn(`⚠️ ${failCount} email(s) failed to send out of ${emailPromises.length}`);
+              toast.error(`${failCount} email(s) n'ont pas pu être envoyés`);
+            } else if (successCount > 0) {
+              console.log(`✅ All ${successCount} email(s) sent successfully`);
+            }
+          } else {
+            console.warn('⚠️ No email recipients found for message notification');
           }
+        } else {
+          console.warn('⚠️ Could not fetch submission data for email notification');
         }
       } catch (emailError) {
-        console.error('Error sending message email notification:', emailError);
+        console.error('❌ Error sending message email notification:', emailError);
+        console.error('❌ Error details:', emailError.message, emailError.stack);
         // Don't block message sending if email fails
       }
       
@@ -486,24 +655,39 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
                     >
                       {getSenderLabel(message.sender_type)}
                     </p>
-                    <p
-                      className={`text-xs ml-3 ${
-                        isOwnMessage ? 'text-gray-400' : 
-                        isNotary ? 'text-indigo-200' : 
-                        'text-gray-500'
-                      }`}
-                    >
-                      {formatTime(message.created_at)}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`text-xs ${
+                          isOwnMessage ? 'text-gray-400' : 
+                          isNotary ? 'text-indigo-200' : 
+                          'text-gray-500'
+                        }`}
+                      >
+                        {formatTime(message.created_at)}
+                      </p>
+                      {isOwnMessage && (
+                        <Icon
+                          icon={message.read ? "heroicons:check-circle" : "heroicons:check"}
+                          className={`w-4 h-4 ${
+                            message.read ? 'text-blue-400' : 'text-gray-400'
+                          }`}
+                          title={message.read ? 'Message lu' : 'Message envoyé'}
+                        />
+                      )}
+                    </div>
                   </div>
                   
-                  {/* Message content with links */}
+                  {/* Message content with formatting */}
                   {message.content && message.content !== '(File attachment)' && (
-                    <p className={`text-sm whitespace-pre-wrap break-words ${
-                      isOwnMessage || isNotary ? 'text-white' : 'text-gray-900'
-                    }`}>
-                      {renderContentWithLinks(message.content)}
-                    </p>
+                    <div 
+                      className={`text-sm break-words prose prose-sm max-w-none ${
+                        isOwnMessage || isNotary ? 'prose-invert' : ''
+                      }`}
+                      dangerouslySetInnerHTML={{ __html: message.content }}
+                      style={{
+                        color: isOwnMessage || isNotary ? 'white' : '#111827'
+                      }}
+                    />
                   )}
 
                   {/* Attachments */}
@@ -636,17 +820,17 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
             document.body
           )}
 
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
-            disabled={sending}
-          />
+          <div className="flex-1 min-w-0">
+            <MessageEditor
+              value={newMessage}
+              onChange={setNewMessage}
+              placeholder="Type your message..."
+              disabled={sending}
+            />
+          </div>
           <button
             type="submit"
-            disabled={(!newMessage.trim() && attachments.length === 0) || sending}
+            disabled={(!getPlainText(newMessage).trim() && attachments.length === 0) || sending}
             className="btn-glassy px-6 py-3 text-white font-semibold rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             {sending ? (

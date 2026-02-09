@@ -5,6 +5,7 @@ import EmojiPicker from 'emoji-picker-react';
 import { supabase } from '../lib/supabase';
 import { playNotificationSoundIfNeeded } from '../utils/soundNotification';
 import { useToast } from '../contexts/ToastContext';
+import MessageEditor from './MessageEditor';
 
 const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, clientFirstName, clientLastName, isFullscreen = false }) => {
   const [messages, setMessages] = useState([]);
@@ -53,6 +54,14 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
     scrollToBottom();
   }, [messages]);
 
+  // Helper function to extract plain text from HTML
+  const getPlainText = (html) => {
+    if (!html) return '';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
+  };
+
   const fetchMessages = async () => {
     try {
       const { data, error } = await supabase
@@ -64,10 +73,28 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
       if (error) throw error;
 
       setMessages(data || []);
+
+      // Mark messages as read
+      if (data && data.length > 0) {
+        await markMessagesAsRead();
+      }
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const markMessagesAsRead = async () => {
+    try {
+      await supabase
+        .from('message')
+        .update({ read: true, read_at: new Date().toISOString() })
+        .eq('submission_id', submissionId)
+        .eq('read', false)
+        .neq('sender_type', currentUserType);
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
     }
   };
 
@@ -86,6 +113,7 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
           
           // Play notification sound if message is not from current user
           if (newMessage.sender_type !== currentUserType) {
+            markMessagesAsRead();
             // Check if user is on messages page (we assume they are if Chat component is mounted)
             // For notary dashboard, we'll play sound if not viewing this specific conversation
             const isViewingMessages = window.location.pathname.includes('/messages');
@@ -107,7 +135,8 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
   const toast = useToast();
   
   const sendMessage = async () => {
-    if (!newMessage.trim() && attachments.length === 0) return;
+    const plainText = getPlainText(newMessage);
+    if (!plainText.trim() && attachments.length === 0) return;
     if (!currentUserId) {
       toast.error('User ID not available');
       return;
@@ -130,46 +159,118 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
 
       if (error) throw error;
 
-      // Send email notification to recipient (client)
+      console.log('✅ Message sent successfully, now sending email notifications...');
+
+      // Send email notification to recipients (client and admin)
       try {
-        // Get submission and client info
+        // Get submission info
         const { data: submissionData, error: subError } = await supabase
           .from('submission')
           .select('id, client_id, first_name, last_name')
           .eq('id', submissionId)
           .single();
 
-        if (!subError && submissionData && submissionData.client_id) {
-          // Get client info
-          const { data: clientData, error: clientError } = await supabase
-            .from('client')
-            .select('email, first_name, last_name')
-            .eq('id', submissionData.client_id)
-            .single();
+        if (!subError && submissionData) {
+          const submissionNumber = submissionId.substring(0, 8);
+          const plainTextPreview = getPlainText(messageContent);
+          const messagePreview = plainTextPreview.length > 100 
+            ? plainTextPreview.substring(0, 100) + '...' 
+            : plainTextPreview;
 
-          if (!clientError && clientData && clientData.email) {
-            const clientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
-            const submissionNumber = submissionId.substring(0, 8);
-            const messagePreview = messageContent.length > 100 
-              ? messageContent.substring(0, 100) + '...' 
-              : messageContent;
+          const { sendTransactionalEmail } = await import('../utils/sendTransactionalEmail');
 
-            const { sendTransactionalEmail } = await import('../utils/sendTransactionalEmail');
-            await sendTransactionalEmail(supabase, {
-              email_type: 'message_received',
-              recipient_email: clientData.email,
-              recipient_name: clientName,
-              recipient_type: 'client',
-              data: {
-                submission_id: submissionId,
-                submission_number: submissionNumber,
-                message_preview: messagePreview
+          // Prepare email promises for parallel sending
+          const emailPromises = [];
+
+          // Notify client
+          if (submissionData.client_id) {
+            const { data: clientData, error: clientError } = await supabase
+              .from('client')
+              .select('email, first_name, last_name')
+              .eq('id', submissionData.client_id)
+              .single();
+
+            if (!clientError && clientData && clientData.email) {
+              const clientName = `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() || 'Client';
+              emailPromises.push(
+                sendTransactionalEmail(supabase, {
+                  email_type: 'message_received',
+                  recipient_email: clientData.email,
+                  recipient_name: clientName,
+                  recipient_type: 'client',
+                  data: {
+                    submission_id: submissionId,
+                    submission_number: submissionNumber,
+                    message_preview: messagePreview
+                  }
+                }).catch(err => {
+                  console.error(`Error sending email to client ${clientData.email}:`, err);
+                  return { success: false, error: err.message };
+                })
+              );
+            }
+          }
+
+          // Notify all admins
+          const { data: adminData, error: adminError } = await supabase
+            .from('admin_user')
+            .select('email, first_name, last_name');
+
+          if (!adminError && adminData && adminData.length > 0) {
+            for (const admin of adminData) {
+              if (admin.email) {
+                const adminName = `${admin.first_name || ''} ${admin.last_name || ''}`.trim() || 'Admin';
+                emailPromises.push(
+                  sendTransactionalEmail(supabase, {
+                    email_type: 'message_received',
+                    recipient_email: admin.email,
+                    recipient_name: adminName,
+                    recipient_type: 'admin',
+                    data: {
+                      submission_id: submissionId,
+                      submission_number: submissionNumber,
+                      message_preview: messagePreview
+                    }
+                  }).catch(err => {
+                    console.error(`Error sending email to admin ${admin.email}:`, err);
+                    return { success: false, error: err.message };
+                  })
+                );
+              }
+            }
+          }
+
+          // Send all emails in parallel
+          if (emailPromises.length > 0) {
+            const results = await Promise.all(emailPromises);
+            let successCount = 0;
+            let failCount = 0;
+            
+            results.forEach((result, index) => {
+              if (result && !result.success) {
+                console.error(`❌ Failed to send email ${index + 1}:`, result.error);
+                failCount++;
+              } else if (result && result.success) {
+                console.log(`✅ Email sent successfully ${index + 1}`);
+                successCount++;
               }
             });
+            
+            if (failCount > 0) {
+              console.warn(`⚠️ ${failCount} email(s) failed to send out of ${emailPromises.length}`);
+              toast.error(`${failCount} email(s) n'ont pas pu être envoyés`);
+            } else if (successCount > 0) {
+              console.log(`✅ All ${successCount} email(s) sent successfully`);
+            }
+          } else {
+            console.warn('⚠️ No email recipients found for message notification');
           }
+        } else {
+          console.warn('⚠️ Could not fetch submission data for email notification');
         }
       } catch (emailError) {
-        console.error('Error sending message email notification:', emailError);
+        console.error('❌ Error sending message email notification:', emailError);
+        console.error('❌ Error details:', emailError.message, emailError.stack);
         // Don't block message sending if email fails
       }
 
@@ -372,21 +473,36 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
                     >
                       {getSenderLabel(message.sender_type)}
                     </p>
-                    <p
-                      className={`text-xs ml-3 ${
-                        isNotary ? 'text-indigo-200' : 
-                        isAdmin ? 'text-gray-400' : 
-                        'text-gray-500'
-                      }`}
-                    >
-                      {formatTime(message.created_at)}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`text-xs ${
+                          isNotary ? 'text-indigo-200' : 
+                          isAdmin ? 'text-gray-400' : 
+                          'text-gray-500'
+                        }`}
+                      >
+                        {formatTime(message.created_at)}
+                      </p>
+                      {isNotary && (
+                        <Icon
+                          icon={message.read ? "heroicons:check-circle" : "heroicons:check"}
+                          className={`w-4 h-4 ${
+                            message.read ? 'text-blue-400' : 'text-gray-400'
+                          }`}
+                          title={message.read ? 'Message lu' : 'Message envoyé'}
+                        />
+                      )}
+                    </div>
                   </div>
-                  <p className={`text-sm whitespace-pre-wrap ${
-                    isNotary || isAdmin ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    {renderMessageContent(message.content)}
-                  </p>
+                  <div 
+                    className={`text-sm break-words prose prose-sm max-w-none ${
+                      isNotary || isAdmin ? 'prose-invert' : ''
+                    }`}
+                    dangerouslySetInnerHTML={{ __html: message.content }}
+                    style={{
+                      color: isNotary || isAdmin ? 'white' : '#111827'
+                    }}
+                  />
                   {message.attachments && message.attachments.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {message.attachments.map((att, idx) => (
@@ -490,21 +606,26 @@ const Chat = ({ submissionId, currentUserType, currentUserId, recipientName, cli
             )}
           </button>
 
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-            placeholder="Type a message..."
-            className="flex-1 min-w-0 px-3 sm:px-4 py-2 text-sm sm:text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black"
-          />
+          <div className="flex-1 min-w-0">
+            <MessageEditor
+              value={newMessage}
+              onChange={setNewMessage}
+              placeholder="Type a message..."
+              disabled={sending}
+            />
+          </div>
 
           <button
             onClick={sendMessage}
-            disabled={sending || (!newMessage.trim() && attachments.length === 0)}
+            disabled={sending || (!getPlainText(newMessage).trim() && attachments.length === 0)}
             className="p-2 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            title="Envoyer"
           >
-            <Icon icon="heroicons:paper-airplane" className="w-5 h-5" />
+            {sending ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <Icon icon="heroicons:paper-airplane" className="w-5 h-5" />
+            )}
           </button>
         </div>
       </div>

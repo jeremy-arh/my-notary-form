@@ -215,18 +215,29 @@ const AdminLayout = ({ children }) => {
       {/* Mobile Sidebar Toggle */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-black text-white rounded-xl shadow-lg"
+        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-black text-white rounded-xl shadow-lg hover:bg-gray-800 transition-colors"
+        aria-label="Toggle sidebar"
       >
         <Icon icon={isSidebarOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'} className="w-6 h-6" />
       </button>
 
       {/* Mobile Sidebar */}
       {isSidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setIsSidebarOpen(false)}>
-          <aside className="w-80 bg-[#F3F4F6] h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="p-8">
-              <div className="mb-10 flex items-center justify-center">
-                <Logo width={150} height={150} />
+        <>
+          <div className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setIsSidebarOpen(false)} />
+          <aside className="lg:hidden fixed left-0 top-0 h-full w-[85vw] max-w-sm bg-[#F3F4F6] z-50 overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 sm:p-8">
+              <div className="mb-8 flex items-center justify-between">
+                <div className="flex items-center justify-center flex-1">
+                  <Logo width={120} height={120} className="sm:w-[150px] sm:h-[150px]" />
+                </div>
+                <button
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-colors"
+                  aria-label="Close sidebar"
+                >
+                  <Icon icon="heroicons:x-mark" className="w-6 h-6" />
+                </button>
               </div>
 
               <div className="space-y-1.5 pb-8">
@@ -244,11 +255,11 @@ const AdminLayout = ({ children }) => {
                       }`}
                     >
                       <div className="flex items-center">
-                        <Icon icon={item.icon} className={`w-5 h-5 mr-2 ${isActive ? 'text-white' : 'text-gray-600'}`} />
-                        <span className="text-sm font-medium">{item.name}</span>
+                        <Icon icon={item.icon} className={`w-5 h-5 mr-2 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                        <span className="text-sm font-medium truncate">{item.name}</span>
                       </div>
                       {item.badge > 0 && (
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold flex-shrink-0 ml-2 ${
                           isActive ? 'bg-white text-black' : 'bg-black text-white'
                         }`}>
                           {item.badge}
@@ -259,10 +270,10 @@ const AdminLayout = ({ children }) => {
                 })}
               </div>
 
-              <div className="p-6 border-t border-gray-200">
+              <div className="pt-6 border-t border-gray-200">
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
+                  className="w-full flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors py-2"
                 >
                   <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
                   <span className="text-sm font-medium">Logout</span>
@@ -270,19 +281,22 @@ const AdminLayout = ({ children }) => {
               </div>
             </div>
           </aside>
-        </div>
+        </>
       )}
 
       {/* Main Content */}
       <main className="flex-1 lg:ml-80 min-h-screen bg-white overflow-x-hidden">
         {/* Top Navigation Bar */}
-        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-end">
+        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between lg:justify-end">
+          <div className="lg:hidden flex items-center">
+            <h1 className="text-lg font-semibold text-gray-900 truncate">Admin</h1>
+          </div>
           {adminInfo && (
             <Notifications userId={adminInfo.id} userType="admin" />
           )}
         </div>
         
-        <div className="p-6 md:p-8">
+        <div className="p-4 sm:p-6 md:p-8">
           {children}
         </div>
       </main>

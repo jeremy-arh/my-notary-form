@@ -478,45 +478,45 @@ const Dashboard = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-8">
+      <div className="space-y-6 sm:space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Vue d'ensemble complète de votre activité</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-2">Vue d'ensemble complète de votre activité</p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {statCards.map((card, index) => (
             <div
               key={index}
-              className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200 hover:shadow-md transition-shadow"
+              className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 ${card.color} rounded-xl flex items-center justify-center`}>
-                  <Icon icon={card.icon} className={`w-6 h-6 ${card.iconColor}`} />
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 ${card.color} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                  <Icon icon={card.icon} className={`w-5 h-5 sm:w-6 sm:h-6 ${card.iconColor}`} />
                 </div>
-                <span className="text-3xl font-bold text-gray-900">{card.value}</span>
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900 ml-2">{card.value}</span>
               </div>
-              <h3 className="text-sm font-semibold text-gray-600">{card.title}</h3>
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-600">{card.title}</h3>
             </div>
           ))}
         </div>
 
         {/* Revenue Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {revenueCards.map((card, index) => (
             <div
               key={index}
-              className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200 hover:shadow-md transition-shadow"
+              className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-600 mb-2">{card.title}</h3>
-                  <p className="text-3xl font-bold text-gray-900">{card.value}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xs sm:text-sm font-semibold text-gray-600 mb-1 sm:mb-2">{card.title}</h3>
+                  <p className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">{card.value}</p>
                 </div>
-                <div className={`w-16 h-16 ${card.color} rounded-xl flex items-center justify-center`}>
-                  <Icon icon={card.icon} className={`w-8 h-8 ${card.iconColor}`} />
+                <div className={`w-12 h-12 sm:w-16 sm:h-16 ${card.color} rounded-xl flex items-center justify-center flex-shrink-0 ml-3`}>
+                  <Icon icon={card.icon} className={`w-6 h-6 sm:w-8 sm:h-8 ${card.iconColor}`} />
                 </div>
               </div>
             </div>
@@ -524,46 +524,50 @@ const Dashboard = () => {
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Submissions & Revenue Chart */}
-          <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Submissions & Revenue (30 derniers jours)</h2>
-            <div style={{ height: '300px' }}>
-              <Line data={lineChartData} options={lineChartOptions} />
+          <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Submissions & Revenue (30 derniers jours)</h2>
+            <div className="overflow-x-auto">
+              <div style={{ height: '250px', minWidth: '300px' }} className="sm:h-[300px]">
+                <Line data={lineChartData} options={lineChartOptions} />
+              </div>
             </div>
           </div>
 
           {/* Status Distribution */}
-          <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Distribution des statuts</h2>
-            <div style={{ height: '300px' }}>
-              <Pie data={pieChartData} options={pieChartOptions} />
+          <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Distribution des statuts</h2>
+            <div className="overflow-x-auto">
+              <div style={{ height: '250px', minWidth: '300px' }} className="sm:h-[300px]">
+                <Pie data={pieChartData} options={pieChartOptions} />
+              </div>
             </div>
           </div>
         </div>
 
         {/* Recent Submissions */}
-        <div className="bg-[#F3F4F6] rounded-2xl p-6 border border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Soumissions récentes</h2>
+        <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Soumissions récentes</h2>
           <div className="space-y-3">
             {recentSubmissions.length === 0 ? (
-              <p className="text-gray-600 text-center py-8">Aucune soumission</p>
+              <p className="text-gray-600 text-center py-8 text-sm sm:text-base">Aucune soumission</p>
             ) : (
               recentSubmissions.map((submission) => (
                 <div
                   key={submission.id}
-                  className="bg-white rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 hover:shadow-md transition-shadow cursor-pointer"
                   onClick={() => window.location.href = '/submissions'}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
                         {submission.first_name} {submission.last_name}
                       </h3>
-                      <p className="text-sm text-gray-600">{submission.email}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 truncate">{submission.email}</p>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <span className="text-sm text-gray-600">{formatDate(submission.created_at)}</span>
+                    <div className="flex items-center justify-between sm:justify-end gap-2 sm:space-x-4">
+                      <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">{formatDate(submission.created_at)}</span>
                       {getStatusBadge(submission.status)}
                     </div>
                   </div>
