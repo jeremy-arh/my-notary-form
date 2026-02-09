@@ -10,7 +10,6 @@ import { pushGTMEvent } from '../../utils/gtm';
 const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenticated = false, handleContinueClick, getValidationErrorMessage, isPriceDetailsOpen, setIsPriceDetailsOpen }) => {
   const { t } = useTranslation();
   const [errors, setErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false);
   const [emailExists, setEmailExists] = useState(false);
   const [isGeocodingAddress, setIsGeocodingAddress] = useState(false);
   const [phoneError, setPhoneError] = useState('');
@@ -121,15 +120,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
       newErrors.email = t('form.steps.personalInfo.validationEmailInvalid');
     }
 
-    // Only validate password if user is not authenticated
-    if (!isAuthenticated) {
-      // Password validation
-      if (!formData.password?.trim()) {
-        newErrors.password = t('form.steps.personalInfo.validationPassword');
-      } else if (formData.password.length < 6) {
-        newErrors.password = t('form.steps.personalInfo.validationPasswordMin');
-      }
-    }
+    // Password validation removed - using magic link authentication
 
     // Validation de l'adresse complète (obligatoire)
     if (!formData.address?.trim()) {
@@ -616,44 +607,7 @@ const PersonalInfo = ({ formData, updateFormData, nextStep, prevStep, isAuthenti
           </div>
         </div>
 
-        {/* Password - Only show for non-authenticated users */}
-        {!isAuthenticated && (
-          <div>
-              <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-1.5 sm:mb-2 flex items-center">
-                <Icon icon="heroicons:lock-closed" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-gray-400 flex-shrink-0" />
-                <span>{t('form.steps.personalInfo.password')} <span className="text-red-500 ml-1">*</span></span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  id="password"
-                  value={formData.password || ''}
-                  onChange={(e) => handleChange('password', e.target.value)}
-                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
-                    errors.password ? 'border-red-500' : 'border-gray-200'
-                  }`}
-                  placeholder={t('form.steps.personalInfo.placeholderPassword')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1"
-                  aria-label={showPassword ? t('form.steps.personalInfo.hidePassword') : t('form.steps.personalInfo.showPassword')}
-                >
-                  <Icon
-                    icon={showPassword ? "heroicons:eye-slash" : "heroicons:eye"}
-                    className="w-4 h-4 sm:w-5 sm:h-5"
-                  />
-                </button>
-              </div>
-              {errors.password && (
-                <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
-                  <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
-                  <span>{errors.password}</span>
-                </p>
-              )}
-            </div>
-          )}
+        {/* Password field removed - using magic link authentication */}
 
         {/* Phone */}
         <div>

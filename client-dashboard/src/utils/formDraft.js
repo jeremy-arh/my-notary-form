@@ -22,10 +22,19 @@ const getSessionId = () => {
  * @param {string} sessionId - Session ID
  * @returns {Promise<{path: string, url: string}>}
  */
+// Sanitize filename: remove accents, replace spaces/special chars with underscores
+const sanitizeFileName = (name) => {
+  // Normalize unicode to decompose accented characters, then strip diacritics
+  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Replace any non-alphanumeric chars (except dot, dash, underscore) with underscore
+  return normalized.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_{2,}/g, '_');
+};
+
 export const uploadDocument = async (file, serviceId, sessionId) => {
   try {
     const timestamp = Date.now();
-    const fileName = `${sessionId}/${serviceId}/${timestamp}_${file.name}`;
+    const safeName = sanitizeFileName(file.name);
+    const fileName = `${sessionId}/${serviceId}/${timestamp}_${safeName}`;
     
     console.log('📤 [FormDraft] Uploading document:', fileName, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     

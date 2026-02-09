@@ -54,7 +54,7 @@ const InactivityModal = ({ isVisible, onClose }) => {
                 openCrisp();
                 onClose();
               }}
-              className="w-full bg-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3] text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+              className="w-full bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
             >
               <Icon icon="heroicons:chat-bubble-left-right" className="w-5 h-5" />
               <span>{t('form.inactivityModal.contactUs') || 'Contact Us'}</span>

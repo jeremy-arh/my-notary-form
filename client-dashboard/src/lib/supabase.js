@@ -466,7 +466,7 @@ export const saveFormDraft = async (formData, email = null, sessionId = null) =>
       firstName: formData.firstName || '',
       lastName: formData.lastName || '',
       email: formData.email || '',
-      password: formData.password || '', // Will be hashed on final submission
+      // Password removed - using magic link authentication
       phone: formData.phone || '',
       address: formData.address || '',
       city: formData.city || '',

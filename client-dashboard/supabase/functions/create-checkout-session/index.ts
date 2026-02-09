@@ -208,6 +208,7 @@ serve(async (req) => {
   let formData: any = null
   let submissionId: string | undefined = undefined
   let stripeCustomerId: string | null = null
+  let submission: any = null
 
   try {
       let body: any = null
@@ -226,8 +227,21 @@ serve(async (req) => {
       )
     }
 
-    if (!formData) {
+    // For retry, formData is optional - we'll use submission data instead
+    if (!submissionId && !formData) {
       throw new Error('Missing required field: formData')
+    }
+    
+    // For retry, create minimal formData if not provided
+    if (submissionId && !formData) {
+      formData = {}
+      console.log('⚠️ [RETRY] No formData provided, using submission data only')
+    }
+    
+    // For retry, create minimal formData if not provided
+    if (submissionId && !formData) {
+      formData = {}
+      console.log('⚠️ [RETRY] No formData provided, using submission data only')
     }
 
     // Récupérer la devise : d'abord depuis le paramètre séparé, puis depuis formData (par défaut EUR)
@@ -264,7 +278,6 @@ serve(async (req) => {
       data: { user },
     } = await supabaseAnon.auth.getUser()
 
-    let submission
     let clientId
     let accountCreated = false
 
@@ -283,9 +296,60 @@ serve(async (req) => {
         throw new Error('Failed to fetch submission: ' + fetchError.message)
       }
 
+      if (!existingSubmission) {
+        throw new Error('Submission not found')
+      }
+
       submission = existingSubmission
       clientId = existingSubmission.client_id
       console.log('✅ [RETRY] Using existing submission and client_id:', clientId)
+
+      // Verify user has access to this submission and get Stripe customer
+      if (user?.id) {
+        // Get client record for current user
+        const { data: client, error: clientError } = await supabase
+          .from('client')
+          .select('id, stripe_customer_id')
+          .eq('user_id', user.id)
+          .single()
+
+        if (clientError || !client) {
+          console.error('❌ [RETRY] User has no client record:', clientError)
+          throw new Error('User does not have access to this submission')
+        }
+
+        // Verify the submission belongs to this client
+        if (existingSubmission.client_id !== client.id) {
+          console.error('❌ [RETRY] Submission does not belong to user. Submission client_id:', existingSubmission.client_id, 'User client_id:', client.id)
+          throw new Error('You do not have permission to access this submission')
+        }
+
+        // Get Stripe customer ID from client record
+        if (client.stripe_customer_id) {
+          stripeCustomerId = client.stripe_customer_id
+          console.log('✅ [RETRY] Using existing Stripe customer:', stripeCustomerId)
+        } else {
+          console.warn('⚠️ [RETRY] No Stripe customer ID found for client, will create one if needed')
+        }
+
+        console.log('✅ [RETRY] User access verified for submission')
+      } else {
+        console.warn('⚠️ [RETRY] No authenticated user - proceeding without access check')
+        
+        // Try to get Stripe customer from client record if we have clientId
+        if (clientId) {
+          const { data: client } = await supabase
+            .from('client')
+            .select('stripe_customer_id')
+            .eq('id', clientId)
+            .single()
+          
+          if (client?.stripe_customer_id) {
+            stripeCustomerId = client.stripe_customer_id
+            console.log('✅ [RETRY] Retrieved Stripe customer from client:', stripeCustomerId)
+          }
+        }
+      }
 
     } else {
       // NEW SUBMISSION: User should already be created at Personal Info step
@@ -307,7 +371,8 @@ serve(async (req) => {
           } else {
             console.warn('⚠️ [AUTH] User not found - should have been created at Personal Info step')
             // Fallback: create user if somehow not created (shouldn't happen normally)
-            const password = formData.password || crypto.randomUUID()
+            // Generate random password (won't be used - user will use magic link)
+            const password = crypto.randomUUID()
             const { data: authData, error: authError } = await supabase.auth.admin.createUser({
               email: formData.email,
               password: password,
@@ -325,7 +390,8 @@ serve(async (req) => {
         } else {
           console.error('❌ [AUTH] Error listing users:', listError)
           // Fallback: try to create user
-          const password = formData.password || crypto.randomUUID()
+          // Generate random password (won't be used - user will use magic link)
+          const password = crypto.randomUUID()
           const { data: authData, error: authError } = await supabase.auth.admin.createUser({
             email: formData.email,
             password: password,
@@ -563,21 +629,38 @@ serve(async (req) => {
     }
 
     // Récupérer les libellés traduits depuis le frontend
-    const language = formData.language || 'en'
-    const localizedNames = formData.localizedNames || {}
+    // For retry, use submission data or formData, with fallback defaults
+    const language = submissionId && submission?.data?.language 
+      ? submission.data.language 
+      : (formData?.language || 'en')
+    const localizedNames = submissionId && submission?.data?.localizedNames
+      ? submission.data.localizedNames
+      : (formData?.localizedNames || {})
     console.log('🌐 [TRANSLATION] Language:', language)
     console.log('🌐 [TRANSLATION] Localized names available:', Object.keys(localizedNames).length)
 
     // Calculate line items for Stripe from selected services and documents
+    // For retry, use submission data if available, otherwise use formData
+    const selectedServices = submissionId && submission?.data?.selectedServices 
+      ? submission.data.selectedServices 
+      : (formData.selectedServices || [])
+    const serviceDocuments = submissionId && submission?.data?.serviceDocuments 
+      ? submission.data.serviceDocuments 
+      : (formData.serviceDocuments || {})
+    
+    console.log('📋 [RETRY] Using services:', submissionId ? 'from submission' : 'from formData')
+    console.log('📋 [RETRY] Selected services:', selectedServices.length)
+    console.log('📋 [RETRY] Service documents keys:', Object.keys(serviceDocuments).length)
+    
     const lineItems: any[] = []
     const optionCounts = {} // Track total count per option across all services
 
-    if (formData.selectedServices && formData.selectedServices.length > 0) {
-      for (const serviceId of formData.selectedServices) {
+    if (selectedServices && selectedServices.length > 0) {
+      for (const serviceId of selectedServices) {
         const service = servicesMap[serviceId]
         if (service) {
           // Get document count for this service
-          const documentsForService = formData.serviceDocuments?.[serviceId] || []
+          const documentsForService = serviceDocuments?.[serviceId] || []
           const documentCount = documentsForService.length
 
           if (documentCount > 0) {
@@ -784,12 +867,22 @@ serve(async (req) => {
     }
 
     // Process additional signatories cost (45€ per additional signatory, first one is free)
-    // Use the explicit fields sent from the client
-    const signatoriesCount = formData.signatoriesCount || 0
-    const additionalSignatoriesCount = formData.additionalSignatoriesCount || 0
-    const additionalSignatoriesCostEUR = formData.additionalSignatoriesCost || 0
+    // Use the explicit fields sent from the client, or from submission data for retry
+    const signatoriesCount = submissionId && submission?.data?.signatoriesCount !== undefined
+      ? submission.data.signatoriesCount
+      : (formData.signatoriesCount || 0)
+    const additionalSignatoriesCount = submissionId && submission?.data?.additionalSignatoriesCount !== undefined
+      ? submission.data.additionalSignatoriesCount
+      : (formData.additionalSignatoriesCount || 0)
+    const additionalSignatoriesCostEUR = submissionId && submission?.data?.additionalSignatoriesCost !== undefined
+      ? submission.data.additionalSignatoriesCost
+      : (formData.additionalSignatoriesCost || 0)
     
-    console.log('🔍 [SIGNATORIES DEBUG] formData.signatories:', formData.signatories)
+    const signatories = submissionId && submission?.data?.signatories
+      ? submission.data.signatories
+      : (formData.signatories || [])
+    console.log('🔍 [SIGNATORIES DEBUG] Using signatories:', submissionId ? 'from submission' : 'from formData')
+    console.log('🔍 [SIGNATORIES DEBUG] signatories:', signatories)
     console.log('🔍 [SIGNATORIES DEBUG] signatoriesCount:', signatoriesCount)
     console.log('🔍 [SIGNATORIES DEBUG] additionalSignatoriesCount:', additionalSignatoriesCount)
     console.log('🔍 [SIGNATORIES DEBUG] additionalSignatoriesCostEUR:', additionalSignatoriesCostEUR)
@@ -831,7 +924,7 @@ serve(async (req) => {
     } else {
       console.log(`ℹ️ [SIGNATORIES] No additional signatories (first signatory is free)`)
       if (signatoriesCount === 0) {
-        console.log(`⚠️ [SIGNATORIES] No signatories found in formData`)
+        console.log(`⚠️ [SIGNATORIES] No signatories found`)
       }
     }
 
@@ -1132,6 +1225,7 @@ serve(async (req) => {
     console.error('❌ [ERROR] Error type:', error?.constructor?.name)
     console.error('❌ [ERROR] Error message:', error?.message)
     console.error('❌ [ERROR] Error stack:', error?.stack)
+    console.error('❌ [ERROR] SubmissionId:', submissionId)
     
     // Log formData for debugging (without sensitive info)
     try {
@@ -1142,9 +1236,37 @@ serve(async (req) => {
           hasEmail: !!formData.email,
           hasAppointmentDate: !!formData.appointmentDate,
         })
+      } else {
+        console.error('❌ [ERROR] No formData provided')
       }
     } catch (logError) {
       console.error('❌ [ERROR] Could not log formData:', logError)
+    }
+    
+    // Log submission data if retry
+    if (submissionId) {
+      try {
+        console.error('❌ [ERROR] Submission data:', {
+          hasSubmission: !!submission,
+          submissionId: submission?.id,
+          hasSelectedServices: !!submission?.data?.selectedServices,
+          selectedServicesCount: submission?.data?.selectedServices?.length || 0,
+          hasServiceDocuments: !!submission?.data?.serviceDocuments,
+          serviceDocumentsKeys: submission?.data?.serviceDocuments ? Object.keys(submission.data.serviceDocuments) : null,
+        })
+      } catch (logError) {
+        console.error('❌ [ERROR] Could not log submission data:', logError)
+      }
+    }
+    
+    // Determine appropriate status code
+    let statusCode = 400
+    if (error?.message?.includes('not found') || error?.message?.includes('not exist')) {
+      statusCode = 404
+    } else if (error?.message?.includes('permission') || error?.message?.includes('access')) {
+      statusCode = 403
+    } else if (error?.message?.includes('authentication') || error?.message?.includes('unauthorized')) {
+      statusCode = 401
     }
     
     // Return more detailed error information with CORS headers
@@ -1152,7 +1274,8 @@ serve(async (req) => {
     const errorDetails = {
       error: errorMessage,
       type: error?.constructor?.name || 'Error',
-      stack: error?.stack || undefined,
+      submissionId: submissionId || undefined,
+      isRetry: !!submissionId,
     }
     
     return new Response(
@@ -1163,7 +1286,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         },
-        status: 400,
+        status: statusCode,
       }
     )
   }

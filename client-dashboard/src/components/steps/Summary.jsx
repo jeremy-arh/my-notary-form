@@ -1008,7 +1008,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     <button
                       onClick={handlePayClick}
                       disabled={isSubmitting || loading}
-                      className="w-full bg-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3] text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#3971ed] disabled:hover:shadow-lg flex items-center justify-center gap-2.5 text-base border border-[#3971ed]"
+                      className="w-full bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2563eb] disabled:hover:shadow-lg flex items-center justify-center gap-2.5 text-base border border-[#2563eb]"
                     >
                       {isSubmitting ? (
                         <>
@@ -1320,7 +1320,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               <button
                 onClick={handlePayClick}
                 disabled={isSubmitting || loading}
-                className="w-full bg-[#3971ed] hover:bg-[#2d5dc7] active:bg-[#2652b3] text-white font-semibold py-3.5 sm:py-4 px-4 sm:px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#3971ed] disabled:hover:shadow-lg flex items-center justify-center gap-2.5 text-sm sm:text-base border border-[#3971ed]"
+                className="w-full bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] text-white font-semibold py-3.5 sm:py-4 px-4 sm:px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2563eb] disabled:hover:shadow-lg flex items-center justify-center gap-2.5 text-sm sm:text-base border border-[#2563eb]"
               >
                 {isSubmitting ? (
                   <>

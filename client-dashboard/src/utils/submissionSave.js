@@ -84,7 +84,7 @@ export const saveSubmission = async (formData, currentStep, completedSteps, tota
     // All fields are nullable to allow creating submission from step 1
     // IMPORTANT: phone must be empty string, not null, to satisfy database constraints
     // client_id is not set here - it will be set later when client is created at step 4
-    const submissionData = {
+    let submissionData = {
       client_id: null, // Explicitly set to null - will be linked later
       email: formData.email || null,
       first_name: formData.firstName || null,

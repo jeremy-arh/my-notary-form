@@ -1,20 +1,55 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { supabase } from '../../lib/supabase';
 import Logo from '../../assets/Logo';
 
 const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showResetPassword, setShowResetPassword] = useState(false);
-  const [resetSuccess, setResetSuccess] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   useEffect(() => {
+    // Handle magic link callback
+    const handleMagicLinkCallback = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        setLoading(true);
+        try {
+          // Set the session with the tokens from the magic link
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) throw error;
+
+          if (data.session) {
+            // Clear URL hash and redirect to dashboard
+            window.history.replaceState({}, document.title, '/login');
+            navigate('/dashboard');
+          }
+        } catch (error) {
+          console.error('Magic link callback error:', error);
+          setError(error.message || 'Failed to sign in. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Check if this is a callback from magic link
+    if (window.location.hash.includes('access_token')) {
+      handleMagicLinkCallback();
+      return;
+    }
+
     // Check if user is already logged in
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -26,48 +61,27 @@ const Login = () => {
     checkUser();
   }, [navigate]);
 
-  const handleLogin = async (e) => {
+  const handleSendMagicLink = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setMagicLinkSent(false);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
       });
 
       if (error) throw error;
 
-      if (data.user) {
-        navigate('/dashboard');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      setError(error.message || 'Invalid email or password. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setResetSuccess(false);
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`
-      });
-
-      if (error) throw error;
-
-      setResetSuccess(true);
+      setMagicLinkSent(true);
       setEmail('');
     } catch (error) {
-      console.error('Password reset error:', error);
-      setError(error.message || 'Failed to send password reset email. Please try again.');
+      console.error('Magic link error:', error);
+      setError(error.message || 'Failed to send magic link. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -84,7 +98,7 @@ const Login = () => {
         {/* Login Form */}
         <div className="bg-[#F3F4F6] rounded-3xl p-8 shadow-sm">
           <p className="text-gray-600 text-center mb-8">
-            {showResetPassword ? 'Enter your email to reset your password' : 'Sign in to your account'}
+            {magicLinkSent ? 'Check your email' : 'Sign in to your account'}
           </p>
 
           {error && (
@@ -94,20 +108,20 @@ const Login = () => {
             </div>
           )}
 
-          {resetSuccess && (
+          {magicLinkSent && (
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
               <div className="flex items-start">
                 <Icon icon="heroicons:check-circle" className="w-5 h-5 text-green-600 mr-2 mt-0.5" />
                 <div className="text-sm text-green-800">
-                  <p className="font-semibold mb-1">Reset link sent!</p>
-                  <p>Check your email and click the link to reset your password.</p>
+                  <p className="font-semibold mb-1">Magic link sent!</p>
+                  <p>Check your email and click the link to sign in. The link will expire in 1 hour.</p>
                 </div>
               </div>
             </div>
           )}
 
-          {showResetPassword ? (
-            <form onSubmit={handleResetPassword} className="space-y-6">
+          {!magicLinkSent && (
+            <form onSubmit={handleSendMagicLink} className="space-y-6">
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
                   Email Address
@@ -120,6 +134,7 @@ const Login = () => {
                   className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
                   placeholder="your.email@example.com"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -134,109 +149,31 @@ const Login = () => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Sending reset link...
+                    Sending magic link...
                   </>
                 ) : (
                   <>
                     <Icon icon="heroicons:paper-airplane" className="w-5 h-5 mr-2" />
-                    Send Reset Link
+                    Send Magic Link
                   </>
                 )}
               </button>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowResetPassword(false);
-                    setError('');
-                    setResetSuccess(false);
-                  }}
-                  className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                  ← Back to login
-                </button>
-              </div>
             </form>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                  placeholder="your.email@example.com"
-                  required
-                />
-              </div>
+          )}
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 pr-12 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all"
-                    placeholder="••••••••"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
-                    tabIndex={-1}
-                  >
-                    <Icon 
-                      icon={showPassword ? 'heroicons:eye-slash' : 'heroicons:eye'} 
-                      className="w-5 h-5" 
-                    />
-                  </button>
-                </div>
-              </div>
-
+          {magicLinkSent && (
+            <div className="text-center mt-6">
               <button
-                type="submit"
-                disabled={loading}
-                className="btn-glassy w-full px-8 py-3 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                type="button"
+                onClick={() => {
+                  setMagicLinkSent(false);
+                  setError('');
+                }}
+                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
               >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    <Icon icon="heroicons:arrow-right-on-rectangle" className="w-5 h-5 mr-2" />
-                    Sign In
-                  </>
-                )}
+                Send another magic link
               </button>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowResetPassword(true);
-                    setError('');
-                  }}
-                  className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-            </form>
+            </div>
           )}
 
           <div className="mt-6 text-center">
