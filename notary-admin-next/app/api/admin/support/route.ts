@@ -66,8 +66,8 @@ export async function GET(req: Request) {
 
     if (list.length === 0) return NextResponse.json({ tickets: [] });
 
-    const subIds = [...new Set(list.map((t) => t.submission_id).filter(Boolean))] as string[];
-    const clientIds = [...new Set(list.map((t) => t.client_id).filter(Boolean))] as string[];
+    const subIds = Array.from(new Set(list.map((t) => t.submission_id).filter(Boolean))) as string[];
+    const clientIds = Array.from(new Set(list.map((t) => t.client_id).filter(Boolean))) as string[];
 
     let subs: { id: string; first_name?: string; last_name?: string; email?: string }[] = [];
     let clients: { id: string; first_name?: string; last_name?: string; email?: string }[] = [];

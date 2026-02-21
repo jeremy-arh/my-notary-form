@@ -102,7 +102,7 @@ export async function GET(req: Request) {
 
     if (list.length === 0) return NextResponse.json({ tasks: [] });
 
-    const subIds = [...new Set(list.map((t) => t.submission_id).filter(Boolean))] as string[];
+    const subIds = Array.from(new Set(list.map((t) => t.submission_id).filter(Boolean))) as string[];
     const { data: subs } = subIds.length > 0 ? await supabase
       .from("submission")
       .select("id, first_name, last_name, email, created_at, status, total_price")

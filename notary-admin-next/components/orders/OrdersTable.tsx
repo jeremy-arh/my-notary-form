@@ -95,7 +95,7 @@ export function OrdersTable({ submissions, loading, onRefetch, initialSearch = "
     return matchSearch && matchStatus;
   });
 
-  const statuses = [...new Set(submissions.map((s) => s.status))];
+  const statuses = Array.from(new Set(submissions.map((s) => s.status)));
 
   if (loading) {
     return (
