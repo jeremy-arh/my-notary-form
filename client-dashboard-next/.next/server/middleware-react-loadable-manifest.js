@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"lib\\\\saveSubmission.ts -> sonner\":{\"id\":\"lib\\\\saveSubmission.ts -> sonner\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_sonner_dist_index_mjs.js\"]}}"

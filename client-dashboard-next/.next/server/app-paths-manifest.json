@@ -1,0 +1,7 @@
+{
+  "/(form)/form/personal-info/page": "app/(form)/form/personal-info/page.js",
+  "/login/page": "app/login/page.js",
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/dashboard/profile/page": "app/(dashboard)/dashboard/profile/page.js",
+  "/(dashboard)/dashboard/submission/[id]/page": "app/(dashboard)/dashboard/submission/[id]/page.js"
+}

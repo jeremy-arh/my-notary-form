@@ -125,9 +125,7 @@ html, body {
 
 .ProseMirror p:first-child {
   margin-top: 0;
-}
-
-.ProseMirror p:last-child {
+}.ProseMirror p:last-child {
   margin-bottom: 0;
 }
 
@@ -147,9 +145,7 @@ html, body {
 
 .ProseMirror em {
   font-style: italic;
-}
-
-.ProseMirror s {
+}.ProseMirror s {
   text-decoration: line-through;
 }
 
