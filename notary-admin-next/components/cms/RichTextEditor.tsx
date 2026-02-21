@@ -13,7 +13,7 @@ interface RichTextEditorProps {
   minHeight?: string;
 }
 
-export function RichTextEditor({ value, onChange, placeholder, minHeight = "200px" }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, minHeight = "200px" }: RichTextEditorProps) {
   const editableRef = useRef<HTMLDivElement>(null);
   const [htmlSource, setHtmlSource] = useState(value);
   const lastValueRef = useRef(value);

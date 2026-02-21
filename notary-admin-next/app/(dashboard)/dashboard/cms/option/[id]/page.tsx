@@ -73,7 +73,7 @@ export default function OptionEditPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Erreur");
-      const data = await res.json();
+      await res.json();
       toast.success("Option enregistrée");
       router.push("/dashboard/cms");
     } catch {

@@ -657,7 +657,7 @@ export default function OrderDetailPage() {
                 <p className="text-sm text-muted-foreground">Aucun signataire enregistré pour ce dossier</p>
               ) : (
                 <div className="space-y-4">
-                  {signatories.map((sig, idx) => (
+                  {signatories.map((sig) => (
                     <div key={sig.id} className="rounded-lg border p-4">
                       <div className="flex items-start gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">

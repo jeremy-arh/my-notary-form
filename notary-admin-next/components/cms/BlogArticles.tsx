@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -112,11 +113,14 @@ export function BlogArticles() {
         {filtered.map((article) => (
           <Card key={String(article.id)} className="overflow-hidden">
             {article.cover_image_url && (
-              <img
-                src={article.cover_image_url as string}
-                alt={(article.cover_image_alt as string) || (article.title as string)}
-                className="h-40 w-full object-cover"
-              />
+              <div className="relative h-40 w-full">
+                <Image
+                  src={article.cover_image_url as string}
+                  alt={(article.cover_image_alt as string) || (article.title as string)}
+                  fill
+                  className="object-cover"
+                />
+              </div>
             )}
             <CardContent className="p-4">
               <div className="flex items-center justify-between gap-2 mb-2">

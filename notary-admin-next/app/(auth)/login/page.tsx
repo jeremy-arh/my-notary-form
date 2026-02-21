@@ -33,7 +33,7 @@ export default function LoginPage() {
         router.push("/dashboard/kpis");
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       toast.error("Erreur de connexion");
     } finally {
       setLoading(false);

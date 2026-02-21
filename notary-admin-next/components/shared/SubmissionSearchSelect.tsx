@@ -104,7 +104,7 @@ export function SubmissionSearchSelect({
       if (found) setSelected(found);
     }
     if (!value) setSelected(null);
-  }, [value, options, selected?.id]);
+  }, [value, options, selected, selected?.id]);
 
   useEffect(() => {
     if (value && !selected) {
@@ -131,7 +131,7 @@ export function SubmissionSearchSelect({
         })
         .catch(() => {});
     }
-  }, [value, selected?.id]);
+  }, [value, selected, selected?.id]);
 
 
   useEffect(() => {

@@ -63,7 +63,7 @@ export default function BlogArticleEditPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Erreur");
-      const data = await res.json();
+      await res.json();
       toast.success("Article enregistré");
       router.push("/dashboard/cms");
     } catch {

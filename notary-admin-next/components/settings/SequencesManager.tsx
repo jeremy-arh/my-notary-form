@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   useSequences,
   AutomationSequence,
@@ -794,6 +794,15 @@ function SmsCounter({ text }: { text: string }) {
 
 /* ── Template Preview ── */
 
+const SAMPLE_VARS: Record<string, string> = {
+  "{{first_name}}": "Jean",
+  "{{last_name}}": "Dupont",
+  "{{email}}": "jean.dupont@email.com",
+  "{{form_link}}": "https://app.mynotary.io/form",
+  "{{support_email}}": "support@mynotary.io",
+  "{{company_name}}": "My Notary",
+};
+
 function TemplatePreview({
   channel,
   subject,
@@ -805,26 +814,17 @@ function TemplatePreview({
   htmlBody: string;
   smsBody: string;
 }) {
-  const sampleVars: Record<string, string> = {
-    "{{first_name}}": "Jean",
-    "{{last_name}}": "Dupont",
-    "{{email}}": "jean.dupont@email.com",
-    "{{form_link}}": "https://app.mynotary.io/form",
-    "{{support_email}}": "support@mynotary.io",
-    "{{company_name}}": "My Notary",
-  };
-
-  const replaceVars = (text: string) => {
+  const replaceVars = useCallback((text: string) => {
     let result = text;
-    for (const [key, val] of Object.entries(sampleVars)) {
+    for (const [key, val] of Object.entries(SAMPLE_VARS)) {
       result = result.replaceAll(key, val);
     }
     return result;
-  };
+  }, []);
 
-  const previewSubject = useMemo(() => replaceVars(subject), [subject]);
-  const previewHtml = useMemo(() => replaceVars(htmlBody), [htmlBody]);
-  const previewSms = useMemo(() => replaceVars(smsBody), [smsBody]);
+  const previewSubject = useMemo(() => replaceVars(subject), [subject, replaceVars]);
+  const previewHtml = useMemo(() => replaceVars(htmlBody), [htmlBody, replaceVars]);
+  const previewSms = useMemo(() => replaceVars(smsBody), [smsBody, replaceVars]);
 
   if (channel === "email") {
     if (!htmlBody && !subject) {

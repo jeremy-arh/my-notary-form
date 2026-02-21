@@ -89,11 +89,11 @@ export default function CommunicationsPage() {
   }, [sms, search, typeFilter]);
 
   const emailTypes = useMemo(
-    () => [...new Set(emails.map((e) => e.email_type))].sort(),
+    () => Array.from(new Set(emails.map((e) => e.email_type))).sort(),
     [emails]
   );
   const smsTypes = useMemo(
-    () => [...new Set(sms.map((s) => s.sms_type))].sort(),
+    () => Array.from(new Set(sms.map((s) => s.sms_type))).sort(),
     [sms]
   );
 
