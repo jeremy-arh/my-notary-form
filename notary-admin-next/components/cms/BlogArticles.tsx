@@ -112,7 +112,7 @@ export function BlogArticles() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filtered.map((article) => (
           <Card key={String(article.id)} className="overflow-hidden">
-            {article.cover_image_url && (
+            {article.cover_image_url ? (
               <div className="relative h-40 w-full">
                 <Image
                   src={article.cover_image_url as string}
@@ -121,15 +121,15 @@ export function BlogArticles() {
                   className="object-cover"
                 />
               </div>
-            )}
+            ) : null}
             <CardContent className="p-4">
               <div className="flex items-center justify-between gap-2 mb-2">
                 {getStatusBadge((article.status as string) || "draft")}
-                {article.is_featured && (
+                {article.is_featured ? (
                   <Badge variant="outline" className="text-amber-600 border-amber-300">
                     Featured
                   </Badge>
-                )}
+                ) : null}
               </div>
               <h3 className="font-semibold line-clamp-2 mb-2">{article.title as string}</h3>
               <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{article.excerpt as string}</p>
