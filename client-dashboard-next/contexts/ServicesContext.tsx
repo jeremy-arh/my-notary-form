@@ -17,6 +17,7 @@ type Option = {
   option_id: string;
   service_id?: string;
   name?: string;
+  description?: string;
   [key: string]: unknown;
 };
 
