@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-02-24.acacia" });
     const supabase = createAdminClient();
 
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     let invoiceUrl: string | null = null;
     if (session.invoice && typeof session.invoice === "object") {
-      invoiceUrl = session.invoice.hosted_invoice_url || session.invoice.invoice_pdf;
+      invoiceUrl = session.invoice.hosted_invoice_url ?? session.invoice.invoice_pdf ?? null;
     }
     if (!invoiceUrl && session.payment_intent && typeof session.payment_intent === "object") {
       const charges = await stripe.charges.list({
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
             paymentMethodId =
               typeof charge.payment_method === "string"
                 ? charge.payment_method
-                : charge.payment_method.id;
+                : (charge.payment_method as { id: string }).id;
           }
         }
         if (!paymentMethodId && session.setup_intent) {

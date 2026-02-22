@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -7,7 +8,7 @@ import { Icon } from "@iconify/react";
 import { trackPaymentSuccess as trackPaymentSuccessPlausible } from "@/lib/utils/plausible";
 import { trackPaymentSuccess } from "@/lib/utils/gtm";
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +39,6 @@ export default function PaymentSuccessPage() {
           setSubmissionId(data.submissionId);
           setInvoiceUrl(data.invoiceUrl ?? null);
 
-          // Clear form data from localStorage
           try {
             localStorage.removeItem("notaryFormData");
             localStorage.removeItem("formSessionId");
@@ -54,8 +54,6 @@ export default function PaymentSuccessPage() {
             /* ignore */
           }
 
-          // Track payment success (Plausible + GTM)
-          // Format dataLayer identique à client-dashboard pour Google Ads
           trackPaymentSuccessPlausible({
             transactionId: data.transactionId || sessionId,
             amount: data.amount ?? 0,
@@ -153,5 +151,22 @@ export default function PaymentSuccessPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-[#491ae9] mb-4" />
+            <p className="text-gray-600 font-medium">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }

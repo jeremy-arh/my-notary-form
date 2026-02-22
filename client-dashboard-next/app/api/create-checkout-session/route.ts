@@ -28,15 +28,15 @@ function convertPriceToMatchClient(eurAmount: number, targetCurrency: string): n
 }
 
 export async function POST(request: NextRequest) {
-  let formData: Record<string, unknown> | null = null;
+  let formData: Record<string, unknown> = {};
   let submissionId: string | undefined;
 
   try {
     const body = await request.json();
-    formData = body.formData;
+    formData = body.formData ?? {};
     submissionId = body.submissionId;
 
-    if (!formData) {
+    if (!body.formData) {
       return NextResponse.json(
         { error: "Missing required field: formData" },
         { status: 400 }
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2023-10-16",
+      apiVersion: "2025-02-24.acacia",
     });
     const supabase = createAdminClient();
 
@@ -379,22 +379,22 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    function getServicePriceForStripe(
+    const getServicePriceForStripe = (
       service: { base_price: number; price_usd?: number; price_gbp?: number },
       curr: string
-    ): number {
+    ): number => {
       if (curr === "USD" && service.price_usd != null) return service.price_usd;
       if (curr === "GBP" && service.price_gbp != null) return service.price_gbp;
       return convertPriceToMatchClient(service.base_price ?? 0, curr);
-    }
-    function getOptionPriceForStripe(
+    };
+    const getOptionPriceForStripe = (
       option: { additional_price: number; price_usd?: number; price_gbp?: number },
       curr: string
-    ): number {
+    ): number => {
       if (curr === "USD" && option.price_usd != null) return option.price_usd;
       if (curr === "GBP" && option.price_gbp != null) return option.price_gbp;
       return convertPriceToMatchClient(option.additional_price ?? 0, curr);
-    }
+    };
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
     const optionCounts: Record<string, number> = {};

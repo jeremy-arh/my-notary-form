@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     if (existingSubmission) {
       const { shouldUpdateFunnelStatus } = await import("@/lib/utils/funnelStatus");
       const currentFunnel = (existingSubmission as { funnel_status: string | null }).funnel_status;
-      let updatePayload = { ...submissionData };
+      let updatePayload: Record<string, unknown> = { ...submissionData };
       if (!shouldUpdateFunnelStatus(currentFunnel, funnelStatus)) {
         const { funnel_status: _, ...rest } = submissionData;
         updatePayload = rest;

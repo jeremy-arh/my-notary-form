@@ -68,7 +68,7 @@ export async function GET(
     const transactions: StripeTransaction[] = [];
     let mainInvoiceUrl: string | null = (paymentData?.invoice_url as string) || null;
 
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-02-24.acacia" });
 
     let piIdToUse = paymentIntentId;
 
