@@ -3,5 +3,5 @@
   "framework": "nextjs",
   "installCommand": "npm install --legacy-peer-deps && cd client-dashboard-next && npm install",
   "buildCommand": "cd client-dashboard-next && npm run build",
-  "outputDirectory": "client-dashboard-next"
+  "outputDirectory": "client-dashboard-next/.next"
 }
