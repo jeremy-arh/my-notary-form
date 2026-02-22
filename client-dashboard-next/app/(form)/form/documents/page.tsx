@@ -108,7 +108,7 @@ export default function DocumentsPage() {
     let checkInterval: ReturnType<typeof setInterval> | null = null;
     let resizeHandler: (() => void) | null = null;
     const calculateFooterPadding = () => {
-      const footer = document.querySelector('[data-footer="notary-form"]');
+      const footer = document.querySelector<HTMLElement>('[data-footer="notary-form"]');
       if (footer && footer.offsetHeight > 0) {
         const footerHeight = footer.offsetHeight;
         const desiredGap = isMobile ? 50 : 20;
@@ -118,7 +118,7 @@ export default function DocumentsPage() {
       return false;
     };
     const setup = () => {
-      const footer = document.querySelector('[data-footer="notary-form"]');
+      const footer = document.querySelector<HTMLElement>('[data-footer="notary-form"]');
       if (footer && footer.offsetHeight > 0) {
         if (!resizeObserver) {
           resizeObserver = new ResizeObserver(calculateFooterPadding);
