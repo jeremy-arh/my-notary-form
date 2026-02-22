@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "npm install && cd client-dashboard-next && npm install",
+  "installCommand": "npm install --legacy-peer-deps && cd client-dashboard-next && npm install",
   "buildCommand": "cd client-dashboard-next && npm run build"
 }
