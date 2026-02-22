@@ -192,7 +192,7 @@ export default function DashboardPage() {
         submissionId: submission.id,
       };
       localStorage.setItem("notaryFormData", JSON.stringify(formData));
-      localStorage.setItem("notaryCurrency", formData.currency);
+      localStorage.setItem("notaryCurrency", String(formData.currency));
       router.push("/form/summary");
     },
     [router]
