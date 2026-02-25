@@ -41,6 +41,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
     formData.firstName?.trim() &&
     formData.lastName?.trim() &&
     formData.email?.trim() &&
+    formData.signatories?.length > 0 &&
     formData.deliveryMethod;
 
   // Get list of missing required information
@@ -73,6 +74,14 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         key: 'personalInfo',
         label: `${t('form.steps.summary.missingPersonalInfo') || 'Informations personnelles manquantes'}: ${missingFields.join(', ')}`,
         action: handleEditPersonalInfo
+      });
+    }
+    
+    if (!formData.signatories || formData.signatories.length === 0) {
+      missing.push({
+        key: 'signatories',
+        label: t('form.steps.summary.missingSignatories') || 'Aucun signataire ajouté',
+        action: handleEditSignatories
       });
     }
     
@@ -431,20 +440,22 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
       });
     }
 
-    // Add cost for additional signatories - Temporarily disabled
-    // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-    //   const additionalSignatories = formData.signatories.length - 1;
-    //   total += additionalSignatories * 45;
-    //   
-    //   // Add signatories as items for GTM
-    //   items.push({
-    //     item_id: 'additional_signatories',
-    //     item_name: `Additional Signatories (${additionalSignatories})`,
-    //     item_category: 'Additional Service',
-    //     price: 45,
-    //     quantity: additionalSignatories
-    //   });
-    // }
+    // Add cost for additional signatories (first one is free)
+    if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+      const additionalSignatories = formData.signatories.length - 1;
+      const signatoriesCost = currency === 'EUR'
+        ? additionalSignatories * 45
+        : convertPriceSync(additionalSignatories * 45, currency);
+      total += signatoriesCost;
+      
+      items.push({
+        item_id: 'additional_signatories',
+        item_name: `Additional Signatories (${additionalSignatories})`,
+        item_category: 'Additional Service',
+        price: 45,
+        quantity: additionalSignatories
+      });
+    }
 
     return {
       currency: formData.currency || 'EUR',
@@ -713,6 +724,67 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
         </div>
       </div>
 
+      {/* Signatories */}
+      {formData.signatories && formData.signatories.length > 0 && (
+        <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
+              {t('form.steps.summary.signatories') || 'Signataires'}
+            </h3>
+            <button
+              onClick={handleEditSignatories}
+              className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+              aria-label="Edit signatories"
+            >
+              <Icon icon="heroicons:pencil-square" className="w-4 h-4" />
+              <span className="hidden sm:inline">{t('form.steps.summary.edit') || 'Edit'}</span>
+            </button>
+          </div>
+          <div className="space-y-2 sm:space-y-3">
+            {formData.signatories.map((signatory, index) => {
+              const getInitials = (firstName, lastName) => {
+                const first = firstName?.charAt(0)?.toUpperCase() || '';
+                const last = lastName?.charAt(0)?.toUpperCase() || '';
+                return first + last || '?';
+              };
+              
+              return (
+                <div key={signatory.id || index} className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl border border-gray-200">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-400 flex items-center justify-center flex-shrink-0">
+                    <span className="text-white font-semibold text-xs sm:text-sm">
+                      {getInitials(signatory.firstName, signatory.lastName)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-900 break-words">
+                      {signatory.firstName} {signatory.lastName}
+                      {index === 0 && (
+                        <span className="ml-2 text-xs text-gray-500 font-normal">
+                          ({t('form.steps.summary.included') || 'inclus'})
+                        </span>
+                      )}
+                      {index > 0 && (
+                        <span className="ml-2 text-xs text-gray-600 font-normal">
+                          (+{formatPriceSync(45, 'EUR')})
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-gray-600 break-all mt-0.5">
+                      {signatory.email}
+                    </p>
+                    {signatory.phone && (
+                      <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+                        {signatory.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Delivery Method Summary */}
       <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
         <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -764,68 +836,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               className="text-[10px] sm:text-xs text-gray-500 mt-2 px-1 [&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800"
               dangerouslySetInnerHTML={{ __html: t('form.steps.summary.termsAcceptance') }}
             />
-
-      {/* Signatories - Temporarily hidden
-      {formData.signatories && formData.signatories.length > 0 && (
-        <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
-              {t('form.steps.summary.signatories') || 'Signatories'}
-            </h3>
-            <button
-              onClick={handleEditSignatories}
-              className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
-              aria-label="Edit signatories"
-            >
-              <Icon icon="heroicons:pencil-square" className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('form.steps.summary.edit') || 'Edit'}</span>
-            </button>
-          </div>
-          <div className="space-y-2 sm:space-y-3">
-            {formData.signatories.map((signatory, index) => {
-              const getInitials = (firstName, lastName) => {
-                const first = firstName?.charAt(0)?.toUpperCase() || '';
-                const last = lastName?.charAt(0)?.toUpperCase() || '';
-                return first + last || '?';
-              };
-              
-              return (
-                <div key={signatory.id || index} className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl border border-gray-200">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-400 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-semibold text-xs sm:text-sm">
-                      {getInitials(signatory.firstName, signatory.lastName)}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-semibold text-gray-900 break-words">
-                      {signatory.firstName} {signatory.lastName}
-                      {index === 0 && (
-                        <span className="ml-2 text-xs text-gray-500 font-normal">
-                          ({t('form.steps.summary.included') || 'included'})
-                        </span>
-                      )}
-                      {index > 0 && (
-                        <span className="ml-2 text-xs text-gray-600 font-normal">
-                          (+{formatPriceSync(45, 'EUR')})
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[10px] sm:text-xs text-gray-600 break-all mt-0.5">
-                      {signatory.email}
-                    </p>
-                    {signatory.phone && (
-                      <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
-                        {signatory.phone}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      */}
           </div>
 
           {/* Right Column - Price Details Sticky (Desktop only - visible from 1536px) */}
@@ -943,7 +953,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
               </div>
             )}
 
-            {/* Additional Signatories - Temporarily hidden
+            {/* Additional Signatories */}
             {formData.signatories && formData.signatories.length > 1 && (
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                 <span className="text-xs sm:text-sm text-gray-700">
@@ -954,7 +964,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                 </span>
               </div>
             )}
-            */}
 
             {/* Total */}
             <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
@@ -992,8 +1001,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   }, 0) || 0) + 
                   (formData.deliveryMethod === 'postal' 
                     ? (currency === 'EUR' ? DELIVERY_POSTAL_PRICE_EUR : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency))
+                    : 0) +
+                  (formData.signatories && formData.signatories.length > 1 
+                    ? (currency === 'EUR' ? (formData.signatories.length - 1) * 45 : convertPriceSync((formData.signatories.length - 1) * 45, currency))
                     : 0)
-                  // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
                 , currency)}
               </span>
             </div>
@@ -1133,8 +1144,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     }, 0) || 0) + 
                     (formData.deliveryMethod === 'postal' 
                       ? (currency === 'EUR' ? DELIVERY_POSTAL_PRICE_EUR : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency))
+                      : 0) +
+                    (formData.signatories && formData.signatories.length > 1 
+                      ? (currency === 'EUR' ? (formData.signatories.length - 1) * 45 : convertPriceSync((formData.signatories.length - 1) * 45, currency))
                       : 0)
-                    // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
                   , currency)}
                 </span>
               )}
@@ -1237,7 +1250,7 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                   </div>
                 )}
 
-                {/* Additional Signatories - Temporarily hidden
+                {/* Additional Signatories */}
                 {formData.signatories && formData.signatories.length > 1 && (
                   <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                     <span className="text-xs sm:text-sm text-gray-700">
@@ -1248,7 +1261,6 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                     </span>
                   </div>
                 )}
-                */}
 
                 {/* Total */}
                 <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
@@ -1277,8 +1289,10 @@ const Summary = ({ formData, prevStep, handleSubmit }) => {
                       }, 0) || 0) + 
                       (formData.deliveryMethod === 'postal' 
                         ? (currency === 'EUR' ? DELIVERY_POSTAL_PRICE_EUR : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency))
+                        : 0) +
+                      (formData.signatories && formData.signatories.length > 1 
+                        ? (currency === 'EUR' ? (formData.signatories.length - 1) * 45 : convertPriceSync((formData.signatories.length - 1) * 45, currency))
                         : 0)
-                      // Signatories cost removed: (formData.signatories && formData.signatories.length > 1 ? (formData.signatories.length - 1) * 45 : 0)
                     , currency)}
                   </span>
                 </div>

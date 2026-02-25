@@ -89,10 +89,10 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
         });
       }
       
-      // Add signatory price - Temporarily disabled
-      // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-      //   pricesToConvert.add((formData.signatories.length - 1) * 45);
-      // }
+      // Add signatory price
+      if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+        pricesToConvert.add((formData.signatories.length - 1) * 45);
+      }
       
       // Convert all prices
       const conversions = await Promise.all(
@@ -173,10 +173,13 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
       total += deliveryPrice;
     }
     
-    // Signatories pricing - Temporarily disabled
-    // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-    //   total += (formData.signatories.length - 1) * 45;
-    // }
+    // Signatories pricing (first one is free, 45€ per additional)
+    if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+      const additionalSignatoriesCost = currency === 'EUR'
+        ? (formData.signatories.length - 1) * 45
+        : convertPriceSync((formData.signatories.length - 1) * 45, currency);
+      total += additionalSignatoriesCost;
+    }
     return total;
   };
 
@@ -335,7 +338,7 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                   </div>
                 )}
 
-                {/* Show signatories breakdown - global for all services - Temporarily hidden
+                {/* Show signatories breakdown - global for all services */}
                 {formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1 && (
                   <div className="pt-1.5 sm:pt-2 border-t border-gray-200">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5">
@@ -343,12 +346,11 @@ const PriceDetails = ({ formData, isOpen: controlledIsOpen, onToggle }) => {
                         + {t('form.priceDetails.additionalSignatories')} ({formData.signatories.length - 1} {(formData.signatories.length - 1) > 1 ? t('form.priceDetails.signatoryPlural') : t('form.priceDetails.signatory')})
                       </span>
                       <span className="text-[9px] sm:text-[10px] font-semibold text-gray-700 flex-shrink-0">
-                        {formatPrice((formData.signatories.length - 1) * 45)}
+                        {formatPrice((formData.signatories.length - 1) * 45, 'EUR')}
                       </span>
                     </div>
                   </div>
                 )}
-                */}
 
                 {/* Total - Always show even if 0 */}
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-1.5 sm:pt-2 border-t-2 border-gray-300 gap-0.5 sm:gap-1">

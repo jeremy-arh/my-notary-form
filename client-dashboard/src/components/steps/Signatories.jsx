@@ -4,6 +4,7 @@ import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import { trackSignatoriesAdded } from '../../utils/analytics';
 
 const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleContinueClick, getValidationErrorMessage }) => {
   const { formatPriceSync } = useCurrency();
@@ -23,6 +24,73 @@ const Signatories = ({ formData, updateFormData, nextStep, prevStep, handleConti
   const [editingIndex, setEditingIndex] = useState(null); // Track which signatory is being edited
   const autocompleteRefs = useRef({});
   const googleMapsLoaded = useRef(false);
+  const userAutoAddedRef = useRef(false);
+
+  // Helper: check if a signatory is the current user (from formData)
+  const isUserSignatory = (sig) => {
+    return sig?.email === formData.email &&
+           sig?.firstName === formData.firstName &&
+           sig?.lastName === formData.lastName;
+  };
+
+  // Auto-add the logged-in user as the first signatory when they reach this step
+  useEffect(() => {
+    const hasUserInfo = formData.firstName?.trim() && formData.lastName?.trim() && formData.email?.trim();
+    if (!hasUserInfo) return;
+
+    const currentSignatories = formData.signatories || [];
+    const userAsSignatory = {
+      id: Date.now(),
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      birthDate: '',
+      birthCity: '',
+      postalAddress: formData.address || '',
+      email: formData.email.trim(),
+      phone: formData.phone?.trim() || ''
+    };
+
+    // Case 1: No signatories yet - add user as first
+    if (currentSignatories.length === 0) {
+      if (!userAutoAddedRef.current) {
+        userAutoAddedRef.current = true;
+        updateFormData({ signatories: [userAsSignatory], isSignatory: true });
+      }
+      return;
+    }
+
+    // Case 2: First signatory is not the user - ensure user is first
+    const firstIsUser = isUserSignatory(currentSignatories[0]);
+    if (!firstIsUser) {
+      const userIndex = currentSignatories.findIndex(isUserSignatory);
+      let newSignatories;
+      if (userIndex >= 0) {
+        // User exists elsewhere - move to first position
+        newSignatories = [
+          { ...currentSignatories[userIndex], ...userAsSignatory },
+          ...currentSignatories.filter((_, i) => i !== userIndex)
+        ];
+      } else {
+        // User not in list - add as first
+        newSignatories = [userAsSignatory, ...currentSignatories];
+      }
+      updateFormData({ signatories: newSignatories, isSignatory: true });
+    } else {
+      // First is user - sync their info in case they updated Personal Info
+      const first = currentSignatories[0];
+      const hasEssentialChanges =
+        first.firstName !== formData.firstName?.trim() ||
+        first.lastName !== formData.lastName?.trim() ||
+        first.email !== formData.email?.trim() ||
+        first.phone !== (formData.phone?.trim() || '');
+      if (hasEssentialChanges) {
+        updateFormData({
+          signatories: [{ ...first, ...userAsSignatory }, ...currentSignatories.slice(1)],
+          isSignatory: true
+        });
+      }
+    }
+  }, [formData.firstName, formData.lastName, formData.email, formData.phone, formData.address]);
 
   // Load signatories from formData and update whenever formData.signatories changes
   useEffect(() => {
@@ -275,7 +343,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
     if (validate()) {
       // Track signatories completed before continuing
       if (formData.signatories && formData.signatories.length > 0) {
-        trackSignatoriesCompleted(formData.signatories.length);
+        trackSignatoriesAdded(formData.signatories.length);
       }
       nextStep();
     } else if (handleContinueClick) {
@@ -293,13 +361,6 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
     const first = firstName?.charAt(0)?.toUpperCase() || '';
     const last = lastName?.charAt(0)?.toUpperCase() || '';
     return (first + last) || '?';
-  };
-
-  // Check if signatory is the user (from formData)
-  const isUserSignatory = (signatory) => {
-    return signatory.email === formData.email && 
-           signatory.firstName === formData.firstName && 
-           signatory.lastName === formData.lastName;
   };
 
   return (
@@ -457,7 +518,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                               
                               // Track signatory added in analytics only when actually saved
                               if (signatory._isNew) {
-                                trackAnalyticsSignatoryAdded(updated.length);
+                                trackSignatoriesAdded(updated.length);
                               }
                             }
                             setEditingIndex(null);
@@ -517,7 +578,7 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                         </div>
                       </div>
 
-                      {/* Action buttons */}
+                      {/* Action buttons - hide remove for first signatory (user) */}
                       <div className="flex items-center space-x-2 flex-shrink-0">
                         <button
                           type="button"
@@ -527,14 +588,16 @@ setEmailErrors(prev => ({ ...prev, [errorKey]: t('form.steps.signatories.validat
                         >
                           <Icon icon="heroicons:pencil" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => removeSignatory(signatoryIndex)}
-                          className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                          aria-label="Remove signatory"
-                        >
-                          <Icon icon="heroicons:trash" className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-                        </button>
+                        {!(signatoryIndex === 0 && isUserSignatory(signatory)) && (
+                          <button
+                            type="button"
+                            onClick={() => removeSignatory(signatoryIndex)}
+                            className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                            aria-label="Remove signatory"
+                          >
+                            <Icon icon="heroicons:trash" className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -165,11 +165,14 @@ export const calculateTotalAmount = (formData, servicesMap = {}, optionsMap = {}
     total += deliveryPrice;
   }
 
-  // Add cost for additional signatories (first one is free) - Temporarily disabled
-  // if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
-  //   const additionalSignatories = formData.signatories.length - 1;
-  //   total += additionalSignatories * ADDITIONAL_SIGNATORY_PRICE_EUR;
-  // }
+  // Add cost for additional signatories (first one is free)
+  if (formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 1) {
+    const additionalSignatories = formData.signatories.length - 1;
+    const signatoriesCost = currency === 'EUR'
+      ? additionalSignatories * ADDITIONAL_SIGNATORY_PRICE_EUR
+      : convertPriceSync(additionalSignatories * ADDITIONAL_SIGNATORY_PRICE_EUR, currency);
+    total += signatoriesCost;
+  }
 
   return total;
 };

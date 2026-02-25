@@ -292,9 +292,9 @@ const NotaryForm = () => {
     { id: 1, name: 'Your personal informations', icon: 'heroicons:user', path: '/form/personal-info' },
     { id: 2, name: 'Choose Services', icon: 'heroicons:check-badge', path: '/form/choose-services' },
     { id: 3, name: 'Upload Documents', icon: 'heroicons:document-text', path: '/form/documents' },
-    { id: 4, name: 'Delivery method', icon: 'heroicons:envelope', path: '/form/delivery' },
-    // { id: 5, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' }, // Temporarily hidden
-    { id: 5, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
+    { id: 4, name: 'Add Signatories', icon: 'heroicons:user-group', path: '/form/signatories' },
+    { id: 5, name: 'Delivery method', icon: 'heroicons:envelope', path: '/form/delivery' },
+    { id: 6, name: 'Summary', icon: 'heroicons:clipboard-document-check', path: '/form/summary' }
   ];
 
   // Function to get validation error message for current step
@@ -306,10 +306,10 @@ const NotaryForm = () => {
         return 'Please select at least one service';
       case 3: // Upload Documents
         return 'Please upload at least one document for each selected service';
-      case 4: // Delivery method
+      case 4: // Add Signatories
+        return 'Please add at least one signatory';
+      case 5: // Delivery method
         return 'Please select a delivery method';
-      // case 5: // Add Signatories - Temporarily hidden
-      //   return 'Please add at least one signatory';
       default:
         return 'Please complete all required fields';
     }
@@ -337,44 +337,26 @@ const NotaryForm = () => {
           return docs && docs.length > 0;
         });
 
-      case 4: // Delivery method
-        // Always valid as long as a method is selected
+      case 4: // Add Signatories
+        if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
+          return false;
+        }
+        return formData.signatories.every(sig => {
+          const firstName = sig.firstName?.trim();
+          const lastName = sig.lastName?.trim();
+          const email = sig.email?.trim();
+          const phone = sig.phone?.trim();
+          if (!firstName || !lastName || !email || !phone) return false;
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) return false;
+          if (phone.length < 5) return false;
+          return true;
+        });
+
+      case 5: // Delivery method
         return !!formData.deliveryMethod;
 
-      // case 5: // Add Signatories - Temporarily hidden
-      //   // Check that there is at least one signatory
-      //   if (!formData.signatories || !Array.isArray(formData.signatories) || formData.signatories.length === 0) {
-      //     return false;
-      //   }
-      //   // Check that all signatories have required fields filled (only firstName, lastName, email, phone)
-      //   return formData.signatories.every(sig => {
-      //     const firstName = sig.firstName?.trim();
-      //     const lastName = sig.lastName?.trim();
-      //     const email = sig.email?.trim();
-      //     const phone = sig.phone?.trim();
-      //     
-      //     // Check all required fields are filled
-      //     if (!firstName || !lastName || !email || !phone) {
-      //       return false;
-      //     }
-      //     
-      //     // Basic email validation
-      //     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      //     if (!emailRegex.test(email)) {
-      //       return false;
-      //     }
-      //     
-      //     // Basic phone validation (at least 5 characters for a valid phone number)
-      //     if (phone.length < 5) {
-      //       return false;
-      //     }
-      //     
-      //     return true;
-      //   });
-
-      case 5: // Summary
-
-        // Check all required fields are filled
+      case 6: // Summary
         return requiredFields.every(field => field && field.trim() !== '');
 
       default:
@@ -427,6 +409,7 @@ const NotaryForm = () => {
             '/form/personal-info': t('form.steps.personalInfo.title', 'Your Personal Information'),
             '/form/choose-services': t('form.steps.chooseOption.title', 'Choose Your Services'),
             '/form/documents': t('form.steps.documents.title', 'Upload Documents'),
+            '/form/signatories': t('form.steps.signatories.title', 'Add Signatories'),
             '/form/delivery': t('form.steps.delivery.title', 'Delivery of your notarized documents'),
             '/form/summary': t('form.steps.summary.title', 'Summary'),
           };
@@ -516,11 +499,14 @@ const NotaryForm = () => {
       let targetPath = '/form/personal-info';
       
       if (completedSteps.length >= steps.length - 1) {
-        // User has completed all steps (4 steps), redirect to summary (step 5)
+        // User has completed all steps, redirect to summary
         targetPath = '/form/summary';
-      } else if (completedSteps.length >= 3) {
-        // User has completed steps 1-3, redirect to delivery (step 4)
+      } else if (completedSteps.length >= 4) {
+        // User has completed steps 1-4, redirect to delivery (step 5)
         targetPath = '/form/delivery';
+      } else if (completedSteps.length >= 3) {
+        // User has completed steps 1-3, redirect to signatories (step 4)
+        targetPath = '/form/signatories';
       } else if (completedSteps.length >= 2) {
         // User has completed steps 1-2, redirect to documents (step 3)
         targetPath = '/form/documents';
@@ -606,17 +592,19 @@ const NotaryForm = () => {
           Object.keys(formData.serviceDocuments).length > 0 &&
           Object.values(formData.serviceDocuments).some(docs => docs && docs.length > 0);
         const hasPersonalInfo = formData.firstName && formData.lastName && formData.email;
+        const hasSignatories = formData.signatories && Array.isArray(formData.signatories) && formData.signatories.length > 0;
         const hasDelivery = formData.deliveryMethod;
         
         console.log('🔍 [GUARD] Vérification données Summary:', {
           hasServices,
           hasDocuments,
           hasPersonalInfo,
+          hasSignatories,
           hasDelivery
         });
         
         // Only allow access to Summary if all essential data is filled
-        if (hasServices && hasDocuments && hasPersonalInfo && hasDelivery) {
+        if (hasServices && hasDocuments && hasPersonalInfo && hasSignatories && hasDelivery) {
           // Mark all previous steps as completed to allow access
           const stepsToComplete = steps.filter(s => s.id !== steps.length).map(s => s.id);
           const updatedCompletedSteps = [...new Set([...completedSteps, ...stepsToComplete.map(s => s - 1)])].sort();
@@ -638,6 +626,10 @@ const NotaryForm = () => {
             navigate('/form/documents', { replace: true });
             return;
           }
+          if (!hasSignatories) {
+            navigate('/form/signatories', { replace: true });
+            return;
+          }
           if (!hasDelivery) {
             navigate('/form/delivery', { replace: true });
             return;
@@ -654,7 +646,7 @@ const NotaryForm = () => {
         navigate(redirectStep.path, { replace: true });
       }
     }
-  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam, formData.selectedServices, formData.serviceDocuments, formData.firstName, formData.lastName, formData.email, formData.deliveryMethod]);
+  }, [location.pathname, completedSteps, navigate, allowServiceParamBypass, serviceParam, hasAppliedServiceParam, formData.selectedServices, formData.serviceDocuments, formData.firstName, formData.lastName, formData.email, formData.signatories, formData.deliveryMethod]);
 
   // Load user data if authenticated
   useEffect(() => {
@@ -1854,13 +1846,10 @@ const NotaryForm = () => {
       const defaultAppointmentTime = formData.appointmentTime || '09:00';
       const defaultTimezone = formData.timezone || 'UTC';
       
-      // Calculate additional signatories cost - Temporarily disabled
-      // const signatoriesCount = formData.signatories?.length || 0;
-      // const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
-      // const additionalSignatoriesCost = additionalSignatoriesCount * 45;
-      const signatoriesCount = 0;
-      const additionalSignatoriesCount = 0;
-      const additionalSignatoriesCost = 0;
+      // Calculate additional signatories cost - 45€ per additional signatory, first one is free
+      const signatoriesCount = formData.signatories?.length || 0;
+      const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
+      const additionalSignatoriesCost = additionalSignatoriesCount * 45;
 
       // Delivery postal cost (29.95€) if selected
       const deliveryPostalCostEUR = formData.deliveryMethod === 'postal' ? 29.95 : 0;
@@ -1934,17 +1923,17 @@ const NotaryForm = () => {
         });
       }
 
-      // Additional signatories line item - Temporarily disabled
-      // if (additionalSignatoriesCount > 0) {
-      //   const signatoriesName = t('form.priceDetails.additionalSignatories', 'Additional signatories');
-      //   localizedNames['additional_signatories'] = signatoriesName;
-      //   localizedLineItems.push({
-      //     type: 'additional_signatories',
-      //     id: 'additional_signatories',
-      //     name: signatoriesName,
-      //     quantity: additionalSignatoriesCount,
-      //   });
-      // }
+      // Additional signatories line item
+      if (additionalSignatoriesCount > 0) {
+        const signatoriesName = t('form.priceDetails.additionalSignatories', 'Additional signatories');
+        localizedNames['additional_signatories'] = signatoriesName;
+        localizedLineItems.push({
+          type: 'additional_signatories',
+          id: 'additional_signatories',
+          name: signatoriesName,
+          quantity: additionalSignatoriesCount,
+        });
+      }
       
       const submissionData = {
         ...formData,
@@ -1970,11 +1959,10 @@ const NotaryForm = () => {
       console.log('📤 Calling Edge Function with full data:');
       console.log('   selectedServices:', submissionData.selectedServices);
       console.log('   serviceDocuments:', submissionData.serviceDocuments);
-      // Signatories logs - Temporarily disabled
-      // console.log('   signatories:', submissionData.signatories);
-      // console.log('   signatories count:', submissionData.signatoriesCount);
-      // console.log('   additional signatories:', submissionData.additionalSignatoriesCount);
-      // console.log('   additional signatories cost:', submissionData.additionalSignatoriesCost, 'EUR');
+      console.log('   signatories:', submissionData.signatories);
+      console.log('   signatories count:', submissionData.signatoriesCount);
+      console.log('   additional signatories:', submissionData.additionalSignatoriesCount);
+      console.log('   additional signatories cost:', submissionData.additionalSignatoriesCost, 'EUR');
       console.log('   currency:', submissionData.currency || 'EUR (default)');
       console.log('   language:', submissionData.language);
       console.log('   localizedNames:', submissionData.localizedNames);
@@ -2337,20 +2325,6 @@ const NotaryForm = () => {
               }
             />
             <Route
-              path="delivery"
-              element={
-                <DeliveryMethod
-                  formData={formData}
-                  updateFormData={updateFormData}
-                  nextStep={nextStep}
-                  prevStep={prevStep}
-                  handleContinueClick={handleContinueClick}
-                  getValidationErrorMessage={getValidationErrorMessage}
-                />
-              }
-            />
-            {/* Signatories step temporarily hidden
-            <Route
               path="signatories"
               element={
                 <Signatories
@@ -2363,7 +2337,19 @@ const NotaryForm = () => {
                 />
               }
             />
-            */}
+            <Route
+              path="delivery"
+              element={
+                <DeliveryMethod
+                  formData={formData}
+                  updateFormData={updateFormData}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                  handleContinueClick={handleContinueClick}
+                  getValidationErrorMessage={getValidationErrorMessage}
+                />
+              }
+            />
             <Route
               path="summary"
               element={
@@ -2379,8 +2365,8 @@ const NotaryForm = () => {
       </main>
 
       {/* Footer - Progress Bar as top border + Navigation Buttons + Price Details - Fixed at bottom */}
-      {/* Hide footer on mobile when on Summary step (step 5) - visible from 1536px (2xl breakpoint) */}
-      <div data-footer="notary-form" className={`fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden ${currentStep === 5 ? '2xl:block hidden' : ''}`}>
+      {/* Hide footer on mobile when on Summary step (step 6) - visible from 1536px (2xl breakpoint) */}
+      <div data-footer="notary-form" className={`fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden ${currentStep === 6 ? '2xl:block hidden' : ''}`}>
         {/* Progress Bar as top border */}
         <div className="relative w-full">
           <div className="h-1 bg-gray-300 w-full">
