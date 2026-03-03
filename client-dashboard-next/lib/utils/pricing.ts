@@ -2,9 +2,10 @@
  * Pricing utilities - services, options, delivery
  */
 
-import { convertPriceSync } from "./currency";
+import { convertPriceSync, convertPriceRoundUpSync } from "./currency";
 
 const DELIVERY_POSTAL_PRICE_EUR = 29.95;
+const ADDITIONAL_SIGNATORY_PRICE_EUR = 45;
 
 export type ServiceRecord = {
   service_id: string;
@@ -77,11 +78,16 @@ export function getOptionPriceInCurrency(option: OptionRecord | null, targetCurr
   return priceCur === targetCurrency ? price : convertPriceSync(price, targetCurrency);
 }
 
-export { DELIVERY_POSTAL_PRICE_EUR };
+export { DELIVERY_POSTAL_PRICE_EUR, ADDITIONAL_SIGNATORY_PRICE_EUR };
 
 /** Calcule le total en devise cible (pour save submission) */
 export function calculateTotalAmount(
-  formData: { selectedServices?: string[]; serviceDocuments?: Record<string, unknown[]>; deliveryMethod?: string | null },
+  formData: {
+    selectedServices?: string[];
+    serviceDocuments?: Record<string, unknown[]>;
+    deliveryMethod?: string | null;
+    signatories?: unknown[];
+  },
   servicesMap: Record<string, ServiceRecord>,
   optionsMap: Record<string, OptionRecord>,
   currency: string
@@ -109,7 +115,13 @@ export function calculateTotalAmount(
     }
   });
   if (formData.deliveryMethod === "postal") {
-    total += currency === "EUR" ? DELIVERY_POSTAL_PRICE_EUR : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+    total += currency === "EUR" ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR) : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+  }
+  const signatoriesCount = formData.signatories?.length ?? 0;
+  if (signatoriesCount > 1) {
+    const additionalCount = signatoriesCount - 1;
+    const signatoriesCostEUR = additionalCount * ADDITIONAL_SIGNATORY_PRICE_EUR;
+    total += currency === "EUR" ? Math.ceil(signatoriesCostEUR) : convertPriceRoundUpSync(signatoriesCostEUR, currency);
   }
   return total;
 }

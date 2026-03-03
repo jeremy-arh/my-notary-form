@@ -14,8 +14,9 @@ import {
   getServicePriceInCurrency,
   getOptionPriceInCurrency,
   DELIVERY_POSTAL_PRICE_EUR,
+  ADDITIONAL_SIGNATORY_PRICE_EUR,
 } from "@/lib/utils/pricing";
-import { formatPriceSync, convertPriceSync } from "@/lib/utils/currency";
+import { formatPriceSync, convertPriceSync, convertPriceRoundUpSync } from "@/lib/utils/currency";
 import { trackFormSubmissionStart as trackFormSubmissionStartPlausible } from "@/lib/utils/plausible";
 import {
   trackFormSubmissionStart,
@@ -58,12 +59,17 @@ export default function SummaryPage() {
       return total + (docs?.length ?? 0);
     }, 0) ?? 0;
 
+  const hasSignatories =
+    formData.signatories &&
+    Array.isArray(formData.signatories) &&
+    formData.signatories.length > 0;
   const isFormComplete =
     (formData.selectedServices?.length ?? 0) > 0 &&
     totalDocuments > 0 &&
     !!formData.firstName?.trim() &&
     !!formData.lastName?.trim() &&
     !!formData.email?.trim() &&
+    hasSignatories &&
     !!formData.deliveryMethod;
 
   useEffect(() => {
@@ -77,8 +83,8 @@ export default function SummaryPage() {
     if (formData.deliveryMethod === "postal") {
       const amount =
         currency === "EUR"
-          ? DELIVERY_POSTAL_PRICE_EUR
-          : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+          ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR)
+          : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
       setConvertedDeliveryPrice(formatPriceSync(amount, currency));
     } else {
       setConvertedDeliveryPrice("");
@@ -119,11 +125,20 @@ export default function SummaryPage() {
     if (formData.deliveryMethod === "postal") {
       total +=
         currency === "EUR"
-          ? DELIVERY_POSTAL_PRICE_EUR
-          : convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+          ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR)
+          : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+    }
+    const signatoriesCount = formData.signatories?.length ?? 0;
+    if (signatoriesCount > 1) {
+      const additionalCount = signatoriesCount - 1;
+      const signatoriesCostEUR = additionalCount * ADDITIONAL_SIGNATORY_PRICE_EUR;
+      total +=
+        currency === "EUR"
+          ? Math.ceil(signatoriesCostEUR)
+          : convertPriceRoundUpSync(signatoriesCostEUR, currency);
     }
     return total;
-  }, [formData.selectedServices, formData.serviceDocuments, formData.deliveryMethod, servicesMap, optionsMap, currency]);
+  }, [formData.selectedServices, formData.serviceDocuments, formData.deliveryMethod, formData.signatories, servicesMap, optionsMap, currency]);
 
   const getMissingInfo = useCallback(() => {
     const missing: { key: string; label: string; action: () => void }[] = [];
@@ -154,6 +169,13 @@ export default function SummaryPage() {
         () => router.push("/form/personal-info")
       );
     }
+    if (!hasSignatories) {
+      push(
+        "signatories",
+        t("form.steps.summary.missingSignatories") || "Aucun signataire ajouté",
+        () => router.push("/form/signatories")
+      );
+    }
     if (!formData.deliveryMethod) {
       push(
         "delivery",
@@ -162,7 +184,7 @@ export default function SummaryPage() {
       );
     }
     return missing;
-  }, [formData, totalDocuments, t, router]);
+  }, [formData, totalDocuments, hasSignatories, t, router]);
 
   const handlePay = useCallback(async () => {
     const missing = getMissingInfo();
@@ -207,6 +229,14 @@ export default function SummaryPage() {
       const localizedNames: Record<string, string> = {};
       const localizedLineItems: { type: string; id: string; name: string; quantity: number }[] = [];
 
+      const signatoriesCount = formData.signatories?.length ?? 0;
+      const additionalSignatoriesCount = signatoriesCount > 1 ? signatoriesCount - 1 : 0;
+      const additionalSignatoriesCostEUR = additionalSignatoriesCount * ADDITIONAL_SIGNATORY_PRICE_EUR;
+      const additionalSignatoriesCost =
+        currency === "EUR"
+          ? Math.ceil(additionalSignatoriesCostEUR)
+          : convertPriceRoundUpSync(additionalSignatoriesCostEUR, currency);
+
       (formData.selectedServices ?? []).forEach((sid) => {
         const service = servicesMap[sid];
         const docs = (formData.serviceDocuments?.[sid] ?? []) as DocFile[];
@@ -228,6 +258,18 @@ export default function SummaryPage() {
         }
       });
 
+      if (additionalSignatoriesCount > 0) {
+        const signatoriesName =
+          t("form.priceDetails.additionalSignatories") || "Additional signatories";
+        localizedNames["additional_signatories"] = signatoriesName;
+        localizedLineItems.push({
+          type: "additional_signatories",
+          id: "additional_signatories",
+          name: signatoriesName,
+          quantity: additionalSignatoriesCount,
+        });
+      }
+
       if (formData.deliveryMethod === "postal") {
         const deliveryName = t("form.steps.delivery.postTitle");
         localizedNames["delivery_postal"] = deliveryName;
@@ -245,9 +287,10 @@ export default function SummaryPage() {
         appointmentDate: new Date().toISOString().split("T")[0],
         appointmentTime: "09:00",
         timezone: formData.timezone || "UTC",
-        signatoriesCount: 0,
-        additionalSignatoriesCount: 0,
-        additionalSignatoriesCost: 0,
+        signatoriesCount,
+        additionalSignatoriesCount,
+        additionalSignatoriesCost,
+        additionalSignatoriesCostEUR,
         deliveryMethod: formData.deliveryMethod,
         deliveryPostalCostEUR: formData.deliveryMethod === "postal" ? DELIVERY_POSTAL_PRICE_EUR : 0,
         language,
@@ -372,6 +415,23 @@ export default function SummaryPage() {
         </div>
       )}
 
+      {formData.signatories &&
+        formData.signatories.length > 1 && (
+          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+            <span className="text-xs sm:text-sm text-gray-700">
+              + {t("form.priceDetails.additionalSignatories") || "Additional signatories"}
+            </span>
+            <span className="text-xs sm:text-sm font-semibold text-gray-900">
+              {formatPriceSync(
+                currency === "EUR"
+                  ? Math.ceil((formData.signatories.length - 1) * ADDITIONAL_SIGNATORY_PRICE_EUR)
+                  : convertPriceRoundUpSync((formData.signatories.length - 1) * ADDITIONAL_SIGNATORY_PRICE_EUR, currency),
+                currency
+              )}
+            </span>
+          </div>
+        )}
+
       {formData.selectedServices &&
         formData.selectedServices.length > 0 &&
         formData.deliveryMethod === "postal" && (
@@ -380,7 +440,7 @@ export default function SummaryPage() {
               + {t("form.steps.summary.delivery")}
             </span>
             <span className="text-xs sm:text-sm font-semibold text-gray-900">
-              {convertedDeliveryPrice || formatPriceSync(DELIVERY_POSTAL_PRICE_EUR, "EUR")}
+              {convertedDeliveryPrice || formatPriceSync(Math.ceil(DELIVERY_POSTAL_PRICE_EUR), "EUR")}
             </span>
           </div>
         )}
@@ -649,6 +709,48 @@ export default function SummaryPage() {
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Signatories */}
+              {formData.signatories && formData.signatories.length > 0 && (
+                <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
+                      {t("form.steps.summary.signatories") || "Signataires"}
+                    </h3>
+                    <button
+                      onClick={() => router.push("/form/signatories")}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      <Icon icon="heroicons:pencil-square" className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">{t("form.steps.summary.edit")}</span>
+                    </button>
+                  </div>
+                  <div className="space-y-2 sm:space-y-3">
+                    {(formData.signatories as { firstName?: string; lastName?: string; first_name?: string; last_name?: string; email?: string }[]).map(
+                      (sig, i) => (
+                        <div
+                          key={i}
+                          className="p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl overflow-hidden"
+                        >
+                          <p className="text-[10px] sm:text-xs font-medium text-gray-900">
+                            {sig.firstName || sig.first_name} {sig.lastName || sig.last_name}
+                            {i > 0 && (
+                              <span className="ml-1.5 text-orange-600 text-[9px] sm:text-[10px]">
+                                (+{formatPriceSync(convertPriceRoundUpSync(ADDITIONAL_SIGNATORY_PRICE_EUR, currency), currency)})
+                              </span>
+                            )}
+                          </p>
+                          {sig.email && (
+                            <p className="text-[10px] sm:text-xs text-gray-600 truncate mt-0.5">
+                              {sig.email}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
                 </div>
               )}
 

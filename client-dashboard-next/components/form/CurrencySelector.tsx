@@ -52,7 +52,7 @@ export default function CurrencySelector({ openDirection = "bottom" }: { openDir
         aria-label="Select currency"
         aria-expanded={isOpen}
       >
-        <span className="text-lg">{CURRENCIES.find((c) => c.code === currency)?.symbol || "€"}</span>
+        <Icon icon="formkit:multicurrency" className="w-4 h-4" />
         <Icon icon="heroicons:chevron-down" className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (

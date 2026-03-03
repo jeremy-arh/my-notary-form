@@ -27,6 +27,15 @@ function convertPriceToMatchClient(eurAmount: number, targetCurrency: string): n
   return Math.round(eurAmount * rate * 100) / 100;
 }
 
+/** Delivery et signataires : arrondi à l'unité supérieure */
+function convertPriceRoundUpToMatchClient(eurAmount: number, targetCurrency: string): number {
+  if (!eurAmount || !targetCurrency) return eurAmount;
+  if (targetCurrency.toUpperCase() === "EUR") return Math.ceil(eurAmount);
+  const rate = CLIENT_FALLBACK_RATES[targetCurrency.toUpperCase()] ?? 1;
+  const converted = eurAmount * rate;
+  return Math.ceil(converted);
+}
+
 export async function POST(request: NextRequest) {
   let formData: Record<string, unknown> = {};
   let submissionId: string | undefined;
@@ -476,7 +485,7 @@ export async function POST(request: NextRequest) {
       (formData.deliveryPostalCostEUR as number) || 0;
 
     if (deliveryMethod === "postal" && deliveryPostalCostEUR > 0) {
-      const deliveryCostInCurrency = convertPriceToMatchClient(
+      const deliveryCostInCurrency = convertPriceRoundUpToMatchClient(
         deliveryPostalCostEUR,
         currency
       );
@@ -499,15 +508,19 @@ export async function POST(request: NextRequest) {
 
     const additionalSignatoriesCount =
       (formData.additionalSignatoriesCount as number) || 0;
+    const ADDITIONAL_SIGNATORY_PRICE_EUR = 45;
     const additionalSignatoriesCostEUR =
-      (formData.additionalSignatoriesCost as number) || 0;
+      (formData.additionalSignatoriesCostEUR as number) ??
+      (additionalSignatoriesCount > 0
+        ? additionalSignatoriesCount * ADDITIONAL_SIGNATORY_PRICE_EUR
+        : 0);
 
     if (additionalSignatoriesCount > 0 && additionalSignatoriesCostEUR > 0) {
-      const cost = convertPriceToMatchClient(
+      const costInTargetCurrency = convertPriceRoundUpToMatchClient(
         additionalSignatoriesCostEUR,
         currency
       );
-      const unitPrice = cost / additionalSignatoriesCount;
+      const unitPrice = costInTargetCurrency / additionalSignatoriesCount;
       const unitAmount =
         currency === "JPY"
           ? Math.round(unitPrice)
@@ -517,7 +530,7 @@ export async function POST(request: NextRequest) {
           currency: stripeCurrency,
           product_data: {
             name: `Additional Signatories (${additionalSignatoriesCount} signatory${additionalSignatoriesCount > 1 ? "ies" : ""})`,
-            description: `Additional signatories: ${additionalSignatoriesCount} × 45€`,
+            description: `Additional signatories: ${additionalSignatoriesCount} × ${additionalSignatoriesCostEUR / additionalSignatoriesCount}€`,
           },
           unit_amount: unitAmount,
         },

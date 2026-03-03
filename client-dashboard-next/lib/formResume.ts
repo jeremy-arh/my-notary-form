@@ -4,6 +4,7 @@ const FORM_STEP_PATHS = [
   "/form/personal-info",
   "/form/choose-services",
   "/form/documents",
+  "/form/signatories",
   "/form/delivery",
   "/form/summary",
 ] as const;
@@ -29,12 +30,20 @@ export function getResumeStepIndex(formData: FormData): number {
   if (totalDocs === 0) {
     return 2; // documents
   }
-  // Étape 4 : méthode de livraison
-  if (!formData.deliveryMethod) {
-    return 3; // delivery
+  // Étape 4 : signataires
+  const hasSignatories =
+    formData.signatories &&
+    Array.isArray(formData.signatories) &&
+    formData.signatories.length > 0;
+  if (!hasSignatories) {
+    return 3; // signatories
   }
-  // Étape 5 : résumé
-  return 4; // summary
+  // Étape 5 : méthode de livraison
+  if (!formData.deliveryMethod) {
+    return 4; // delivery
+  }
+  // Étape 6 : résumé
+  return 5; // summary
 }
 
 /**

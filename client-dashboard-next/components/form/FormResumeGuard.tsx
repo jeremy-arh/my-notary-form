@@ -10,6 +10,7 @@ const FORM_STEP_PATHS = [
   "/form/personal-info",
   "/form/choose-services",
   "/form/documents",
+  "/form/signatories",
   "/form/delivery",
   "/form/summary",
 ] as const;

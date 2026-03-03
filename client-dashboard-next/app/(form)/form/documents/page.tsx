@@ -302,7 +302,7 @@ export default function DocumentsPage() {
       setNotification({ type: "warning", message: t("form.steps.documents.uploadInProgress") });
       return;
     }
-    router.push("/form/delivery");
+    router.push("/form/signatories");
   }, [isAnyUploading, router, t]);
 
   useEffect(() => {

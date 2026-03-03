@@ -29,6 +29,15 @@ export function convertPriceSync(eurAmount: number, targetCurrency: string): num
   return Math.round(eurAmount * rate * 100) / 100;
 }
 
+/** Convertit et arrondit à l'unité supérieure (delivery, signataires) */
+export function convertPriceRoundUpSync(eurAmount: number, targetCurrency: string): number {
+  if (!eurAmount || !targetCurrency) return eurAmount;
+  if (targetCurrency === "EUR") return Math.ceil(eurAmount);
+  const rate = FALLBACK_RATES[targetCurrency] ?? 1;
+  const converted = eurAmount * rate;
+  return Math.ceil(converted);
+}
+
 export function formatPriceSync(amount: number, targetCurrency: string): string {
   const symbol = SYMBOLS[targetCurrency] ?? targetCurrency;
   if (targetCurrency === "JPY" || targetCurrency === "CNY") {

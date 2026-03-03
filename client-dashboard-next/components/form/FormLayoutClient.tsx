@@ -22,8 +22,9 @@ const FORM_STEPS = [
   { id: 1, path: "/form/personal-info", name: "Your personal informations", icon: "heroicons:user" },
   { id: 2, path: "/form/choose-services", name: "Choose Services", icon: "heroicons:squares-2x2" },
   { id: 3, path: "/form/documents", name: "Upload Documents", icon: "heroicons:document" },
-  { id: 4, path: "/form/delivery", name: "Delivery method", icon: "heroicons:truck" },
-  { id: 5, path: "/form/summary", name: "Summary", icon: "heroicons:clipboard-document-check" },
+  { id: 4, path: "/form/signatories", name: "Add Signatories", icon: "heroicons:user-group" },
+  { id: 5, path: "/form/delivery", name: "Delivery method", icon: "heroicons:truck" },
+  { id: 6, path: "/form/summary", name: "Summary", icon: "heroicons:clipboard-document-check" },
 ];
 
 export default function FormLayoutClient({ children }: { children: React.ReactNode }) {
@@ -97,7 +98,7 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
 
   // Modal "Need help?" après 15 secondes d'inactivité (une seule fois)
   useEffect(() => {
-    if (currentStep === 5 || isContinuing || hasShownInactivityModal || showInactivityModal) return;
+    if (currentStep === 6 || isContinuing || hasShownInactivityModal || showInactivityModal) return;
     if (currentStep === 1 && !formData.firstName?.trim() && !formData.lastName?.trim() && !formData.email?.trim()) return;
 
     let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -182,7 +183,7 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
       {/* Footer - Progress Bar + Navigation - identique à l'original */}
       <div
         data-footer="notary-form"
-        className={`fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden ${currentStep === 5 ? "2xl:block hidden" : ""}`}
+        className={`fixed bottom-0 left-0 right-0 bg-white z-50 safe-area-inset-bottom max-w-full overflow-x-hidden ${currentStep === 6 ? "2xl:block hidden" : ""}`}
       >
         {/* Progress Bar */}
         <div className="relative w-full">

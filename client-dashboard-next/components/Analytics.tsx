@@ -29,7 +29,7 @@ export default function Analytics() {
       <Script
         src="https://plausible.io/js/script.js"
         data-domain={PLAUSIBLE_DOMAIN}
-        strategy="afterInteractive"
+        strategy="lazyOnload"
       />
 
       {/* Google Tag Manager */}

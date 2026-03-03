@@ -9,8 +9,7 @@ import { useFormActions } from "@/contexts/FormActionsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DELIVERY_POSTAL_PRICE_EUR } from "@/lib/utils/pricing";
-import { formatPriceSync } from "@/lib/utils/currency";
-import { convertPriceSync } from "@/lib/utils/currency";
+import { formatPriceSync, convertPriceRoundUpSync } from "@/lib/utils/currency";
 
 export default function DeliveryPage() {
   const router = useRouter();
@@ -24,8 +23,8 @@ export default function DeliveryPage() {
   // Toujours calculer le prix converti pour l'affichage de l'option postale
   const convertedPrice =
     currency === "EUR"
-      ? formatPriceSync(DELIVERY_POSTAL_PRICE_EUR, "EUR")
-      : formatPriceSync(convertPriceSync(DELIVERY_POSTAL_PRICE_EUR, currency), currency);
+      ? formatPriceSync(Math.ceil(DELIVERY_POSTAL_PRICE_EUR), "EUR")
+      : formatPriceSync(convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency), currency);
 
   const handleSelect = useCallback(
     (method: string) => {
