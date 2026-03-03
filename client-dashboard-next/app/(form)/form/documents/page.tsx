@@ -550,6 +550,7 @@ export default function DocumentsPage() {
       {viewingFile &&
         createPortal(
           <div
+            className="backdrop-blur-sm"
             style={{
               position: "fixed",
               top: 0,
@@ -558,7 +559,7 @@ export default function DocumentsPage() {
               bottom: 0,
               width: "100vw",
               height: "100vh",
-              backgroundColor: "#000000",
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
               zIndex: 99999,
               overflow: "auto",
             }}
