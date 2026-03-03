@@ -6,6 +6,7 @@ import LanguageSelector from "./LanguageSelector";
 import CurrencySelector from "./CurrencySelector";
 import InactivityModal from "./InactivityModal";
 import { openCrisp } from "@/lib/utils/crisp";
+import { LOGO_BLACK } from "@/lib/constants";
 
 const FORM_STEPS = [
   { id: 1, path: "/form/personal-info", name: "Your personal informations", icon: "heroicons:user" },
@@ -46,7 +47,7 @@ export default function FormLayoutContent({
       <header className="fixed top-0 left-0 right-0 bg-[#F3F4F6] z-50 h-14 sm:h-16 overflow-visible">
         <div className="flex items-center justify-between h-full px-2 sm:px-3 md:px-4 xl:px-6">
           <Link href="/form" className="flex items-center">
-            <img src="/logo-noir.svg" alt="My Notary" className="w-[70px] h-[70px] sm:w-[80px] sm:h-[80px]" />
+            <img src={LOGO_BLACK} alt="My Notary" className="w-[70px] h-[70px] sm:w-[80px] sm:h-[80px]" />
           </Link>
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 xl:gap-3 overflow-visible">
             <LanguageSelector openDirection="bottom" />

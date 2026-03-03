@@ -6,9 +6,6 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Submit your request",
   description: "Submit your notary service request online",
-  icons: {
-    icon: "/favicon.png",
-  },
 };
 
 export default function RootLayout({
