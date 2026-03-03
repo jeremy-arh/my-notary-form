@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Icon } from "@iconify/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -245,8 +246,38 @@ export default function SubmissionDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-gray-200 border-t-black" />
+      <div className="space-y-6 overflow-x-hidden">
+        <div className="mb-6 sm:mb-8">
+          <Skeleton className="h-4 w-40 mb-4" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-4 w-36" />
+            </div>
+            <Skeleton className="h-8 w-24 rounded-full" />
+          </div>
+        </div>
+        <div className="flex gap-4 border-b pb-3">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-6 w-28" />
+          ))}
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-40 mb-2" />
+            <Skeleton className="h-4 w-full" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex justify-between items-center py-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -475,8 +506,14 @@ export default function SubmissionDetailPage() {
             </CardHeader>
             <CardContent>
             {transactionsLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-foreground" />
+              <div className="space-y-4 py-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex justify-between items-center py-3 border-b last:border-b-0">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                  </div>
+                ))}
               </div>
             ) : transactions.length === 0 ? (
               <div className="space-y-4">

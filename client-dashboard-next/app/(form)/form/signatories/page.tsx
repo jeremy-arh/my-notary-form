@@ -294,7 +294,7 @@ export default function SignatoriesPage() {
 
   return (
     <div
-      className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-32 sm:pb-36 md:pb-6 lg:pb-6"
+      className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-28 sm:pb-32 md:pb-28 lg:pb-28"
       style={{ minHeight: 0 }}
     >
       <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">

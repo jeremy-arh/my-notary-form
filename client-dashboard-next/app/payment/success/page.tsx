@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { trackPaymentSuccess as trackPaymentSuccessPlausible } from "@/lib/utils/plausible";
 import { trackPaymentSuccess } from "@/lib/utils/gtm";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
@@ -87,9 +88,12 @@ function PaymentSuccessContent() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-[#491ae9] mb-4" />
-          <p className="text-gray-600 font-medium">Verifying your payment...</p>
+        <div className="w-full max-w-2xl flex flex-col items-center space-y-4">
+          <Skeleton className="h-20 w-20 rounded-full" />
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-16 w-full rounded-xl mt-4" />
+          <Skeleton className="h-12 w-full rounded-xl" />
         </div>
       </div>
     );
@@ -159,9 +163,12 @@ export default function PaymentSuccessPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center p-4">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-[#491ae9] mb-4" />
-            <p className="text-gray-600 font-medium">Loading...</p>
+          <div className="w-full max-w-2xl flex flex-col items-center space-y-4">
+            <Skeleton className="h-20 w-20 rounded-full" />
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-16 w-full rounded-xl mt-4" />
+            <Skeleton className="h-12 w-full rounded-xl" />
           </div>
         </div>
       }

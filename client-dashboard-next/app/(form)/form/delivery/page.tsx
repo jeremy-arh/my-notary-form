@@ -65,7 +65,7 @@ export default function DeliveryPage() {
       </div>
 
       <div
-        className="flex-1 px-3 sm:px-4 md:px-6 pb-32 sm:pb-36 md:pb-6 lg:pb-24 overflow-y-auto overflow-x-hidden"
+        className="flex-1 px-3 sm:px-4 md:px-6 pb-28 sm:pb-32 md:pb-28 lg:pb-28 overflow-y-auto overflow-x-hidden"
         style={{ minHeight: 0 }}
       >
         <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">

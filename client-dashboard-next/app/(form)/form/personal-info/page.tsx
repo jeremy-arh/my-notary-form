@@ -15,7 +15,7 @@ export default function PersonalInfoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { formData, updateFormData } = useFormData();
-  const { registerContinueHandler } = useFormActions();
+  const { registerContinueHandler, registerStepValidationOverride } = useFormActions();
   const { t } = useTranslation();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [emailExists, setEmailExists] = useState(false);
@@ -76,6 +76,18 @@ export default function PersonalInfoPage() {
       .catch(() => setPhoneDefaultCountry("FR"));
   }, []);
 
+  const isFormValid = useCallback(() => {
+    if (!formData.firstName?.trim()) return false;
+    if (!formData.lastName?.trim()) return false;
+    if (!formData.email?.trim()) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return false;
+    if (!formData.address?.trim()) return false;
+    if (!formData.phone?.trim()) return false;
+    if (!isValidPhoneNumber(formData.phone)) return false;
+    if (emailExists) return false;
+    return true;
+  }, [formData, emailExists]);
+
   const validate = useCallback(() => {
     const newErrors: Record<string, string> = {};
     if (!formData.firstName?.trim()) newErrors.firstName = t("form.steps.personalInfo.validationFirstName");
@@ -100,16 +112,26 @@ export default function PersonalInfoPage() {
     if (!validate()) return;
     const search = searchParams.toString();
     const query = search ? `?${search}` : "";
-    if ((formData.selectedServices?.length ?? 0) > 0) {
+    const hasServiceInUrl = searchParams.has("service");
+    if (hasServiceInUrl) {
       router.push(`/form/documents${query}`);
     } else {
       router.push(`/form/choose-services${query}`);
     }
-  }, [validate, router, searchParams, formData.selectedServices]);
+  }, [validate, router, searchParams]);
 
   useEffect(() => {
     registerContinueHandler(handleNext);
   }, [registerContinueHandler, handleNext]);
+
+  useEffect(() => {
+    const unregister = registerStepValidationOverride("/form/personal-info", () => {
+      if (emailExists) return { isComplete: false, errorKey: "form.steps.personalInfo.emailExists" };
+      if (!isFormValid()) return { isComplete: false, errorKey: "form.steps.personalInfo.stepHint" };
+      return { isComplete: true, errorKey: "" };
+    });
+    return unregister;
+  }, [registerStepValidationOverride, isFormValid, emailExists]);
 
   const inputClass = (err: boolean) =>
     `w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
@@ -119,7 +141,7 @@ export default function PersonalInfoPage() {
   return (
     <>
       <div
-        className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-32 sm:pb-36 md:pb-6 lg:pb-6"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 pb-28 sm:pb-32 md:pb-28 lg:pb-28"
         style={{ minHeight: 0 }}
       >
         <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">

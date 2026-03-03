@@ -12,7 +12,8 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { uploadDocument, deleteDocument } from "@/lib/utils/formDraft";
 import { getServicePriceInCurrency, getOptionPriceInCurrency } from "@/lib/utils/pricing";
 import { formatPriceSync } from "@/lib/utils/currency";
-import Notification from "@/components/form/Notification";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { FormData } from "@/lib/formData";
 
 const APOSTILLE_SERVICE_ID = "473fb677-4dd3-4766-8221-0250ea3440cd";
@@ -77,7 +78,6 @@ export default function DocumentsPage() {
   const [viewingFile, setViewingFile] = useState<DocFile | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [footerPadding, setFooterPadding] = useState(160);
-  const [notification, setNotification] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const savedScrollPositionRef = useRef<number | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -177,10 +177,7 @@ export default function DocumentsPage() {
 
       const invalid = files.filter((f) => !ALLOWED_TYPES.includes(f.type.toLowerCase()));
       if (invalid.length > 0) {
-        setNotification({
-          type: "error",
-          message: t("form.steps.documents.invalidFileFormat").replace("{fileNames}", invalid.map((f) => f.name).join(", ")),
-        });
+        toast.error(t("form.steps.documents.invalidFileFormat").replace("{fileNames}", invalid.map((f) => f.name).join(", ")));
         e.target.value = "";
         return;
       }
@@ -197,7 +194,7 @@ export default function DocumentsPage() {
 
         for (const file of files) {
           if (file.size > MAX_SIZE) {
-            setNotification({ type: "error", message: t("form.steps.documents.fileTooLarge") });
+            toast.error(t("form.steps.documents.fileTooLarge"));
             uploaded.push({ name: file.name, size: file.size, type: file.type, error: "File too large" });
             continue;
           }
@@ -219,10 +216,7 @@ export default function DocumentsPage() {
         const ok = uploaded.filter((x) => !x.error);
         const failed = uploaded.filter((x) => x.error);
         if (failed.length > 0) {
-          setNotification({
-            type: "error",
-            message: t("form.steps.documents.uploadError") || `${failed.length} fichier(s) en échec`,
-          });
+          toast.error(t("form.steps.documents.uploadError") || `${failed.length} fichier(s) en échec`);
         }
         if (ok.length > 0) {
           updateFormData((prev: FormData) => {
@@ -231,7 +225,7 @@ export default function DocumentsPage() {
             docs[serviceId] = [...existing, ...ok];
             return { serviceDocuments: docs };
           });
-          setNotification({ type: "success", message: t("form.steps.documents.uploadSuccess") });
+          toast.success(t("form.steps.documents.uploadSuccess"));
         }
       } finally {
         setUploadingServices((p) => ({ ...p, [serviceId]: false }));
@@ -299,7 +293,7 @@ export default function DocumentsPage() {
 
   const handleNext = useCallback(() => {
     if (isAnyUploading) {
-      setNotification({ type: "warning", message: t("form.steps.documents.uploadInProgress") });
+      toast.warning(t("form.steps.documents.uploadInProgress"));
       return;
     }
     router.push("/form/signatories");
@@ -325,8 +319,20 @@ export default function DocumentsPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-12 w-12 animate-spin rounded-full border-2 border-black border-t-transparent" />
+            <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 w-full">
+                  <div className="mb-3 sm:mb-4">
+                    <Skeleton className="h-4 w-48 mb-2" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 sm:p-12 flex flex-col items-center justify-center min-h-[200px]">
+                    <Skeleton className="h-12 w-12 rounded-full mb-3" />
+                    <Skeleton className="h-4 w-48 mb-2" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : services.length === 0 ? (
             <div className="text-center py-12">
@@ -653,9 +659,6 @@ export default function DocumentsPage() {
           document.body
         )}
 
-      {notification && (
-        <Notification type={notification.type} message={notification.message} onClose={() => setNotification(null)} />
-      )}
     </div>
   );
 }

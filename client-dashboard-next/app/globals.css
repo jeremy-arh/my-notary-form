@@ -123,3 +123,39 @@ html, body {
 @media (max-width: 768px) {
   html { font-size: 14px; }
 }
+
+/* Toasts Sonner - styles harmonisés succès / erreur / warning */
+[data-sonner-toaster][data-sonner-theme='light'] {
+  --success-bg: #f0fdf4;
+  --success-border: #bbf7d0;
+  --success-text: #166534;
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
+  --error-text: #b91c1c;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-text: #b45309;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='success'],
+[data-rich-colors='true'][data-sonner-toast][data-type='error'],
+[data-rich-colors='true'][data-sonner-toast][data-type='warning'] {
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='success'] [data-close-button],
+[data-rich-colors='true'][data-sonner-toast][data-type='error'] [data-close-button],
+[data-rich-colors='true'][data-sonner-toast][data-type='warning'] [data-close-button] {
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='success'] [data-close-button]:hover,
+[data-rich-colors='true'][data-sonner-toast][data-type='error'] [data-close-button]:hover,
+[data-rich-colors='true'][data-sonner-toast][data-type='warning'] [data-close-button]:hover {
+  opacity: 1;
+}
+

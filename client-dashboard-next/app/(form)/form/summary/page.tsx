@@ -9,7 +9,8 @@ import { useFormActions } from "@/contexts/FormActionsContext";
 import { useServices } from "@/contexts/ServicesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useTranslation } from "@/hooks/useTranslation";
-import Notification from "@/components/form/Notification";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   getServicePriceInCurrency,
   getOptionPriceInCurrency,
@@ -33,11 +34,6 @@ type DocFile = {
   selectedOptions?: string[];
 };
 
-type NotificationState = {
-  type: "error" | "info";
-  message: string;
-} | null;
-
 export default function SummaryPage() {
   const router = useRouter();
   const { formData } = useFormData();
@@ -50,7 +46,6 @@ export default function SummaryPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [isPriceDetailsOpen, setIsPriceDetailsOpen] = useState(true);
   const [viewingFile, setViewingFile] = useState<DocFile | null>(null);
-  const [notification, setNotification] = useState<NotificationState>(null);
   const [convertedDeliveryPrice, setConvertedDeliveryPrice] = useState("");
 
   const totalDocuments =
@@ -192,7 +187,7 @@ export default function SummaryPage() {
     if (missing.length > 0) {
       const missingLabels = missing.map((item) => `• ${item.label}`).join("\n");
       const title = t("form.steps.summary.missingInfoTitle") || "Informations manquantes";
-      setNotification({ type: "error", message: `${title}\n\n${missingLabels}` });
+      toast.error(`${title}\n\n${missingLabels}`, { duration: 8000 });
       setTimeout(() => {
         missing[0]?.action();
       }, 2000);
@@ -320,7 +315,7 @@ export default function SummaryPage() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Payment failed";
-      setNotification({ type: "error", message });
+      toast.error(message);
       trackPaymentFailurePlausible({ message });
       trackPaymentFailure({ message });
     } finally {
@@ -538,14 +533,6 @@ export default function SummaryPage() {
 
   return (
     <>
-      {notification && (
-        <Notification
-          type={notification.type}
-          message={notification.message}
-          onClose={() => setNotification(null)}
-          duration={notification.type === "error" ? 8000 : 5000}
-        />
-      )}
 
       <div
         className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8 w-full max-w-full"
@@ -871,8 +858,13 @@ export default function SummaryPage() {
                     </div>
                   </div>
                   {loading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black" />
+                    <div className="space-y-3 py-2">
+                      {[...Array(4)].map((_, i) => (
+                        <div key={i} className="flex justify-between items-center">
+                          <Skeleton className="h-4 flex-1 max-w-[60%]" />
+                          <Skeleton className="h-4 w-16 ml-2" />
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="space-y-2">{renderPriceDetailsContent()}</div>
@@ -917,8 +909,13 @@ export default function SummaryPage() {
               {isPriceDetailsOpen && (
                 <>
                   {loading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-black" />
+                    <div className="space-y-3 py-2">
+                      {[...Array(4)].map((_, i) => (
+                        <div key={i} className="flex justify-between items-center">
+                          <Skeleton className="h-4 flex-1 max-w-[60%]" />
+                          <Skeleton className="h-4 w-16 ml-2" />
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="space-y-2">{renderPriceDetailsContent()}</div>
