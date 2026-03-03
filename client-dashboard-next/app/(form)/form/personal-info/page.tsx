@@ -274,7 +274,7 @@ export default function PersonalInfoPage() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="shrink-0 mr-2 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
+                    className="shrink-0 mr-2 px-3 py-1.5 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-300 rounded-lg transition-colors"
                   >
                     {t("form.steps.personalInfo.logout")}
                   </button>
