@@ -50,6 +50,7 @@ export default function PersonalInfoPage() {
   const [activeSubmission, setActiveSubmission] = useState<ActiveSubmission | null>(null);
   const [activeFormData, setActiveFormData] = useState<Record<string, unknown> | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [resumeCreatedAt, setResumeCreatedAt] = useState<string | undefined>(undefined);
 
   const handleChange = (field: string, value: string) => {
     updateFormData({ [field]: value });
@@ -127,6 +128,37 @@ export default function PersonalInfoPage() {
       setIsLoggedIn(!!user);
     };
     checkAuth();
+  }, []);
+
+  // Lire le pendingResume stocké par /form/page.tsx
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("pendingResume");
+      if (!raw) return;
+      sessionStorage.removeItem("pendingResume");
+      const { formData: fd, createdAt } = JSON.parse(raw) as {
+        formData: Record<string, unknown>;
+        createdAt?: string;
+      };
+      if (!fd) return;
+      // Créer un objet ActiveSubmission minimal pour réutiliser le modal existant
+      setActiveSubmission({
+        id: (fd.submissionId as string) ?? "",
+        created_at: createdAt,
+        data: {
+          session_id: (fd.sessionId as string) ?? "",
+          selectedServices: fd.selectedServices as string[] | undefined,
+          serviceDocuments: fd.serviceDocuments as Record<string, unknown[]> | undefined,
+          signatories: fd.signatories as unknown[] | undefined,
+          deliveryMethod: fd.deliveryMethod as string | undefined,
+        },
+        first_name: fd.firstName as string | undefined,
+        last_name: fd.lastName as string | undefined,
+      });
+      setActiveFormData(fd);
+      setResumeCreatedAt(createdAt);
+      setPendingNavigation("skip"); // Pas de navigation en attente, c'est une reprise directe
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -450,8 +482,8 @@ export default function PersonalInfoPage() {
             <div className="px-6 pt-6 pb-4">
               <h2 className="text-base font-semibold text-gray-900">You have an unfinished request</h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                {activeSubmission.created_at
-                  ? `Started on ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date(activeSubmission.created_at as string))}`
+                {(resumeCreatedAt || activeSubmission.created_at)
+                  ? `Started on ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date((resumeCreatedAt || activeSubmission.created_at) as string))}`
                   : "A request is already in progress for this email."}
               </p>
             </div>
@@ -514,15 +546,19 @@ export default function PersonalInfoPage() {
               <button
                 onClick={async () => {
                   try {
-                    await fetch("/api/abandon-submissions", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ submissionIds: [activeSubmission.id] }),
-                    });
+                    if (activeSubmission.id) {
+                      await fetch("/api/abandon-submissions", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ submissionIds: [activeSubmission.id] }),
+                      });
+                    }
                   } catch { /* ignore */ }
                   setActiveSubmission(null);
                   setActiveFormData(null);
+                  setResumeCreatedAt(undefined);
                   if (pendingNavigation === "next") navigateNext();
+                  // Si "skip" (venu de /form), rester sur personal-info avec localStorage vide
                 }}
                 className="w-full flex items-center justify-center gap-2 py-2.5 text-gray-500 hover:text-gray-800 font-medium text-sm transition-colors rounded-xl hover:bg-gray-50"
               >
