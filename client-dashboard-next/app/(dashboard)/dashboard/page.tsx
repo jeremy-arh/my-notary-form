@@ -359,12 +359,23 @@ export default function DashboardPage() {
                       {getPaymentBadge(submission.data?.payment?.payment_status)}
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
-                          <Icon icon="lucide:file-text" className="w-3.5 h-3.5" />{docCount} doc{docCount !== 1 ? "s" : ""}
+                          <Icon icon="lucide:file-text" className="w-3.5 h-3.5 shrink-0" />{docCount} doc{docCount !== 1 ? "s" : ""}
                         </span>
                         <span className="flex items-center gap-1">
-                          <Icon icon="lucide:users" className="w-3.5 h-3.5" />{sigCount} sig{sigCount !== 1 ? "s" : ""}
+                          <Icon icon="lucide:users" className="w-3.5 h-3.5 shrink-0" />{sigCount} sig{sigCount !== 1 ? "s" : ""}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          {(() => {
+                            const method = (submission.data?.deliveryMethod || submission.data?.delivery_method || "email") as string;
+                            const isEmail = !method || method === "digital" || method === "email";
+                            return isEmail ? (
+                              <><span className="w-4 h-4 rounded border border-gray-200 bg-gray-50 flex items-center justify-center text-[9px] font-semibold text-gray-600 shrink-0">@</span>Email</>
+                            ) : (
+                              <><Icon icon="heroicons:envelope" className="w-3.5 h-3.5 shrink-0" />Postal</>
+                            );
+                          })()}
                         </span>
                         <span>{formatDate(submission.created_at)}</span>
                       </div>
@@ -387,20 +398,21 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* ── Desktop: table ── */}
-            <div className="hidden md:block rounded-md border">
-              <Table>
+            {/* ── Desktop: table (scroll horizontal si necessaire) ── */}
+            <div className="hidden md:block overflow-x-auto rounded-md border">
+              <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow className="sticky top-0 z-10 bg-muted shadow-sm [&>th]:bg-muted">
-                    <TableHead>Client</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead className="text-center">Docs</TableHead>
-                    <TableHead className="text-center">Sigs</TableHead>
-                    <TableHead className="hidden lg:table-cell">Country</TableHead>
-                    <TableHead className="hidden lg:table-cell">Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="w-20 text-right">Actions</TableHead>
+                    <TableHead className="min-w-[140px]">Client</TableHead>
+                    <TableHead className="whitespace-nowrap">Status</TableHead>
+                    <TableHead className="whitespace-nowrap">Payment</TableHead>
+                    <TableHead className="text-center whitespace-nowrap w-14">Docs</TableHead>
+                    <TableHead className="text-center whitespace-nowrap w-14">Sigs</TableHead>
+                    <TableHead className="text-center whitespace-nowrap w-16 hidden xl:table-cell">Delivery</TableHead>
+                    <TableHead className="hidden lg:table-cell min-w-[90px]">Country</TableHead>
+                    <TableHead className="hidden lg:table-cell whitespace-nowrap">Date</TableHead>
+                    <TableHead className="text-right whitespace-nowrap min-w-[80px]">Amount</TableHead>
+                    <TableHead className="w-24 text-right whitespace-nowrap">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -411,32 +423,43 @@ export default function DashboardPage() {
                     const sigCount = Array.isArray(submission.data?.signatories)
                       ? (submission.data.signatories as unknown[]).length
                       : 0;
+                    const method = (submission.data?.deliveryMethod || submission.data?.delivery_method || "email") as string;
+                    const isEmail = !method || method === "digital" || method === "email";
                     return (
                       <TableRow
                         key={submission.id}
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => router.push(`/dashboard/submission/${submission.id}`)}
                       >
-                        <TableCell>
+                        <TableCell className="min-w-[140px]">
                           <span className="font-medium">
                             {submission.first_name || submission.last_name
                               ? `${submission.first_name || ""} ${submission.last_name || ""}`.trim()
                               : submission.id.slice(0, 8)}
                           </span>
-                          <p className="text-xs text-muted-foreground">{submission.email || "—"}</p>
+                          <p className="text-xs text-muted-foreground truncate max-w-[180px]">{submission.email || "—"}</p>
                         </TableCell>
                         <TableCell>{getStatusBadge(submission.status)}</TableCell>
                         <TableCell>{getPaymentBadge(submission.data?.payment?.payment_status)}</TableCell>
                         <TableCell className="text-center">
-                          <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center justify-center gap-1 text-sm text-muted-foreground" title={`${docCount} document(s)`}>
                             <Icon icon="lucide:file-text" className="w-3.5 h-3.5 shrink-0" />
                             {docCount}
                           </span>
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center justify-center gap-1 text-sm text-muted-foreground" title={`${sigCount} signatory(ies)`}>
                             <Icon icon="lucide:users" className="w-3.5 h-3.5 shrink-0" />
                             {sigCount}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center hidden xl:table-cell">
+                          <span className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground" title={isEmail ? "Email" : "Postal"}>
+                            {isEmail ? (
+                              <span className="w-5 h-5 rounded border border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] font-semibold text-gray-600">@</span>
+                            ) : (
+                              <Icon icon="heroicons:envelope" className="w-4 h-4 text-gray-600" />
+                            )}
                           </span>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">{submission.country || "—"}</TableCell>
