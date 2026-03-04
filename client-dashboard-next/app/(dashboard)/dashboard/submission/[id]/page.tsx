@@ -510,7 +510,7 @@ export default function SubmissionDetailPage() {
                     <p className="font-semibold">
                       {sig.first_name} {sig.last_name}
                     </p>
-                    <p className="text-xs text-muted-foreground">Date of birth: {sig.birth_date || "N/A"}</p>
+                    {sig.phone && <p className="text-xs text-muted-foreground">Phone: {sig.phone}</p>}
                     {sig.email && <p className="text-xs text-muted-foreground">Email: {sig.email}</p>}
                   </div>
                 ))}
