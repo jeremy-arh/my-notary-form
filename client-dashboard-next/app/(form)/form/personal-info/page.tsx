@@ -10,6 +10,30 @@ import { useFormData } from "@/contexts/FormContext";
 import { useFormActions } from "@/contexts/FormActionsContext";
 import { useTranslation } from "@/hooks/useTranslation";
 import AddressAutocomplete from "@/components/form/AddressAutocomplete";
+import { getResumePath, getResumeStepIndex } from "@/lib/formResume";
+import { initialFormData } from "@/lib/formData";
+
+const STORAGE_KEY = "notaryFormData";
+const SESSION_KEY = "formSessionId";
+
+const STEP_LABELS = ["Personal info", "Choose services", "Upload documents", "Signatories", "Delivery", "Summary"];
+
+type ActiveSubmission = {
+  id: string;
+  created_at?: string;
+  data?: {
+    selectedServices?: string[];
+    serviceDocuments?: Record<string, unknown[]>;
+    signatories?: unknown[];
+    deliveryMethod?: string;
+    delivery_method?: string;
+    session_id?: string;
+    [key: string]: unknown;
+  };
+  first_name?: string;
+  last_name?: string;
+  [key: string]: unknown;
+};
 
 export default function PersonalInfoPage() {
   const router = useRouter();
@@ -23,6 +47,9 @@ export default function PersonalInfoPage() {
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [phoneDefaultCountry, setPhoneDefaultCountry] = useState<string | undefined>("FR");
+  const [activeSubmission, setActiveSubmission] = useState<ActiveSubmission | null>(null);
+  const [activeFormData, setActiveFormData] = useState<Record<string, unknown> | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   const handleChange = (field: string, value: string) => {
     updateFormData({ [field]: value });
@@ -160,8 +187,7 @@ export default function PersonalInfoPage() {
     return Object.keys(newErrors).length === 0;
   }, [formData, emailExists, isLoggedIn, t]);
 
-  const handleNext = useCallback(() => {
-    if (!validate()) return;
+  const navigateNext = useCallback(() => {
     const search = searchParams.toString();
     const query = search ? `?${search}` : "";
     const hasServiceInUrl = searchParams.has("service");
@@ -170,7 +196,37 @@ export default function PersonalInfoPage() {
     } else {
       router.push(`/form/choose-services${query}`);
     }
-  }, [validate, router, searchParams]);
+  }, [router, searchParams]);
+
+  const handleNext = useCallback(async () => {
+    if (!validate()) return;
+
+    const email = formData.email?.trim();
+    if (!email) { navigateNext(); return; }
+
+    // Vérifier si une soumission en cours existe pour cet email (cross-device/session)
+    const currentSubmissionId = (() => {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (raw) return (JSON.parse(raw) as { submissionId?: string }).submissionId;
+      } catch { /* ignore */ }
+      return undefined;
+    })();
+
+    try {
+      const res = await fetch(`/api/active-submission?email=${encodeURIComponent(email)}`);
+      const { formData: dbFd, submission } = await res.json();
+      if (submission && submission.id !== currentSubmissionId) {
+        // Une autre soumission en cours existe → afficher le modal
+        setActiveSubmission(submission);
+        setActiveFormData(dbFd);
+        setPendingNavigation("next");
+        return;
+      }
+    } catch { /* ignore, continuer */ }
+
+    navigateNext();
+  }, [validate, formData.email, navigateNext]);
 
   useEffect(() => {
     registerContinueHandler(handleNext);
@@ -383,6 +439,99 @@ export default function PersonalInfoPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal : soumission en cours détectée */}
+      {activeSubmission && activeFormData && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="px-6 pt-6 pb-4">
+              <h2 className="text-base font-semibold text-gray-900">You have an unfinished request</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {activeSubmission.created_at
+                  ? `Started on ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date(activeSubmission.created_at as string))}`
+                  : "A request is already in progress for this email."}
+              </p>
+            </div>
+
+            <div className="px-6 pb-4 space-y-3">
+              {(() => {
+                const fd = activeFormData;
+                const sCount = (fd.selectedServices as string[] | undefined)?.length ?? 0;
+                const dCount = Object.values((fd.serviceDocuments as Record<string, unknown[]> | undefined) ?? {}).reduce(
+                  (a: number, arr) => a + (Array.isArray(arr) ? arr.length : 0), 0
+                );
+                const sigCount = Array.isArray(fd.signatories) ? (fd.signatories as unknown[]).length : 0;
+                const stepIdx = getResumeStepIndex({ ...initialFormData, ...(fd as typeof initialFormData) });
+                const stepLabel = STEP_LABELS[stepIdx] ?? "Summary";
+                return (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span>Stopped at: <span className="font-semibold text-gray-900">{stepLabel}</span></span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      {[
+                        { value: sCount, label: sCount > 1 ? "Services" : "Service" },
+                        { value: dCount, label: dCount > 1 ? "Documents" : "Document" },
+                        { value: sigCount, label: sigCount > 1 ? "Signatories" : "Signatory" },
+                      ].map(({ value, label }) => (
+                        <div key={label} className="text-center py-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                          <p className="text-xl font-bold text-gray-900 leading-none">{value}</p>
+                          <p className="text-[10px] text-gray-400 mt-1">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="mx-6 border-t border-gray-100" />
+
+            <div className="px-6 py-4 space-y-2">
+              {/* Reprendre */}
+              <button
+                onClick={() => {
+                  const fd = activeFormData;
+                  const sessionId = (activeSubmission.data?.session_id as string) ?? "";
+                  const submissionId = activeSubmission.id;
+                  const { sessionId: _s, submissionId: _si, ...rest } = fd as { sessionId?: string; submissionId?: string; [key: string]: unknown };
+                  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...rest, submissionId }));
+                  if (sessionId) window.localStorage.setItem(SESSION_KEY, sessionId);
+                  const path = getResumePath({ ...initialFormData, ...(rest as typeof initialFormData) });
+                  const search = searchParams.toString();
+                  router.replace(search ? `${path}?${search}` : path);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-semibold rounded-xl text-sm transition-all shadow-md"
+              >
+                <Icon icon="heroicons:arrow-path" className="w-4 h-4" />
+                Resume my request
+              </button>
+              {/* Continuer quand même → abandonne l'ancienne */}
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch("/api/abandon-submissions", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ submissionIds: [activeSubmission.id] }),
+                    });
+                  } catch { /* ignore */ }
+                  setActiveSubmission(null);
+                  setActiveFormData(null);
+                  if (pendingNavigation === "next") navigateNext();
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-gray-500 hover:text-gray-800 font-medium text-sm transition-colors rounded-xl hover:bg-gray-50"
+              >
+                Start a new request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

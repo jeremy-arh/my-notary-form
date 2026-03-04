@@ -41,21 +41,25 @@ export async function POST(request: NextRequest) {
 
     // 2. Si non trouvé par session_id, chercher par email (évite les doublons cross-device)
     if (!existingSubmission && email) {
-      const { data: byEmail } = await supabase
+      const { data: allByEmail } = await supabase
         .from("submission")
         .select("id, client_id, data, funnel_status")
         .eq("status", "pending_payment")
         .eq("email", email)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (byEmail) {
-        existingSubmission = byEmail;
-        // Mettre à jour le session_id dans la DB pour lier cette session à la soumission existante
+        .order("created_at", { ascending: false });
+
+      if (allByEmail && allByEmail.length > 0) {
+        // Garder la plus récente, abandonner les autres
+        existingSubmission = allByEmail[0];
+        if (allByEmail.length > 1) {
+          const extraIds = allByEmail.slice(1).map((s: { id: string }) => s.id);
+          await supabase.from("submission").update({ status: "abandoned" }).in("id", extraIds);
+        }
+        // Mettre à jour le session_id pour lier cette session à la soumission existante
         await supabase
           .from("submission")
-          .update({ data: { ...(byEmail.data ?? {}), session_id: sessionId } })
-          .eq("id", byEmail.id);
+          .update({ data: { ...(existingSubmission.data ?? {}), session_id: sessionId } })
+          .eq("id", existingSubmission.id);
       }
     }
 
