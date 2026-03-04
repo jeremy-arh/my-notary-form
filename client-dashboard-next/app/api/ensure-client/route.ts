@@ -39,6 +39,7 @@ export async function POST() {
 
     const admin = createAdminClient();
 
+    // 1. Chercher le client par user_id (déjà lié)
     const { data: existing } = await admin
       .from("client")
       .select("id, first_name, last_name, email, phone, address, city, postal_code, country")
@@ -58,12 +59,39 @@ export async function POST() {
       );
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // 2. Chercher un client existant avec le même email (créé anonymement via le formulaire)
+    const { data: existingByEmail } = await admin
+      .from("client")
+      .select("id, first_name, last_name, email, phone, address, city, postal_code, country")
+      .ilike("email", normalizedEmail)
+      .maybeSingle();
+
+    if (existingByEmail) {
+      // Lier l'auth user à ce client existant (qui a déjà phone, address, etc.)
+      const { data: linked, error: linkError } = await admin
+        .from("client")
+        .update({ user_id: user.id })
+        .eq("id", existingByEmail.id)
+        .select("id, first_name, last_name, email, phone, address, city, postal_code, country")
+        .single();
+
+      if (linkError) {
+        console.error("[ensure-client] Link error:", linkError);
+      } else {
+        await relinkOrphanedSubmissions(admin, linked.id, linked.email || normalizedEmail);
+        return NextResponse.json({ client: linked });
+      }
+    }
+
+    // 3. Aucun client trouvé → créer un nouveau
     const { data: newClient, error } = await admin
       .from("client")
       .insert([
         {
           user_id: user.id,
-          email: email.toLowerCase().trim(),
+          email: normalizedEmail,
           first_name: user.user_metadata?.first_name || "",
           last_name: user.user_metadata?.last_name || "",
         },
@@ -79,7 +107,7 @@ export async function POST() {
       );
     }
 
-    await relinkOrphanedSubmissions(admin, newClient.id, newClient.email || email);
+    await relinkOrphanedSubmissions(admin, newClient.id, newClient.email || normalizedEmail);
 
     return NextResponse.json({ client: newClient });
   } catch (err) {

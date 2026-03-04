@@ -39,6 +39,11 @@ type ClientInfo = {
   first_name?: string;
   last_name?: string;
   email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  country?: string;
 };
 
 const ITEMS_PER_PAGE = 6;
@@ -184,11 +189,11 @@ export default function DashboardPage() {
         firstName: submission.first_name || clientInfo?.first_name || "",
         lastName: submission.last_name || clientInfo?.last_name || "",
         email: submission.email || clientInfo?.email || "",
-        phone: submission.phone || "",
-        address: submission.address || "",
-        city: submission.city || "",
-        postalCode: submission.postal_code || "",
-        country: submission.country || "",
+        phone: submission.phone || clientInfo?.phone || "",
+        address: submission.address || clientInfo?.address || "",
+        city: submission.city || clientInfo?.city || "",
+        postalCode: submission.postal_code || clientInfo?.postal_code || "",
+        country: submission.country || clientInfo?.country || "",
         notes: (d.notes as string) || "",
         timezone: (d.timezone as string) || "UTC",
         currency: (d.currency as string) || "EUR",
