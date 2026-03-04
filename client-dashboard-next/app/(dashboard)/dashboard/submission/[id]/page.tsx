@@ -525,8 +525,12 @@ export default function SubmissionDetailPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 p-4 rounded-xl border bg-muted/30">
-                    <div className={`p-2.5 rounded-lg ${isDigital ? "bg-sky-100" : "bg-amber-100"}`}>
-                      <Icon icon={isDigital ? "lucide:mail" : "lucide:package"} className={`w-5 h-5 ${isDigital ? "text-sky-700" : "text-amber-700"}`} />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50 flex-shrink-0">
+                      {isDigital ? (
+                        <span className="text-lg sm:text-xl font-semibold text-gray-700">@</span>
+                      ) : (
+                        <Icon icon="heroicons:envelope" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                      )}
                     </div>
                     <div>
                       <p className="font-semibold text-sm">Delivery method</p>
@@ -773,13 +777,23 @@ export default function SubmissionDetailPage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Icon icon="lucide:truck" className="w-3.5 h-3.5" />
+                      <span className="flex items-center gap-2">
                         {(() => {
                           const d = submission.data || {};
                           const method = (d.deliveryMethod || d.delivery_method || "digital") as string;
                           const isDigital = !method || method === "digital" || method === "email";
-                          return isDigital ? "Digital" : "Physical";
+                          return (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="w-6 h-6 rounded-md border border-gray-200 flex items-center justify-center bg-gray-50 shrink-0">
+                                {isDigital ? (
+                                  <span className="text-sm font-semibold text-gray-700">@</span>
+                                ) : (
+                                  <Icon icon="heroicons:envelope" className="w-3.5 h-3.5 text-gray-700" />
+                                )}
+                              </span>
+                              {isDigital ? "Email" : "Postal"}
+                            </span>
+                          );
                         })()}
                       </span>
                     </div>
