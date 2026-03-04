@@ -9,6 +9,7 @@ import "react-phone-number-input/style.css";
 import { createClient } from "@/lib/supabase/client";
 import { useFormData } from "@/contexts/FormContext";
 import { useFormActions } from "@/contexts/FormActionsContext";
+import { useServices } from "@/contexts/ServicesContext";
 import { useTranslation } from "@/hooks/useTranslation";
 import AddressAutocomplete from "@/components/form/AddressAutocomplete";
 import { getResumePath, getResumeStepIndex } from "@/lib/formResume";
@@ -48,6 +49,7 @@ export default function PersonalInfoPage() {
   const searchParams = useSearchParams();
   const { formData, updateFormData } = useFormData();
   const { registerContinueHandler, registerStepValidationOverride } = useFormActions();
+  const { servicesMap, optionsMap, getServiceName, getOptionName } = useServices();
   const { t } = useTranslation();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [emailExists, setEmailExists] = useState(false);
@@ -467,15 +469,89 @@ export default function PersonalInfoPage() {
               </div>
 
               <div className="px-6 pb-4">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <span>
-                    {t("form.resumePopup.stoppedAt")}{" "}
-                    <span className="font-semibold text-gray-900">
-                      {t(STEP_KEYS[getResumeStepIndex({ ...initialFormData, ...(activeFormData as typeof initialFormData) })] ?? "form.resumePopup.stepSummary")}
-                    </span>
-                  </span>
-                </div>
+                {(() => {
+                  const fd = activeFormData;
+                  const stepIdx = getResumeStepIndex({ ...initialFormData, ...(fd as typeof initialFormData) });
+                  const stepLabel = t(STEP_KEYS[stepIdx] ?? "form.resumePopup.stepSummary");
+                  const serviceIds = (fd.selectedServices as string[] | undefined) ?? [];
+                  const serviceDocs = (fd.serviceDocuments as Record<string, { name?: string; selectedOptions?: string[] }[] | undefined>) ?? {};
+                  const signatories = (fd.signatories as { firstName?: string; lastName?: string; first_name?: string; last_name?: string }[] | undefined) ?? [];
+                  const delivery = (fd.deliveryMethod ?? fd.delivery_method) as string | undefined;
+                  return (
+                    <div className="space-y-0">
+                      <div className="flex items-center gap-2 text-sm text-gray-600 pb-4">
+                        <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span>{t("form.resumePopup.stoppedAt")} <span className="font-semibold text-gray-900">{stepLabel}</span></span>
+                      </div>
+
+                      {serviceIds.length > 0 && (
+                        <section className="border-t border-gray-200 pt-4 pb-4">
+                          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <Icon icon="heroicons:document-text" className="w-3.5 h-3.5" />
+                            {t("form.steps.summary.services")}
+                          </h3>
+                          <div className="space-y-4">
+                            {serviceIds.map((sid) => {
+                              const service = servicesMap[sid];
+                              const docs = serviceDocs[sid] ?? [];
+                              const name = service ? getServiceName(service) : sid;
+                              return (
+                                <div key={sid} className="space-y-2">
+                                  <p className="font-semibold text-sm text-gray-900">{name}</p>
+                                  <div className="space-y-2 pl-3 border-l-2 border-gray-200">
+                                    {docs.map((doc, i) => {
+                                      const docName = (doc as { name?: string }).name || `Document ${i + 1}`;
+                                      const opts = (doc as { selectedOptions?: string[] }).selectedOptions ?? [];
+                                      const optNames = opts.map((oid) => (optionsMap[oid] ? getOptionName(optionsMap[oid]) : oid));
+                                      return (
+                                        <div key={i} className="space-y-0.5">
+                                          <p className="text-[10px] text-gray-500 font-medium">{t("form.resumePopup.document")} {i + 1}</p>
+                                          <p className="text-xs text-gray-800 break-words" title={docName}>{docName}</p>
+                                          {optNames.length > 0 && (
+                                            <p className="text-[10px] text-gray-600">{t("form.resumePopup.options")} {optNames.join(", ")}</p>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      )}
+
+                      {signatories.length > 0 && (
+                        <section className="border-t border-gray-200 pt-4 pb-4">
+                          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <Icon icon="heroicons:user-group" className="w-3.5 h-3.5" />
+                            {t("form.steps.summary.signatories")}
+                          </h3>
+                          <div className="space-y-1.5">
+                            {signatories.map((sig, i) => (
+                              <div key={i} className="flex items-baseline gap-2">
+                                <span className="text-[10px] text-gray-500 font-medium shrink-0">{t("form.resumePopup.signatory")} {i + 1}</span>
+                                <span className="text-xs text-gray-900">{sig.firstName || sig.first_name} {sig.lastName || sig.last_name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+
+                      {delivery && (
+                        <section className="border-t border-gray-200 pt-4 pb-4">
+                          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Icon icon="heroicons:truck" className="w-3.5 h-3.5" />
+                            {t("form.steps.summary.delivery")}
+                          </h3>
+                          <p className="text-xs text-gray-900">
+                            {delivery === "postal" ? t("form.steps.delivery.postTitle") : t("form.steps.delivery.emailTitle")}
+                          </p>
+                        </section>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
