@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { createClient } from "@/lib/supabase/client";
-import { initLiveChat, openLiveChat } from "@/lib/utils/livechat";
+import { initCrisp, openCrisp } from "@/lib/utils/crisp";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    initLiveChat();
+    initCrisp();
   }, []);
 
   // Update document title to tab name (no My Notary)
@@ -100,7 +100,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <NavLinks />
           <button
-            onClick={() => openLiveChat()}
+            onClick={() => openCrisp()}
             className={cn(
               "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-white/80 hover:bg-white/5 hover:text-white"
             )}
@@ -145,7 +145,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <button
                     onClick={() => {
                       setMobileOpen(false);
-                      openLiveChat();
+                      openCrisp();
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-white/80 hover:bg-white/5"
                   >
