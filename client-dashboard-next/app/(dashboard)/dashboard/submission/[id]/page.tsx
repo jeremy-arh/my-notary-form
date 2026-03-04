@@ -515,8 +515,8 @@ export default function SubmissionDetailPage() {
         {activeTab === "delivery" && (() => {
           const d = submission.data || {};
           const method = (d.deliveryMethod || d.delivery_method || "") as string;
-          const isDigital = !method || method === "digital";
-          const methodLabel = isDigital ? "Digital (email)" : method === "physical" ? "Physical (mail)" : method;
+          const isDigital = !method || method === "digital" || method === "email";
+          const methodLabel = isDigital ? "Digital (email)" : method === "postal" || method === "physical" ? "Physical (mail)" : method;
           return (
             <Card>
               <CardHeader>
@@ -816,7 +816,7 @@ export default function SubmissionDetailPage() {
           {(() => {
             const d = submission.data || {};
             const method = (d.deliveryMethod || d.delivery_method || "digital") as string;
-            const isDigital = !method || method === "digital";
+            const isDigital = !method || method === "digital" || method === "email";
             return (
               <Card className="shadow-sm">
                 <CardHeader className="pb-2">
