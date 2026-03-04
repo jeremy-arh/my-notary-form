@@ -325,71 +325,145 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            <div className="rounded-md border">
+            {/* ── Mobile: cards ── */}
+            <div className="flex flex-col gap-3 md:hidden">
+              {paginationData.currentSubmissions.map((submission) => {
+                const docCount = Object.values(
+                  ((submission.data?.serviceDocuments || submission.data?.documents || {}) as Record<string, unknown[]>)
+                ).reduce((acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0), 0);
+                const sigCount = Array.isArray(submission.data?.signatories)
+                  ? (submission.data.signatories as unknown[]).length
+                  : 0;
+                const name = submission.first_name || submission.last_name
+                  ? `${submission.first_name || ""} ${submission.last_name || ""}`.trim()
+                  : submission.id.slice(0, 8);
+                return (
+                  <div
+                    key={submission.id}
+                    className="rounded-xl border bg-white p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => router.push(`/dashboard/submission/${submission.id}`)}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate">{name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{submission.email || "—"}</p>
+                      </div>
+                      <span className="text-base font-bold shrink-0">
+                        {submission.total_price
+                          ? new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR" }).format(parseFloat(String(submission.total_price)))
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {getStatusBadge(submission.status)}
+                      {getPaymentBadge(submission.data?.payment?.payment_status)}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Icon icon="lucide:file-text" className="w-3.5 h-3.5" />{docCount} doc{docCount !== 1 ? "s" : ""}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Icon icon="lucide:users" className="w-3.5 h-3.5" />{sigCount} sig{sigCount !== 1 ? "s" : ""}
+                        </span>
+                        <span>{formatDate(submission.created_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {submission.status === "pending_payment" && (
+                          <>
+                            <button onClick={() => retryPayment(submission)} className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg" title="Retry Payment">
+                              <Icon icon="lucide:refresh-cw" className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => deleteSubmission(submission.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title="Delete">
+                              <Icon icon="lucide:trash-2" className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                        <Icon icon="lucide:chevron-right" className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Desktop: table ── */}
+            <div className="hidden md:block rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow className="sticky top-0 z-10 bg-muted shadow-sm [&>th]:bg-muted">
-                    <TableHead>ID / Client</TableHead>
+                    <TableHead>Client</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment</TableHead>
-                    <TableHead>Country</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead className="text-center">Docs</TableHead>
+                    <TableHead className="text-center">Sigs</TableHead>
+                    <TableHead className="hidden lg:table-cell">Country</TableHead>
+                    <TableHead className="hidden lg:table-cell">Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="w-20 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginationData.currentSubmissions.map((submission) => (
-                    <TableRow
-                      key={submission.id}
-                      className="cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => router.push(`/dashboard/submission/${submission.id}`)}
-                    >
-                      <TableCell>
-                        <span className="font-medium">
-                          {submission.first_name || submission.last_name
-                            ? `${submission.first_name || ""} ${submission.last_name || ""}`.trim()
-                            : submission.id.slice(0, 8)}
-                        </span>
-                        <p className="text-xs text-muted-foreground">{submission.email || "—"}</p>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(submission.status)}</TableCell>
-                      <TableCell>{getPaymentBadge(submission.data?.payment?.payment_status)}</TableCell>
-                      <TableCell>{submission.country || "—"}</TableCell>
-                      <TableCell>{formatDate(submission.created_at)}</TableCell>
-                      <TableCell className="text-right">
-                        {submission.total_price
-                          ? new Intl.NumberFormat("en-US", {
-                              style: "currency",
-                              currency: "EUR",
-                            }).format(parseFloat(String(submission.total_price)))
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 justify-end">
-                          {submission.status === "pending_payment" && (
-                            <>
-                              <button
-                                onClick={() => retryPayment(submission)}
-                                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg"
-                                title="Retry Payment"
-                              >
-                                <Icon icon="lucide:refresh-cw" className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => deleteSubmission(submission.id)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                                title="Delete"
-                              >
-                                <Icon icon="lucide:trash-2" className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                          <Icon icon="lucide:chevron-right" className="w-4 h-4 text-muted-foreground ml-1" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {paginationData.currentSubmissions.map((submission) => {
+                    const docCount = Object.values(
+                      ((submission.data?.serviceDocuments || submission.data?.documents || {}) as Record<string, unknown[]>)
+                    ).reduce((acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0), 0);
+                    const sigCount = Array.isArray(submission.data?.signatories)
+                      ? (submission.data.signatories as unknown[]).length
+                      : 0;
+                    return (
+                      <TableRow
+                        key={submission.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/dashboard/submission/${submission.id}`)}
+                      >
+                        <TableCell>
+                          <span className="font-medium">
+                            {submission.first_name || submission.last_name
+                              ? `${submission.first_name || ""} ${submission.last_name || ""}`.trim()
+                              : submission.id.slice(0, 8)}
+                          </span>
+                          <p className="text-xs text-muted-foreground">{submission.email || "—"}</p>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(submission.status)}</TableCell>
+                        <TableCell>{getPaymentBadge(submission.data?.payment?.payment_status)}</TableCell>
+                        <TableCell className="text-center">
+                          <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                            <Icon icon="lucide:file-text" className="w-3.5 h-3.5 shrink-0" />
+                            {docCount}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                            <Icon icon="lucide:users" className="w-3.5 h-3.5 shrink-0" />
+                            {sigCount}
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">{submission.country || "—"}</TableCell>
+                        <TableCell className="hidden lg:table-cell">{formatDate(submission.created_at)}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {submission.total_price
+                            ? new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR" }).format(parseFloat(String(submission.total_price)))
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1 justify-end">
+                            {submission.status === "pending_payment" && (
+                              <>
+                                <button onClick={() => retryPayment(submission)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg" title="Retry Payment">
+                                  <Icon icon="lucide:refresh-cw" className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => deleteSubmission(submission.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Delete">
+                                  <Icon icon="lucide:trash-2" className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                            <Icon icon="lucide:chevron-right" className="w-4 h-4 text-muted-foreground ml-1" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
