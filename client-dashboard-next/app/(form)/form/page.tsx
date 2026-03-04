@@ -164,87 +164,82 @@ export default function FormPage() {
       : null;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+
           {/* Header */}
-          <div className="bg-gradient-to-r from-[#491ae9] to-[#b300c7] px-6 py-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                <Icon icon="heroicons:document-text" className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-white font-semibold text-base">Request in progress</h2>
-                <p className="text-white/70 text-xs mt-0.5">
-                  {formattedDate ? `Started on ${formattedDate}` : "You have an unfinished request"}
-                </p>
-              </div>
-            </div>
+          <div className="px-6 pt-6 pb-4">
+            <h2 className="text-base font-semibold text-gray-900">You have an unfinished request</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formattedDate ? `Started on ${formattedDate}` : "Pick up where you left off or start fresh."}
+            </p>
           </div>
 
           {/* Recap */}
-          <div className="px-6 py-5 space-y-3">
+          <div className="px-6 pb-4 space-y-3">
             {name && (
-              <div className="flex items-center gap-3 text-sm text-gray-700">
+              <div className="flex items-center gap-2 text-sm text-gray-700">
                 <Icon icon="heroicons:user" className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                <span>{name}</span>
+                <span className="font-medium">{name}</span>
               </div>
             )}
-            <div className="flex items-center gap-3 text-sm text-gray-700">
-              <Icon icon="heroicons:arrow-right-circle" className="w-4 h-4 text-[#491ae9] flex-shrink-0" />
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <span>Stopped at: <span className="font-semibold text-gray-900">{stepLabel}</span></span>
             </div>
-            <div className="border-t pt-3 grid grid-cols-3 gap-3">
-              <div className="text-center p-2 bg-gray-50 rounded-xl">
-                <p className="text-lg font-bold text-gray-900">{servicesCount}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">Service{servicesCount > 1 ? "s" : ""}</p>
-              </div>
-              <div className="text-center p-2 bg-gray-50 rounded-xl">
-                <p className="text-lg font-bold text-gray-900">{docsCount}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">Document{docsCount > 1 ? "s" : ""}</p>
-              </div>
-              <div className="text-center p-2 bg-gray-50 rounded-xl">
-                <p className="text-lg font-bold text-gray-900">{sigsCount}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">Signator{sigsCount > 1 ? "ies" : "y"}</p>
-              </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {[
+                { value: servicesCount, label: servicesCount > 1 ? "Services" : "Service" },
+                { value: docsCount, label: docsCount > 1 ? "Documents" : "Document" },
+                { value: sigsCount, label: sigsCount > 1 ? "Signatories" : "Signatory" },
+              ].map(({ value, label }) => (
+                <div key={label} className="text-center py-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                  <p className="text-xl font-bold text-gray-900 leading-none">{value}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{label}</p>
+                </div>
+              ))}
             </div>
+
             {delivery && (
-              <div className="flex items-center gap-3 text-sm text-gray-600">
-                {delivery === "postal" ? (
-                  <Icon icon="heroicons:envelope" className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                ) : (
-                  <span className="w-4 h-4 text-center text-gray-400 font-semibold text-base leading-none flex-shrink-0">@</span>
-                )}
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                {delivery === "postal"
+                  ? <Icon icon="heroicons:envelope" className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  : <span className="w-4 h-4 text-center font-bold text-gray-400 leading-none text-base flex-shrink-0">@</span>
+                }
                 <span>Delivery: <span className="font-medium text-gray-900">{delivery === "postal" ? "Postal" : "Email"}</span></span>
               </div>
             )}
           </div>
 
+          {/* Separator */}
+          <div className="mx-6 border-t border-gray-100" />
+
           {/* Actions */}
-          <div className="px-6 pb-6 space-y-2.5">
+          <div className="px-6 py-4 space-y-2">
             <button
               onClick={() => applyAndRedirect(fd)}
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] text-white font-semibold rounded-xl text-sm transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] text-white font-semibold rounded-xl text-sm transition-all duration-200 shadow-md"
             >
               <Icon icon="heroicons:arrow-path" className="w-4 h-4" />
               Resume my request
             </button>
             <button
               onClick={startFresh}
-              className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-gray-900 font-medium rounded-xl text-sm transition-all duration-200 hover:bg-gray-50"
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-gray-500 hover:text-gray-800 font-medium text-sm transition-colors rounded-xl hover:bg-gray-50"
             >
-              <Icon icon="heroicons:plus" className="w-4 h-4" />
               Start a new request
             </button>
           </div>
+
         </div>
       </div>
     );
   }
 
-  // Spinner de chargement initial
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-white">
-      <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#491ae9] border-t-transparent" />
+    <div className="fixed inset-0 flex items-center justify-center bg-[#F3F4F6]">
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#491ae9] border-t-transparent" />
     </div>
   );
 }
