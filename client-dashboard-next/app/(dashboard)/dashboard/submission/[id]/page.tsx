@@ -14,8 +14,10 @@ import {
   getServicePriceCurrency,
   getOptionPrice,
   getOptionPriceCurrency,
+  ADDITIONAL_SIGNATORY_PRICE_EUR,
+  DELIVERY_POSTAL_PRICE_EUR,
 } from "@/lib/utils/pricing";
-import { formatPriceSync } from "@/lib/utils/currency";
+import { formatPriceSync, convertPriceRoundUpSync } from "@/lib/utils/currency";
 
 type Submission = {
   id: string;
@@ -345,22 +347,35 @@ export default function SubmissionDetailPage() {
     { id: "notarized" as const, label: "Notarized Documents", icon: "lucide:file-check", count: notarizedFiles.length },
   ];
 
-  // Calcul du total global
+  // Calcul du total global (identique au form)
   const computeTotal = () => {
+    const currency = getCurrency();
     let total = 0;
     selectedServices.forEach((sid) => {
       const svc = servicesMap[sid];
       const docs = serviceDocuments[sid] || [];
       if (svc) {
-        total += docs.length * getServicePrice(svc, getCurrency());
+        total += docs.length * getServicePrice(svc, currency);
         docs.forEach((doc) => {
           (doc.selectedOptions || []).forEach((optId) => {
             const opt = optionsMap[optId];
-            if (opt) total += getOptionPrice(opt, getCurrency());
+            if (opt) total += getOptionPrice(opt, currency);
           });
         });
       }
     });
+    // Signataires supplémentaires (le 1er est inclus, les suivants payants)
+    const signatories = (submission.data?.signatories as unknown[]) || [];
+    const additionalSigs = Math.max(0, signatories.length - 1);
+    if (additionalSigs > 0) {
+      const costEUR = additionalSigs * ADDITIONAL_SIGNATORY_PRICE_EUR;
+      total += currency === "EUR" ? Math.ceil(costEUR) : convertPriceRoundUpSync(costEUR, currency);
+    }
+    // Livraison postale
+    const method = (submission.data?.deliveryMethod || submission.data?.delivery_method || "") as string;
+    if (method === "postal") {
+      total += currency === "EUR" ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR) : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+    }
     return total;
   };
 
@@ -769,35 +784,38 @@ export default function SubmissionDetailPage() {
                       </div>
                     );
                   })}
-                  <div className="border-t pt-3 space-y-2">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Icon icon="lucide:users" className="w-3.5 h-3.5" />
-                        {globalSignatories.length} signator{globalSignatories.length === 1 ? "y" : "ies"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-2">
-                        {(() => {
-                          const d = submission.data || {};
-                          const method = (d.deliveryMethod || d.delivery_method || "digital") as string;
-                          const isDigital = !method || method === "digital" || method === "email";
-                          return (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="w-6 h-6 rounded-md border border-gray-200 flex items-center justify-center bg-gray-50 shrink-0">
-                                {isDigital ? (
-                                  <span className="text-sm font-semibold text-gray-700">@</span>
-                                ) : (
-                                  <Icon icon="heroicons:envelope" className="w-3.5 h-3.5 text-gray-700" />
-                                )}
-                              </span>
-                              {isDigital ? "Email" : "Postal"}
-                            </span>
-                          );
-                        })()}
-                      </span>
-                    </div>
-                  </div>
+                  {/* Signataires supplémentaires */}
+                  {(() => {
+                    const currency = getCurrency();
+                    const sigs = (submission.data?.signatories as unknown[]) || [];
+                    const additionalSigs = Math.max(0, sigs.length - 1);
+                    if (additionalSigs === 0) return null;
+                    const costEUR = additionalSigs * ADDITIONAL_SIGNATORY_PRICE_EUR;
+                    const cost = currency === "EUR" ? Math.ceil(costEUR) : convertPriceRoundUpSync(costEUR, currency);
+                    return (
+                      <div className="border-t pt-3 flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">+ Additional signatories ({additionalSigs})</span>
+                        <span className="font-semibold">{formatPriceSync(cost, currency)}</span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Livraison postale (email = gratuit, ne pas afficher) */}
+                  {(() => {
+                    const currency = getCurrency();
+                    const method = (submission.data?.deliveryMethod || submission.data?.delivery_method || "") as string;
+                    if (method !== "postal") return null;
+                    const cost = currency === "EUR" ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR) : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+                    return (
+                      <div className="border-t pt-3 flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-1.5">
+                          <Icon icon="heroicons:envelope" className="w-4 h-4 shrink-0" />
+                          + Postal delivery
+                        </span>
+                        <span className="font-semibold">{formatPriceSync(cost, currency)}</span>
+                      </div>
+                    );
+                  })()}
 
                   <div className="border-t pt-3 flex items-center justify-between">
                     <span className="text-sm font-bold">Total</span>
