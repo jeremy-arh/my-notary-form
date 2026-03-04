@@ -712,7 +712,9 @@ export default function SubmissionDetailPage() {
         </div>{/* end left col */}
 
         {/* Right — Order summary sticky */}
-        <div className="sticky top-6">
+        <div className="sticky top-6 space-y-4">
+
+          {/* Services & Total */}
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Order Summary</CardTitle>
@@ -728,7 +730,6 @@ export default function SubmissionDetailPage() {
                     if (!service) return null;
                     const currency = getCurrency();
                     const servicePrice = getServicePrice(service, currency);
-
                     return (
                       <div key={serviceId} className="space-y-2">
                         <div className="flex items-start justify-between gap-2">
@@ -740,7 +741,6 @@ export default function SubmissionDetailPage() {
                         <p className="text-xs text-muted-foreground">
                           {documents.length} doc(s) × {formatPrice(servicePrice, getServicePriceCurrency(service, currency))}
                         </p>
-                        {/* Options par document */}
                         {documents.some((doc) => (doc.selectedOptions || []).length > 0) && (
                           <div className="pl-3 border-l-2 border-muted space-y-1">
                             {documents.map((doc, i) =>
@@ -765,12 +765,10 @@ export default function SubmissionDetailPage() {
                       </div>
                     );
                   })}
-
                   <div className="border-t pt-3 flex items-center justify-between">
                     <span className="text-sm font-bold">Total</span>
                     <span className="text-lg font-bold">{formatPrice(computeTotal(), "EUR")}</span>
                   </div>
-
                   {submission.status === "pending_payment" && (
                     <button
                       onClick={retryPayment}
@@ -784,6 +782,71 @@ export default function SubmissionDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Signatories */}
+          {globalSignatories.length > 0 && (
+            <Card className="shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Icon icon="lucide:users" className="w-4 h-4" />
+                  Signatories ({globalSignatories.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {globalSignatories.map((sig, i) => (
+                  <div key={i} className="flex items-center gap-2 py-1">
+                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 text-xs font-semibold text-muted-foreground">
+                      {(sig.first_name?.[0] || "?").toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-tight truncate">
+                        {sig.first_name} {sig.last_name}
+                      </p>
+                      {sig.email && (
+                        <p className="text-xs text-muted-foreground truncate">{sig.email}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Delivery */}
+          {(() => {
+            const d = submission.data || {};
+            const method = (d.deliveryMethod || d.delivery_method || "digital") as string;
+            const isDigital = !method || method === "digital";
+            return (
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Icon icon="lucide:truck" className="w-4 h-4" />
+                    Delivery
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
+                      isDigital
+                        ? "bg-sky-50 text-sky-700 border-sky-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }`}>
+                      <Icon icon={isDigital ? "lucide:mail" : "lucide:package"} className="w-3.5 h-3.5" />
+                      {isDigital ? "Digital" : "Physical"}
+                    </span>
+                  </div>
+                  {!isDigital && submission.address && (
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                      {submission.address}{submission.city ? `, ${submission.city}` : ""}
+                      {submission.country ? ` — ${submission.country}` : ""}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
         </div>{/* end right col */}
 
       </div>{/* end grid */}
