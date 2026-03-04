@@ -161,7 +161,7 @@ export default function ChooseServicesPage() {
       const bSel = selected.includes(b.service_id);
       if (aSel && !bSel) return -1;
       if (!aSel && bSel) return 1;
-      return 0;
+      return getServiceName(a).localeCompare(getServiceName(b), undefined, { sensitivity: "base" });
     });
   }, [services, searchQuery, formData.selectedServices, getServiceName]);
 
@@ -206,12 +206,9 @@ export default function ChooseServicesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-2 sm:gap-3 md:gap-4">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl border-2 border-gray-200 bg-white">
-                <div className="flex items-center space-x-2 sm:space-x-3">
-                  <Skeleton className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg flex-shrink-0" />
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-3 w-20" />
                 </div>
               </div>
             ))}
@@ -242,34 +239,24 @@ export default function ChooseServicesPage() {
                       : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"
                   }`}
                 >
-                  <div className="flex items-center space-x-2 sm:space-x-3">
-                    <div
-                      className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${service.color ?? "bg-gray-100"}`}
-                    >
-                      <Icon
-                        icon={(service.icon as string) ?? "heroicons:document-text"}
-                        className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600"
-                      />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm sm:text-base text-gray-900 break-words">
+                        {getServiceName(service)}
+                      </h3>
+                      <p className="text-xs sm:text-sm font-semibold text-gray-900 mt-0.5">
+                        {formatPriceSync(price, currency)}{" "}
+                        {t("form.steps.documents.perDocument")}
+                      </p>
                     </div>
-                    <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm sm:text-base text-gray-900 break-words">
-                          {getServiceName(service)}
-                        </h3>
-                        <p className="text-xs sm:text-sm font-semibold text-gray-900 mt-0.5">
-                          {formatPriceSync(price, currency)}{" "}
-                          {t("form.steps.documents.perDocument")}
-                        </p>
+                    {isSelected && (
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center flex-shrink-0">
+                        <Icon
+                          icon="stash:check-light"
+                          className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600"
+                        />
                       </div>
-                      {isSelected && (
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center flex-shrink-0">
-                          <Icon
-                            icon="stash:check-light"
-                            className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600"
-                          />
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </button>
               );
