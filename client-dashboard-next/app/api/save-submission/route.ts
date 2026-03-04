@@ -25,18 +25,39 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
     const funnelStatus = getFunnelStatus(currentStep ?? 1);
+    const email = formData?.email?.trim() || null;
 
-    // Chercher submission existante par session_id
-    const { data: existingSubmissions } = await supabase
+    // 1. Chercher par session_id (priorité)
+    const { data: bySession } = await supabase
       .from("submission")
       .select("id, client_id, data, funnel_status")
       .eq("status", "pending_payment")
       .order("created_at", { ascending: false })
       .limit(20);
 
-    const existingSubmission = (existingSubmissions ?? []).find(
+    let existingSubmission = (bySession ?? []).find(
       (s: { data?: { session_id?: string } }) => s.data?.session_id === sessionId
     );
+
+    // 2. Si non trouvé par session_id, chercher par email (évite les doublons cross-device)
+    if (!existingSubmission && email) {
+      const { data: byEmail } = await supabase
+        .from("submission")
+        .select("id, client_id, data, funnel_status")
+        .eq("status", "pending_payment")
+        .eq("email", email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (byEmail) {
+        existingSubmission = byEmail;
+        // Mettre à jour le session_id dans la DB pour lier cette session à la soumission existante
+        await supabase
+          .from("submission")
+          .update({ data: { ...(byEmail.data ?? {}), session_id: sessionId } })
+          .eq("id", byEmail.id);
+      }
+    }
 
     // Structure data identique à l'ancienne version + compat create-checkout-session
     const submissionData = {
