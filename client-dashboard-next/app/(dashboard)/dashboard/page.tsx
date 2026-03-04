@@ -179,7 +179,7 @@ export default function DashboardPage() {
         deliveryMethod: d.deliveryMethod || d.delivery_method || "digital",
         firstName: submission.first_name || "",
         lastName: submission.last_name || "",
-        email: d.email || "",
+        email: submission.email || (d.email as string) || "",
         phone: d.phone || "",
         address: d.address || "",
         city: d.city || "",
