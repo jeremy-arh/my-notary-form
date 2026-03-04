@@ -25,6 +25,10 @@ type Submission = {
   first_name?: string;
   last_name?: string;
   email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
   country?: string;
   total_price?: number | string;
   data?: { payment?: { payment_status?: string } };
@@ -76,7 +80,7 @@ export default function DashboardPage() {
 
       const { data: submissionsData, error: submissionsError } = await supabase
         .from("submission")
-        .select("id, created_at, status, first_name, last_name, email, country, total_price, data")
+        .select("id, created_at, status, first_name, last_name, email, phone, address, city, postal_code, country, total_price, data")
         .eq("client_id", client.id)
         .order("created_at", { ascending: false });
 
@@ -180,14 +184,14 @@ export default function DashboardPage() {
         firstName: submission.first_name || "",
         lastName: submission.last_name || "",
         email: submission.email || (d.email as string) || "",
-        phone: d.phone || "",
-        address: d.address || "",
-        city: d.city || "",
-        postalCode: d.postalCode || d.postal_code || "",
-        country: d.country || "",
-        notes: d.notes || "",
-        timezone: d.timezone || "UTC",
-        currency: d.currency || "EUR",
+        phone: submission.phone || (d.phone as string) || "",
+        address: submission.address || (d.address as string) || "",
+        city: submission.city || (d.city as string) || "",
+        postalCode: submission.postal_code || (d.postalCode as string) || (d.postal_code as string) || "",
+        country: submission.country || (d.country as string) || "",
+        notes: (d.notes as string) || "",
+        timezone: (d.timezone as string) || "UTC",
+        currency: (d.currency as string) || "EUR",
         signatories: d.signatories || [],
         isSignatory: d.isSignatory ?? false,
         submissionId: submission.id,
