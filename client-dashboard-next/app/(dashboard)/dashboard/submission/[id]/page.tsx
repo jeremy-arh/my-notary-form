@@ -227,23 +227,23 @@ export default function SubmissionDetailPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      pending_payment: "bg-orange-100 text-orange-800 border-orange-200",
-      confirmed: "bg-green-100 text-green-800 border-green-200",
-      in_progress: "bg-blue-100 text-blue-800 border-blue-200",
-      completed: "bg-purple-100 text-purple-800 border-purple-200",
-      cancelled: "bg-red-100 text-red-800 border-red-200",
+      pending:         "bg-amber-50 text-amber-700 border-amber-200",
+      pending_payment: "bg-orange-50 text-orange-700 border-orange-200",
+      confirmed:       "bg-green-50 text-green-700 border-green-200",
+      in_progress:     "bg-sky-50 text-sky-700 border-sky-200",
+      completed:       "bg-emerald-50 text-emerald-700 border-emerald-200",
+      cancelled:       "bg-red-50 text-red-700 border-red-200",
     };
     const labels: Record<string, string> = {
-      pending: "Pending",
+      pending:         "Pending",
       pending_payment: "Pending Payment",
-      confirmed: "Confirmed",
-      in_progress: "In Progress",
-      completed: "Completed",
-      cancelled: "Cancelled",
+      confirmed:       "Confirmed",
+      in_progress:     "In Progress",
+      completed:       "Completed",
+      cancelled:       "Cancelled",
     };
     return (
-      <span className={`px-4 py-2 rounded-full text-sm font-semibold border ${styles[status] || styles.pending}`}>
+      <span className={`inline-flex items-center px-3 py-1 rounded-md text-sm font-medium border ${styles[status] || styles.pending}`}>
         {labels[status] || status}
       </span>
     );

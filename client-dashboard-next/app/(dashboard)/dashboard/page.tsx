@@ -116,36 +116,37 @@ export default function DashboardPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      pending_payment: "bg-orange-100 text-orange-800 border-orange-200",
-      confirmed: "bg-green-100 text-green-800 border-green-200",
-      in_progress: "bg-blue-100 text-blue-800 border-blue-200",
-      completed: "bg-purple-100 text-purple-800 border-purple-200",
-      cancelled: "bg-red-100 text-red-800 border-red-200",
+      pending:         "bg-amber-50 text-amber-700 border-amber-200",
+      pending_payment: "bg-orange-50 text-orange-700 border-orange-200",
+      confirmed:       "bg-green-50 text-green-700 border-green-200",
+      in_progress:     "bg-sky-50 text-sky-700 border-sky-200",
+      completed:       "bg-emerald-50 text-emerald-700 border-emerald-200",
+      cancelled:       "bg-red-50 text-red-700 border-red-200",
     };
     const labels: Record<string, string> = {
-      pending: "Pending",
+      pending:         "Pending",
       pending_payment: "Pending Payment",
-      confirmed: "Confirmed",
-      in_progress: "In Progress",
-      completed: "Completed",
-      cancelled: "Cancelled",
+      confirmed:       "Confirmed",
+      in_progress:     "In Progress",
+      completed:       "Completed",
+      cancelled:       "Cancelled",
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${styles[status] || styles.pending}`}>
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${styles[status] || styles.pending}`}>
         {labels[status] || status}
       </span>
     );
   };
 
   const getPaymentBadge = (paymentStatus?: string) => {
-    const styles: Record<string, string> = {
-      paid: "bg-green-100 text-green-800",
-      unpaid: "bg-red-100 text-red-800",
-    };
+    const isPaid = paymentStatus === "paid";
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${styles[paymentStatus || "unpaid"] || styles.unpaid}`}>
-        {paymentStatus === "paid" ? "Paid" : "Pending"}
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${
+        isPaid
+          ? "bg-green-50 text-green-700 border-green-200"
+          : "bg-orange-50 text-orange-700 border-orange-200"
+      }`}>
+        {isPaid ? "Paid" : "Pending"}
       </span>
     );
   };
@@ -334,8 +335,7 @@ export default function DashboardPage() {
                     <TableHead>Country</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                    <TableHead className="w-10" />
+                    <TableHead className="w-20 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -366,7 +366,7 @@ export default function DashboardPage() {
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-1 justify-end">
                           {submission.status === "pending_payment" && (
                             <>
                               <button
@@ -385,17 +385,8 @@ export default function DashboardPage() {
                               </button>
                             </>
                           )}
-                          <button
-                            onClick={() => router.push(`/dashboard/submission/${submission.id}`)}
-                            className="p-2 text-muted-foreground hover:bg-muted rounded-lg"
-                            title="View"
-                          >
-                            <Icon icon="lucide:eye" className="w-4 h-4" />
-                          </button>
+                          <Icon icon="lucide:chevron-right" className="w-4 h-4 text-muted-foreground ml-1" />
                         </div>
-                      </TableCell>
-                      <TableCell className="w-10">
-                        <Icon icon="lucide:chevron-right" className="h-4 w-4 text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ))}
