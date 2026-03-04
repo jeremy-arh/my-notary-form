@@ -39,6 +39,9 @@ export async function POST() {
 
     const admin = createAdminClient();
 
+    const authEmail = user.email || user.user_metadata?.email;
+    const normalizedEmail = authEmail ? authEmail.toLowerCase().trim() : "";
+
     // 1. Chercher le client par user_id (déjà lié)
     const { data: existing } = await admin
       .from("client")
@@ -47,19 +50,51 @@ export async function POST() {
       .maybeSingle();
 
     if (existing) {
-      await relinkOrphanedSubmissions(admin, existing.id, existing.email || user.email || "");
+      // Si le client trouvé n'a pas de phone/address, chercher un autre client
+      // avec le même email qui pourrait avoir ces données (client anonyme du formulaire)
+      const needsMerge = !existing.phone && !existing.address && normalizedEmail;
+      if (needsMerge) {
+        const { data: richClient } = await admin
+          .from("client")
+          .select("id, first_name, last_name, email, phone, address, city, postal_code, country")
+          .ilike("email", normalizedEmail)
+          .neq("id", existing.id)
+          .maybeSingle();
+
+        if (richClient && (richClient.phone || richClient.address)) {
+          // Merger les données du client riche dans le client lié
+          const mergePayload: Record<string, string | null> = {};
+          if (!existing.phone && richClient.phone) mergePayload.phone = richClient.phone;
+          if (!existing.address && richClient.address) mergePayload.address = richClient.address;
+          if (!existing.city && richClient.city) mergePayload.city = richClient.city;
+          if (!existing.postal_code && richClient.postal_code) mergePayload.postal_code = richClient.postal_code;
+          if (!existing.country && richClient.country) mergePayload.country = richClient.country;
+          if (!existing.first_name && richClient.first_name) mergePayload.first_name = richClient.first_name;
+          if (!existing.last_name && richClient.last_name) mergePayload.last_name = richClient.last_name;
+
+          const { data: merged } = await admin
+            .from("client")
+            .update(mergePayload)
+            .eq("id", existing.id)
+            .select("id, first_name, last_name, email, phone, address, city, postal_code, country")
+            .single();
+
+          const finalClient = merged || { ...existing, ...mergePayload };
+          await relinkOrphanedSubmissions(admin, finalClient.id, finalClient.email || normalizedEmail);
+          return NextResponse.json({ client: finalClient });
+        }
+      }
+
+      await relinkOrphanedSubmissions(admin, existing.id, existing.email || normalizedEmail);
       return NextResponse.json({ client: existing });
     }
 
-    const email = user.email || user.user_metadata?.email;
-    if (!email) {
+    if (!authEmail) {
       return NextResponse.json(
         { error: "Email required to create client" },
         { status: 400 }
       );
     }
-
-    const normalizedEmail = email.toLowerCase().trim();
 
     // 2. Chercher un client existant avec le même email (créé anonymement via le formulaire)
     const { data: existingByEmail } = await admin
