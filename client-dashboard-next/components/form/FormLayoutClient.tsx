@@ -59,7 +59,7 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
   useEffect(() => {
     const stepData = FORM_STEPS.find((s) => s.path === pathname);
     if (stepData) {
-      trackPageViewPlausible(stepData.name, pathname);
+      trackPageViewPlausible(stepData.name);
       trackPageView(stepData.name, pathname);
       if (currentStep === 1 && !hasTrackedFormStart.current) {
         hasTrackedFormStart.current = true;
