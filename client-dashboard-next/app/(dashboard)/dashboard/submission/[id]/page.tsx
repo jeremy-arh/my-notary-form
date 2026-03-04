@@ -824,9 +824,9 @@ export default function SubmissionDetailPage() {
                   {submission.status === "pending_payment" && (
                     <button
                       onClick={retryPayment}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white text-sm font-semibold rounded-xl hover:bg-black/90 transition-colors"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-4 bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] text-white text-base font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 border border-[#2563eb]"
                     >
-                      <Icon icon="lucide:refresh-cw" className="w-4 h-4" />
+                      <Icon icon="heroicons:lock-closed" className="w-5 h-5" />
                       Retry payment
                     </button>
                   )}
