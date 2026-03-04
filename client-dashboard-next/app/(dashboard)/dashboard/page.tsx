@@ -31,7 +31,14 @@ type Submission = {
   postal_code?: string;
   country?: string;
   total_price?: number | string;
-  data?: { payment?: { payment_status?: string } };
+  data?: {
+    payment?: { payment_status?: string };
+    serviceDocuments?: Record<string, unknown[]>;
+    documents?: Record<string, unknown[]>;
+    signatories?: unknown[];
+    deliveryMethod?: string;
+    delivery_method?: string;
+  };
 };
 
 type ClientInfo = {
