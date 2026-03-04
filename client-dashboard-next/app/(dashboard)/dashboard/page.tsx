@@ -181,14 +181,14 @@ export default function DashboardPage() {
         selectedServices: d.selectedServices || d.selected_services || [],
         serviceDocuments: d.serviceDocuments || d.documents || {},
         deliveryMethod: d.deliveryMethod || d.delivery_method || "digital",
-        firstName: submission.first_name || "",
-        lastName: submission.last_name || "",
-        email: submission.email || (d.email as string) || "",
-        phone: submission.phone || (d.phone as string) || "",
-        address: submission.address || (d.address as string) || "",
-        city: submission.city || (d.city as string) || "",
-        postalCode: submission.postal_code || (d.postalCode as string) || (d.postal_code as string) || "",
-        country: submission.country || (d.country as string) || "",
+        firstName: submission.first_name || clientInfo?.first_name || "",
+        lastName: submission.last_name || clientInfo?.last_name || "",
+        email: submission.email || clientInfo?.email || "",
+        phone: submission.phone || "",
+        address: submission.address || "",
+        city: submission.city || "",
+        postalCode: submission.postal_code || "",
+        country: submission.country || "",
         notes: (d.notes as string) || "",
         timezone: (d.timezone as string) || "UTC",
         currency: (d.currency as string) || "EUR",
@@ -200,7 +200,7 @@ export default function DashboardPage() {
       localStorage.setItem("notaryCurrency", String(formData.currency));
       router.push("/form/summary");
     },
-    [router]
+    [router, clientInfo]
   );
 
   const filteredSubmissions = useMemo(() => {

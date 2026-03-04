@@ -22,24 +22,22 @@ export default function AuthPreFill() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data: client, error } = await supabase
+        const { data: client } = await supabase
           .from("client")
           .select("first_name, last_name, email, phone, address, city, postal_code, country, timezone")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (error || !client) return;
-
         updateFormData((prev) => ({
-          firstName: prev.firstName?.trim() || client.first_name || "",
-          lastName: prev.lastName?.trim() || client.last_name || "",
-          email: prev.email?.trim() || client.email || "",
-          phone: prev.phone?.trim() || client.phone || "",
-          address: prev.address?.trim() || client.address || "",
-          city: prev.city?.trim() || client.city || "",
-          postalCode: prev.postalCode?.trim() || client.postal_code || "",
-          country: prev.country?.trim() || client.country || "",
-          timezone: prev.timezone?.trim() || client.timezone || prev.timezone || "UTC",
+          firstName: prev.firstName?.trim() || client?.first_name || "",
+          lastName: prev.lastName?.trim() || client?.last_name || "",
+          email: prev.email?.trim() || client?.email || user.email || "",
+          phone: prev.phone?.trim() || client?.phone || "",
+          address: prev.address?.trim() || client?.address || "",
+          city: prev.city?.trim() || client?.city || "",
+          postalCode: prev.postalCode?.trim() || client?.postal_code || "",
+          country: prev.country?.trim() || client?.country || "",
+          timezone: prev.timezone?.trim() || client?.timezone || prev.timezone || "UTC",
         }));
       } catch {
         /* ignore */
