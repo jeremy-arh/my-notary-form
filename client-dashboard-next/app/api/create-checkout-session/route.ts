@@ -237,6 +237,18 @@ export async function POST(request: NextRequest) {
           clientId = (existingClient as { id: string }).id;
           stripeCustomerId = (existingClient as { stripe_customer_id: string | null })
             .stripe_customer_id;
+          // Toujours mettre à jour le client avec les données les plus récentes du formulaire
+          const clientUpdatePayload: Record<string, string> = {};
+          if (formData.phone) clientUpdatePayload.phone = formData.phone as string;
+          if (formData.address) clientUpdatePayload.address = formData.address as string;
+          if (formData.city) clientUpdatePayload.city = formData.city as string;
+          if (formData.postalCode) clientUpdatePayload.postal_code = formData.postalCode as string;
+          if (formData.country) clientUpdatePayload.country = formData.country as string;
+          if (formData.firstName) clientUpdatePayload.first_name = formData.firstName as string;
+          if (formData.lastName) clientUpdatePayload.last_name = formData.lastName as string;
+          if (Object.keys(clientUpdatePayload).length > 0) {
+            await supabase.from("client").update(clientUpdatePayload).eq("id", clientId);
+          }
         } else {
           const clientEmail = email || (user?.email as string);
           if (!clientEmail)

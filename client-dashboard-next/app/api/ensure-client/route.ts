@@ -54,6 +54,7 @@ export async function POST() {
       // avec le même email qui pourrait avoir ces données (client anonyme du formulaire)
       const needsMerge = !existing.phone && !existing.address && normalizedEmail;
       if (needsMerge) {
+        // Stratégie 1: chercher un autre client avec le même email
         const { data: richClient } = await admin
           .from("client")
           .select("id, first_name, last_name, email, phone, address, city, postal_code, country")
@@ -61,16 +62,35 @@ export async function POST() {
           .neq("id", existing.id)
           .maybeSingle();
 
-        if (richClient && (richClient.phone || richClient.address)) {
-          // Merger les données du client riche dans le client lié
+        // Stratégie 2: chercher dans les submissions de ce client
+        const { data: latestSub } = await admin
+          .from("submission")
+          .select("phone, address, city, postal_code, country, first_name, last_name")
+          .eq("client_id", existing.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // Aussi chercher dans les submissions par email (au cas où client_id n'est pas lié)
+        const { data: latestSubByEmail } = await admin
+          .from("submission")
+          .select("phone, address, city, postal_code, country, first_name, last_name")
+          .ilike("email", normalizedEmail)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const source = richClient || latestSub || latestSubByEmail;
+
+        if (source && (source.phone || source.address)) {
           const mergePayload: Record<string, string | null> = {};
-          if (!existing.phone && richClient.phone) mergePayload.phone = richClient.phone;
-          if (!existing.address && richClient.address) mergePayload.address = richClient.address;
-          if (!existing.city && richClient.city) mergePayload.city = richClient.city;
-          if (!existing.postal_code && richClient.postal_code) mergePayload.postal_code = richClient.postal_code;
-          if (!existing.country && richClient.country) mergePayload.country = richClient.country;
-          if (!existing.first_name && richClient.first_name) mergePayload.first_name = richClient.first_name;
-          if (!existing.last_name && richClient.last_name) mergePayload.last_name = richClient.last_name;
+          if (!existing.phone && source.phone) mergePayload.phone = source.phone;
+          if (!existing.address && source.address) mergePayload.address = source.address;
+          if (!existing.city && source.city) mergePayload.city = source.city;
+          if (!existing.postal_code && source.postal_code) mergePayload.postal_code = source.postal_code;
+          if (!existing.country && source.country) mergePayload.country = source.country;
+          if (!existing.first_name && source.first_name) mergePayload.first_name = source.first_name;
+          if (!existing.last_name && source.last_name) mergePayload.last_name = source.last_name;
 
           const { data: merged } = await admin
             .from("client")
