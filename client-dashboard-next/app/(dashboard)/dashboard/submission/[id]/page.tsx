@@ -24,6 +24,11 @@ type Submission = {
   first_name?: string;
   last_name?: string;
   email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  country?: string;
   notes?: string;
   assigned_notary_id?: string;
   data?: Record<string, unknown> & {
@@ -199,12 +204,12 @@ export default function SubmissionDetailPage() {
       deliveryMethod: d.deliveryMethod || d.delivery_method || "digital",
       firstName: submission.first_name || "",
       lastName: submission.last_name || "",
-      email: submission.email || (d.email as string) || "",
-      phone: (d.phone as string) || "",
-      address: (d.address as string) || "",
-      city: (d.city as string) || "",
-      postalCode: (d.postalCode as string) || (d.postal_code as string) || "",
-      country: (d.country as string) || "",
+      email: submission.email || "",
+      phone: submission.phone || "",
+      address: submission.address || "",
+      city: submission.city || "",
+      postalCode: submission.postal_code || "",
+      country: submission.country || "",
       notes: (d.notes as string) || "",
       timezone: (d.timezone as string) || "UTC",
       currency: getCurrency(),
@@ -339,9 +344,29 @@ export default function SubmissionDetailPage() {
     { id: "notarized" as const, label: "Notarized Documents", icon: "lucide:file-check", count: notarizedFiles.length },
   ];
 
+  // Calcul du total global
+  const computeTotal = () => {
+    let total = 0;
+    selectedServices.forEach((sid) => {
+      const svc = servicesMap[sid];
+      const docs = serviceDocuments[sid] || [];
+      if (svc) {
+        total += docs.length * getServicePrice(svc, getCurrency());
+        docs.forEach((doc) => {
+          (doc.selectedOptions || []).forEach((optId) => {
+            const opt = optionsMap[optId];
+            if (opt) total += getOptionPrice(opt, getCurrency());
+          });
+        });
+      }
+    });
+    return total;
+  };
+
   return (
     <div className="space-y-6 overflow-x-hidden">
-      <div className="mb-6 sm:mb-8">
+      {/* Header */}
+      <div>
         <Link
           href="/dashboard"
           className="flex items-center text-sm text-muted-foreground hover:text-foreground mb-4"
@@ -369,25 +394,30 @@ export default function SubmissionDetailPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 border-b overflow-x-auto pb-3">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 pb-2 text-sm font-medium whitespace-nowrap ${
-              activeTab === tab.id ? "text-foreground border-b-2 border-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Icon icon={tab.icon} className="w-4 h-4" />
-            {tab.label}
-            {tab.count !== undefined && tab.count > 0 && (
-              <span className="px-2 py-0.5 bg-gray-200 rounded-full text-xs">{tab.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
 
-      <div className="space-y-6">
+        {/* Left — tabs + content */}
+        <div className="xl:col-span-2 space-y-6">
+          <div className="flex gap-4 border-b overflow-x-auto pb-3">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 pb-2 text-sm font-medium whitespace-nowrap ${
+                  activeTab === tab.id ? "text-foreground border-b-2 border-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon icon={tab.icon} className="w-4 h-4" />
+                {tab.label}
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className="px-2 py-0.5 bg-gray-200 rounded-full text-xs">{tab.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-6">
         {activeTab === "services" && (
           <Card>
             <CardHeader>
@@ -397,7 +427,7 @@ export default function SubmissionDetailPage() {
             {selectedServices.length === 0 ? (
               <p className="text-muted-foreground">No service selected.</p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {selectedServices.map((serviceId) => {
                   const service = servicesMap[serviceId];
                   const documents = serviceDocuments[serviceId] || [];
@@ -407,24 +437,51 @@ export default function SubmissionDetailPage() {
                   const serviceTotal = documents.length * servicePrice;
                   return (
                     <div key={serviceId} className="rounded-xl p-4 border bg-muted/30">
-                      <h3 className="font-semibold">{service.name || serviceId}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {documents.length} doc(s) × {formatPrice(servicePrice, getServicePriceCurrency(service, currency))} ={" "}
-                        <span className="font-bold">{formatPrice(serviceTotal, getServicePriceCurrency(service, currency))}</span>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold">{service.name || serviceId}</h3>
+                        <span className="text-sm font-semibold">
+                          {formatPrice(serviceTotal, getServicePriceCurrency(service, currency))}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {documents.length} doc(s) × {formatPrice(servicePrice, getServicePriceCurrency(service, currency))}
                       </p>
-                      <div className="mt-3 pl-4 border-l-2 space-y-2">
+                      <div className="space-y-2">
                         {documents.map((doc, i) => (
-                          <div key={i} className="rounded-lg p-2 flex items-center justify-between bg-muted/50">
-                            <span className="text-sm font-medium truncate">{doc.name || `Document ${i + 1}`}</span>
-                            {(doc.public_url || doc.url) && (
-                              <a
-                                href={doc.public_url || doc.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-black hover:underline flex items-center gap-1"
-                              >
-                                <Icon icon="lucide:download" className="w-4 h-4" /> Download
-                              </a>
+                          <div key={i} className="rounded-lg border bg-white">
+                            <div className="px-3 py-2 flex items-center justify-between">
+                              <span className="text-sm font-medium truncate flex-1 mr-2">{doc.name || `Document ${i + 1}`}</span>
+                              {(doc.public_url || doc.url) && (
+                                <a
+                                  href={doc.public_url || doc.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-black hover:underline flex items-center gap-1 shrink-0"
+                                >
+                                  <Icon icon="lucide:download" className="w-3.5 h-3.5" /> Download
+                                </a>
+                              )}
+                            </div>
+                            {(doc.selectedOptions || []).length > 0 && (
+                              <div className="border-t px-3 py-2 space-y-1 bg-muted/30 rounded-b-lg">
+                                {(doc.selectedOptions || []).map((optId) => {
+                                  const opt = optionsMap[optId];
+                                  if (!opt) return null;
+                                  const currency = getCurrency();
+                                  const optPrice = getOptionPrice(opt, currency);
+                                  return (
+                                    <div key={optId} className="flex items-center justify-between text-xs text-muted-foreground">
+                                      <span className="flex items-center gap-1">
+                                        <Icon icon="lucide:plus" className="w-3 h-3" />
+                                        {opt.name || optId}
+                                      </span>
+                                      <span className="font-medium text-foreground">
+                                        +{formatPrice(optPrice, getOptionPriceCurrency(opt, currency))}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
                         ))}
@@ -432,28 +489,6 @@ export default function SubmissionDetailPage() {
                     </div>
                   );
                 })}
-                <div className="pt-4 border-t flex justify-between items-center">
-                  <span className="font-bold">Total</span>
-                  <span className="text-xl font-bold">
-                    {(() => {
-                      let total = 0;
-                      selectedServices.forEach((sid) => {
-                        const svc = servicesMap[sid];
-                        const docs = serviceDocuments[sid] || [];
-                        if (svc) {
-                          total += docs.length * getServicePrice(svc, getCurrency());
-                          docs.forEach((doc) => {
-                            (doc.selectedOptions || []).forEach((optId) => {
-                              const opt = optionsMap[optId];
-                              if (opt) total += getOptionPrice(opt, getCurrency());
-                            });
-                          });
-                        }
-                      });
-                      return formatPrice(total, "EUR");
-                    })()}
-                  </span>
-                </div>
               </div>
             )}
           </CardContent>
@@ -644,7 +679,85 @@ export default function SubmissionDetailPage() {
             </CardContent>
           </Card>
         )}
-      </div>
+          </div>{/* end space-y-6 tab content */}
+        </div>{/* end left col */}
+
+        {/* Right — Order summary sticky */}
+        <div className="sticky top-6">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Order Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {selectedServices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No service.</p>
+              ) : (
+                <>
+                  {selectedServices.map((serviceId) => {
+                    const service = servicesMap[serviceId];
+                    const documents = serviceDocuments[serviceId] || [];
+                    if (!service) return null;
+                    const currency = getCurrency();
+                    const servicePrice = getServicePrice(service, currency);
+
+                    return (
+                      <div key={serviceId} className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-semibold leading-snug">{service.name || serviceId}</span>
+                          <span className="text-sm font-semibold shrink-0">
+                            {formatPrice(documents.length * servicePrice, getServicePriceCurrency(service, currency))}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {documents.length} doc(s) × {formatPrice(servicePrice, getServicePriceCurrency(service, currency))}
+                        </p>
+                        {/* Options par document */}
+                        {documents.some((doc) => (doc.selectedOptions || []).length > 0) && (
+                          <div className="pl-3 border-l-2 border-muted space-y-1">
+                            {documents.map((doc, i) =>
+                              (doc.selectedOptions || []).map((optId) => {
+                                const opt = optionsMap[optId];
+                                if (!opt) return null;
+                                const optPrice = getOptionPrice(opt, getCurrency());
+                                return (
+                                  <div key={`${i}-${optId}`} className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span className="truncate flex-1 mr-1">
+                                      {doc.name ? `${doc.name} — ` : ""}{opt.name || optId}
+                                    </span>
+                                    <span className="shrink-0 font-medium text-foreground">
+                                      +{formatPrice(optPrice, getOptionPriceCurrency(opt, getCurrency()))}
+                                    </span>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <div className="border-t pt-3 flex items-center justify-between">
+                    <span className="text-sm font-bold">Total</span>
+                    <span className="text-lg font-bold">{formatPrice(computeTotal(), "EUR")}</span>
+                  </div>
+
+                  {submission.status === "pending_payment" && (
+                    <button
+                      onClick={retryPayment}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 text-white text-sm font-semibold rounded-xl hover:bg-orange-700 transition-colors"
+                    >
+                      <Icon icon="lucide:refresh-cw" className="w-4 h-4" />
+                      Retry payment
+                    </button>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>{/* end right col */}
+
+      </div>{/* end grid */}
     </div>
   );
 }
