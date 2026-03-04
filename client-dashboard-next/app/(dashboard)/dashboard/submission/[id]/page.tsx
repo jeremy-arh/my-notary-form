@@ -54,7 +54,7 @@ export default function SubmissionDetailPage() {
   const [transactions, setTransactions] = useState<{ id: string; type: string; amount: number; currency: string; status: string; created: number; invoiceUrl?: string; receiptUrl?: string }[]>([]);
   const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"services" | "signatories" | "transactions" | "notarized">("services");
+  const [activeTab, setActiveTab] = useState<"services" | "signatories" | "delivery" | "transactions" | "notarized">("services");
 
   const fetchSubmission = useCallback(async () => {
     if (!id) return;
@@ -340,6 +340,7 @@ export default function SubmissionDetailPage() {
   const tabs = [
     { id: "services" as const, label: "Services & Documents", icon: "lucide:file-text" },
     { id: "signatories" as const, label: "Signatories", icon: "lucide:users" },
+    { id: "delivery" as const, label: "Delivery", icon: "lucide:truck" },
     { id: "transactions" as const, label: "Transactions", icon: "lucide:credit-card", count: transactions.length },
     { id: "notarized" as const, label: "Notarized Documents", icon: "lucide:file-check", count: notarizedFiles.length },
   ];
@@ -380,15 +381,6 @@ export default function SubmissionDetailPage() {
             <p className="text-sm text-muted-foreground">Submitted on {formatDate(submission.created_at)}</p>
           </div>
           <div className="flex items-center gap-3">
-            {submission.status === "pending_payment" && (
-              <button
-                onClick={retryPayment}
-                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-full hover:bg-orange-700 transition-colors"
-              >
-                <Icon icon="lucide:refresh-cw" className="w-4 h-4" />
-                Retry payment
-              </button>
-            )}
             {getStatusBadge(submission.status)}
           </div>
         </div>
@@ -519,6 +511,43 @@ export default function SubmissionDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {activeTab === "delivery" && (() => {
+          const d = submission.data || {};
+          const method = (d.deliveryMethod || d.delivery_method || "") as string;
+          const isDigital = !method || method === "digital";
+          const methodLabel = isDigital ? "Digital (email)" : method === "physical" ? "Physical (mail)" : method;
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>Delivery</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 rounded-xl border bg-muted/30">
+                    <div className={`p-2.5 rounded-lg ${isDigital ? "bg-sky-100" : "bg-amber-100"}`}>
+                      <Icon icon={isDigital ? "lucide:mail" : "lucide:package"} className={`w-5 h-5 ${isDigital ? "text-sky-700" : "text-amber-700"}`} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Delivery method</p>
+                      <p className="text-sm text-muted-foreground">{methodLabel}</p>
+                    </div>
+                  </div>
+                  {!isDigital && (submission.address || submission.city) && (
+                    <div className="p-4 rounded-xl border bg-muted/30 space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Delivery address</p>
+                      {submission.address && <p className="text-sm">{submission.address}</p>}
+                      {(submission.city || submission.postal_code) && (
+                        <p className="text-sm">{[submission.postal_code, submission.city].filter(Boolean).join(" ")}</p>
+                      )}
+                      {submission.country && <p className="text-sm text-muted-foreground">{submission.country}</p>}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {activeTab === "transactions" && (
           <Card>
@@ -745,7 +774,7 @@ export default function SubmissionDetailPage() {
                   {submission.status === "pending_payment" && (
                     <button
                       onClick={retryPayment}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 text-white text-sm font-semibold rounded-xl hover:bg-orange-700 transition-colors"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white text-sm font-semibold rounded-xl hover:bg-black/90 transition-colors"
                     >
                       <Icon icon="lucide:refresh-cw" className="w-4 h-4" />
                       Retry payment
