@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useFormData } from "@/contexts/FormContext";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Icon } from "@iconify/react";
 
 const CURRENCIES = [
@@ -19,6 +21,7 @@ const CURRENCIES = [
 export default function CurrencySelector({ openDirection = "bottom" }: { openDirection?: "top" | "bottom" }) {
   const { currency, setCurrency } = useCurrency();
   const { updateFormData } = useFormData();
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -35,14 +38,33 @@ export default function CurrencySelector({ openDirection = "bottom" }: { openDir
   const hasSyncedInitial = useRef(false);
 
   useEffect(() => {
-    // Skip the very first render — formData.currency is already set from localStorage.
-    // Only sync when the user actively changes the currency via the selector.
     if (!hasSyncedInitial.current) {
       hasSyncedInitial.current = true;
       return;
     }
     updateFormData({ currency });
   }, [currency]);
+
+  const listContent = (
+    <>
+      {CURRENCIES.map((curr) => (
+        <button
+          key={curr.code}
+          onClick={() => {
+            setCurrency(curr.code as "EUR" | "USD" | "GBP" | "CAD" | "AUD" | "CHF" | "JPY" | "CNY");
+            setIsOpen(false);
+          }}
+          className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors flex items-center gap-3 ${
+            currency === curr.code ? "bg-gray-50 font-semibold" : ""
+          }`}
+        >
+          <span className="text-lg shrink-0">{curr.symbol}</span>
+          <span>{curr.code}</span>
+          {currency === curr.code && <Icon icon="heroicons:check" className="w-4 h-4 ml-auto text-gray-600 shrink-0" />}
+        </button>
+      ))}
+    </>
+  );
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -56,28 +78,35 @@ export default function CurrencySelector({ openDirection = "bottom" }: { openDir
         <Icon icon="heroicons:chevron-down" className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (
-        <div
-          className={`absolute left-1/2 -translate-x-1/2 ${
-            openDirection === "top" ? "bottom-full mb-2" : "top-full mt-2"
-          } w-44 bg-white rounded-lg shadow-lg py-1 z-[200] max-h-96 overflow-y-auto`}
-        >
-          {CURRENCIES.map((curr) => (
-            <button
-              key={curr.code}
-              onClick={() => {
-                setCurrency(curr.code as "EUR" | "USD" | "GBP" | "CAD" | "AUD" | "CHF" | "JPY" | "CNY");
-                setIsOpen(false);
-              }}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center space-x-3 ${
-                currency === curr.code ? "bg-gray-50 font-semibold" : ""
-              }`}
-            >
-              <span className="text-lg">{curr.symbol}</span>
-              <span>{curr.code}</span>
-              {currency === curr.code && <Icon icon="heroicons:check" className="w-4 h-4 ml-auto text-gray-600" />}
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Mobile: full-screen modal */}
+          {typeof document !== "undefined" &&
+            createPortal(
+              <div className="fixed inset-0 z-[9999] flex flex-col bg-white sm:hidden">
+                <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 shrink-0">
+                  <h2 className="text-base font-semibold text-gray-900">{t("selector.currency")}</h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="p-2 -m-2 text-gray-600 hover:text-gray-900"
+                    aria-label="Close"
+                  >
+                    <Icon icon="heroicons:x-mark" className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto">{listContent}</div>
+              </div>,
+              document.body
+            )}
+          {/* Desktop: dropdown */}
+          <div
+            className={`hidden sm:block absolute left-1/2 -translate-x-1/2 ${
+              openDirection === "top" ? "bottom-full mb-2" : "top-full mt-2"
+            } w-44 bg-white rounded-lg shadow-lg py-1 z-[200] max-h-96 overflow-y-auto`}
+          >
+            {listContent}
+          </div>
+        </>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
@@ -17,6 +17,7 @@ import { initialFormData } from "@/lib/formData";
 
 const STORAGE_KEY = "notaryFormData";
 const SESSION_KEY = "formSessionId";
+const POPUP_SHOWN_KEY = "resumePopupShown";
 
 const STEP_KEYS = [
   "form.resumePopup.stepPersonalInfo",
@@ -228,7 +229,27 @@ export default function PersonalInfoPage() {
       const res = await fetch(`/api/active-submission?email=${encodeURIComponent(email)}`);
       const { formData: dbFd, submission } = await res.json();
       if (submission && submission.id !== currentSubmissionId) {
-        // Une autre soumission en cours existe → afficher le modal
+        const fd = dbFd as Record<string, unknown>;
+        const serviceIds = (fd.selectedServices as string[] | undefined) ?? [];
+        const signatories = (fd.signatories as unknown[] | undefined) ?? [];
+        const delivery = fd.deliveryMethod ?? fd.delivery_method;
+        const hasDetail = serviceIds.length > 0 || signatories.length > 0 || !!delivery;
+
+        const popupAlreadyShown = typeof window !== "undefined" && sessionStorage.getItem(POPUP_SHOWN_KEY) === "1";
+
+        if (!hasDetail || popupAlreadyShown) {
+          // Détail vide ou popup déjà affiché cette session → reprendre directement sans popup
+          const sessionId = (submission.data?.session_id as string) ?? "";
+          const { sessionId: _s, submissionId: _si, ...rest } = fd;
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...rest, submissionId: submission.id }));
+          if (sessionId) window.localStorage.setItem(SESSION_KEY, sessionId);
+          const path = getResumePath({ ...initialFormData, ...(rest as typeof initialFormData) });
+          const search = searchParams.toString();
+          router.replace(search ? `${path}?${search}` : path);
+          return;
+        }
+
+        sessionStorage.setItem(POPUP_SHOWN_KEY, "1");
         setActiveSubmission(submission);
         setActiveFormData(dbFd);
         setPendingNavigation("next");
@@ -237,7 +258,7 @@ export default function PersonalInfoPage() {
     } catch { /* ignore, continuer */ }
 
     navigateNext();
-  }, [validate, formData.email, navigateNext]);
+  }, [validate, formData.email, navigateNext, router, searchParams]);
 
   useEffect(() => {
     registerContinueHandler(handleNext);
@@ -475,80 +496,83 @@ export default function PersonalInfoPage() {
                   const stepLabel = t(STEP_KEYS[stepIdx] ?? "form.resumePopup.stepSummary");
                   const serviceIds = (fd.selectedServices as string[] | undefined) ?? [];
                   const serviceDocs = (fd.serviceDocuments as Record<string, { name?: string; selectedOptions?: string[] }[] | undefined>) ?? {};
-                  const signatories = (fd.signatories as { firstName?: string; lastName?: string; first_name?: string; last_name?: string }[] | undefined) ?? [];
+                  const hasDocuments = serviceIds.some((sid) => (serviceDocs[sid]?.length ?? 0) > 0);
+                  const signatories = (fd.signatories as { firstName?: string; first_name?: string; lastName?: string; last_name?: string }[] | undefined) ?? [];
                   const delivery = (fd.deliveryMethod ?? fd.delivery_method) as string | undefined;
+                  const hasPersonalInfo = !!(fd.firstName || fd.first_name) && !!(fd.lastName || fd.last_name) && !!fd.email;
+
+                  const StepBlock = ({ completed, title, icon, children }: { completed: boolean; title: string; icon: string; children: React.ReactNode }) => (
+                    <div className={`rounded-lg p-3 border-2 ${completed ? "bg-emerald-50 border-emerald-200" : "bg-gray-200 border-gray-300"}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {completed ? <Icon icon="heroicons:check-circle" className="w-4 h-4 text-emerald-600 shrink-0" /> : <Icon icon={icon} className="w-3.5 h-3.5 text-gray-500 shrink-0" />}
+                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-gray-700">{title}</h3>
+                      </div>
+                      {children}
+                    </div>
+                  );
+
                   return (
-                    <div className="space-y-0">
-                      <div className="flex items-center gap-2 text-sm text-gray-600 pb-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-600 pb-2">
                         <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         <span>{t("form.resumePopup.stoppedAt")} <span className="font-semibold text-gray-900">{stepLabel}</span></span>
                       </div>
 
-                      {serviceIds.length > 0 && (
-                        <section className="border-t border-gray-200 pt-4 pb-4">
-                          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                            <Icon icon="heroicons:document-text" className="w-3.5 h-3.5" />
-                            {t("form.steps.summary.services")}
-                          </h3>
-                          <div className="space-y-4">
+                      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{t("form.resumePopup.completedElements")}</p>
+
+                      <StepBlock completed={!!hasPersonalInfo} title={t("form.resumePopup.stepPersonalInfo")} icon="heroicons:user">
+                        {hasPersonalInfo ? (
+                          <p className="text-xs text-gray-800">{(fd.firstName || fd.first_name) as string} {(fd.lastName || fd.last_name) as string}</p>
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
+                        )}
+                      </StepBlock>
+
+                      <StepBlock completed={serviceIds.length > 0} title={t("form.resumePopup.stepChooseServices")} icon="heroicons:squares-2x2">
+                        {serviceIds.length > 0 ? (
+                          <div className="space-y-2">
                             {serviceIds.map((sid) => {
                               const service = servicesMap[sid];
-                              const docs = serviceDocs[sid] ?? [];
                               const name = service ? getServiceName(service) : sid;
-                              return (
-                                <div key={sid} className="space-y-2">
-                                  <p className="font-semibold text-sm text-gray-900">{name}</p>
-                                  <div className="space-y-2 pl-3 border-l-2 border-gray-200">
-                                    {docs.map((doc, i) => {
-                                      const docName = (doc as { name?: string }).name || `Document ${i + 1}`;
-                                      const opts = (doc as { selectedOptions?: string[] }).selectedOptions ?? [];
-                                      const optNames = opts.map((oid) => (optionsMap[oid] ? getOptionName(optionsMap[oid]) : oid));
-                                      return (
-                                        <div key={i} className="space-y-0.5">
-                                          <p className="text-[10px] text-gray-500 font-medium">{t("form.resumePopup.document")} {i + 1}</p>
-                                          <p className="text-xs text-gray-800 break-words" title={docName}>{docName}</p>
-                                          {optNames.length > 0 && (
-                                            <p className="text-[10px] text-gray-600">{t("form.resumePopup.options")} {optNames.join(", ")}</p>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
+                              return <p key={sid} className="text-xs text-gray-800 font-medium">{name}</p>;
                             })}
                           </div>
-                        </section>
-                      )}
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
+                        )}
+                      </StepBlock>
 
-                      {signatories.length > 0 && (
-                        <section className="border-t border-gray-200 pt-4 pb-4">
-                          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                            <Icon icon="heroicons:user-group" className="w-3.5 h-3.5" />
-                            {t("form.steps.summary.signatories")}
-                          </h3>
-                          <div className="space-y-1.5">
+                      <StepBlock completed={hasDocuments} title={t("form.resumePopup.stepDocuments")} icon="heroicons:document-text">
+                        {hasDocuments ? (
+                          <div className="space-y-1">
+                            {serviceIds.flatMap((sid) => (serviceDocs[sid] ?? []).map((doc, i) => (
+                              <p key={`${sid}-${i}`} className="text-xs text-gray-800 break-words" title={(doc as { name?: string }).name}>{(doc as { name?: string }).name || `Document ${i + 1}`}</p>
+                            )))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
+                        )}
+                      </StepBlock>
+
+                      <StepBlock completed={signatories.length > 0} title={t("form.resumePopup.stepSignatories")} icon="heroicons:user-group">
+                        {signatories.length > 0 ? (
+                          <div className="space-y-1">
                             {signatories.map((sig, i) => (
-                              <div key={i} className="flex items-baseline gap-2">
-                                <span className="text-[10px] text-gray-500 font-medium shrink-0">{t("form.resumePopup.signatory")} {i + 1}</span>
-                                <span className="text-xs text-gray-900">{sig.firstName || sig.first_name} {sig.lastName || sig.last_name}</span>
-                              </div>
+                              <p key={i} className="text-xs text-gray-800">{(sig as { firstName?: string; first_name?: string }).firstName || (sig as { first_name?: string }).first_name} {(sig as { lastName?: string; last_name?: string }).lastName || (sig as { last_name?: string }).last_name}</p>
                             ))}
                           </div>
-                        </section>
-                      )}
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
+                        )}
+                      </StepBlock>
 
-                      {delivery && (
-                        <section className="border-t border-gray-200 pt-4 pb-4">
-                          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <Icon icon="heroicons:truck" className="w-3.5 h-3.5" />
-                            {t("form.steps.summary.delivery")}
-                          </h3>
-                          <p className="text-xs text-gray-900">
-                            {delivery === "postal" ? t("form.steps.delivery.postTitle") : t("form.steps.delivery.emailTitle")}
-                          </p>
-                        </section>
-                      )}
+                      <StepBlock completed={!!delivery} title={t("form.resumePopup.stepDelivery")} icon="heroicons:truck">
+                        {delivery ? (
+                          <p className="text-xs text-gray-800">{delivery === "postal" ? t("form.steps.delivery.postTitle") : t("form.steps.delivery.emailTitle")}</p>
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
+                        )}
+                      </StepBlock>
                     </div>
                   );
                 })()}
