@@ -114,7 +114,7 @@ export default function FormLayoutContent({
                   className="px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 bg-[#2563eb] text-white border-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {isContinuing ? (
-                    <div className="h-4 w-4 sm:h-5 sm:w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span className="truncate">{t("form.navigation.processing") || "Processing..."}</span>
                   ) : isUploading ? (
                     <span className="truncate">{t("form.steps.documents.uploading") || "Uploading..."}</span>
                   ) : (
@@ -137,7 +137,7 @@ export default function FormLayoutContent({
                   className="px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-2.5 font-medium rounded-lg transition-all text-xs sm:text-sm flex-shrink-0 border shadow-lg min-w-0 max-w-full flex items-center justify-center gap-2 bg-[#2563eb] text-white border-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {isContinuing ? (
-                    <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span className="truncate">{t("form.navigation.processing") || "Processing..."}</span>
                   ) : isUploading ? (
                     <span className="truncate">{t("form.steps.documents.uploading") || "Uploading..."}</span>
                   ) : (

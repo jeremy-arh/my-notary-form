@@ -393,7 +393,7 @@ export default function DocumentsPage() {
                       >
                         {uploading && (
                           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg bg-white/90 backdrop-blur-sm">
-                            <Icon icon="svg-spinners:ring-resize" className="mb-3 h-12 w-12 sm:h-16 sm:w-16 text-blue-600" />
+                            <div className="mb-3 h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gray-100 shrink-0" aria-hidden />
                             <p className="text-sm font-medium text-gray-900 sm:text-base">{t("form.steps.documents.uploading")}</p>
                             <p className="mt-1 text-xs text-gray-600 sm:text-sm">{t("form.steps.documents.pleaseWait")}</p>
                           </div>

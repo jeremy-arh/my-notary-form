@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { Skeleton } from "@/components/ui/skeleton";
 import { initialFormData, type FormData } from "@/lib/formData";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
@@ -25,8 +26,19 @@ export default function FormLayout({ children }: { children: React.ReactNode }) 
 
   if (!isLoaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-white">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#491ae9] border-t-transparent" />
+      <div className="flex flex-col min-h-screen bg-[#F3F4F6]">
+        <Skeleton className="h-14 sm:h-16 rounded-none" />
+        <div className="flex-1 p-4 sm:p-6 max-w-2xl mx-auto w-full space-y-4">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-full max-w-md" />
+          <div className="space-y-3 pt-4">
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-3/4 rounded-xl" />
+          </div>
+        </div>
+        <div className="h-1 bg-gray-200" />
+        <Skeleton className="h-16 rounded-none" />
       </div>
     );
   }

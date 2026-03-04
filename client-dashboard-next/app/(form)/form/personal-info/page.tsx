@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
@@ -16,7 +17,14 @@ import { initialFormData } from "@/lib/formData";
 const STORAGE_KEY = "notaryFormData";
 const SESSION_KEY = "formSessionId";
 
-const STEP_LABELS = ["Personal info", "Choose services", "Upload documents", "Signatories", "Delivery", "Summary"];
+const STEP_KEYS = [
+  "form.resumePopup.stepPersonalInfo",
+  "form.resumePopup.stepChooseServices",
+  "form.resumePopup.stepDocuments",
+  "form.resumePopup.stepSignatories",
+  "form.resumePopup.stepDelivery",
+  "form.resumePopup.stepSummary",
+] as const;
 
 type ActiveSubmission = {
   id: string;
@@ -128,37 +136,6 @@ export default function PersonalInfoPage() {
       setIsLoggedIn(!!user);
     };
     checkAuth();
-  }, []);
-
-  // Lire le pendingResume stocké par /form/page.tsx
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("pendingResume");
-      if (!raw) return;
-      sessionStorage.removeItem("pendingResume");
-      const { formData: fd, createdAt } = JSON.parse(raw) as {
-        formData: Record<string, unknown>;
-        createdAt?: string;
-      };
-      if (!fd) return;
-      // Créer un objet ActiveSubmission minimal pour réutiliser le modal existant
-      setActiveSubmission({
-        id: (fd.submissionId as string) ?? "",
-        created_at: createdAt,
-        data: {
-          session_id: (fd.sessionId as string) ?? "",
-          selectedServices: fd.selectedServices as string[] | undefined,
-          serviceDocuments: fd.serviceDocuments as Record<string, unknown[]> | undefined,
-          signatories: fd.signatories as unknown[] | undefined,
-          deliveryMethod: fd.deliveryMethod as string | undefined,
-        },
-        first_name: fd.firstName as string | undefined,
-        last_name: fd.lastName as string | undefined,
-      });
-      setActiveFormData(fd);
-      setResumeCreatedAt(createdAt);
-      setPendingNavigation("skip"); // Pas de navigation en attente, c'est une reprise directe
-    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -472,58 +449,39 @@ export default function PersonalInfoPage() {
         </div>
       </div>
 
-      {/* Modal : soumission en cours détectée */}
-      {activeSubmission && activeFormData && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="px-6 pt-6 pb-4">
-              <h2 className="text-base font-semibold text-gray-900">You have an unfinished request</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {(resumeCreatedAt || activeSubmission.created_at)
-                  ? `Started on ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date((resumeCreatedAt || activeSubmission.created_at) as string))}`
-                  : "A request is already in progress for this email."}
-              </p>
+      {/* Modal : soumission en cours détectée — rendu dans body pour flouter toute la page */}
+      {activeSubmission &&
+        activeFormData &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[99999] flex items-stretch sm:items-center sm:justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-md">
+            <div className="bg-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-sm sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="px-6 pt-6 pb-4">
+                <h2 className="text-base font-semibold text-gray-900">{t("form.resumePopup.title")}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {(resumeCreatedAt || activeSubmission.created_at)
+                    ? t("form.resumePopup.startedOn").replace("{date}", new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", year: "numeric" }).format(new Date((resumeCreatedAt || activeSubmission.created_at) as string)))
+                    : t("form.resumePopup.inProgress")}
+                </p>
+              </div>
+
+              <div className="px-6 pb-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span>
+                    {t("form.resumePopup.stoppedAt")}{" "}
+                    <span className="font-semibold text-gray-900">
+                      {t(STEP_KEYS[getResumeStepIndex({ ...initialFormData, ...(activeFormData as typeof initialFormData) })] ?? "form.resumePopup.stepSummary")}
+                    </span>
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="px-6 pb-4 space-y-3">
-              {(() => {
-                const fd = activeFormData;
-                const sCount = (fd.selectedServices as string[] | undefined)?.length ?? 0;
-                const dCount = Object.values((fd.serviceDocuments as Record<string, unknown[]> | undefined) ?? {}).reduce(
-                  (a: number, arr) => a + (Array.isArray(arr) ? arr.length : 0), 0
-                );
-                const sigCount = Array.isArray(fd.signatories) ? (fd.signatories as unknown[]).length : 0;
-                const stepIdx = getResumeStepIndex({ ...initialFormData, ...(fd as typeof initialFormData) });
-                const stepLabel = STEP_LABELS[stepIdx] ?? "Summary";
-                return (
-                  <>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span>Stopped at: <span className="font-semibold text-gray-900">{stepLabel}</span></span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 pt-1">
-                      {[
-                        { value: sCount, label: sCount > 1 ? "Services" : "Service" },
-                        { value: dCount, label: dCount > 1 ? "Documents" : "Document" },
-                        { value: sigCount, label: sigCount > 1 ? "Signatories" : "Signatory" },
-                      ].map(({ value, label }) => (
-                        <div key={label} className="text-center py-2.5 bg-gray-50 rounded-xl border border-gray-100">
-                          <p className="text-xl font-bold text-gray-900 leading-none">{value}</p>
-                          <p className="text-[10px] text-gray-400 mt-1">{label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
+            <div className="flex-shrink-0 mx-6 border-t border-gray-100" />
 
-            <div className="mx-6 border-t border-gray-100" />
-
-            <div className="px-6 py-4 space-y-2">
+            <div className="flex-shrink-0 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-2">
               {/* Reprendre */}
               <button
                 onClick={() => {
@@ -540,7 +498,7 @@ export default function PersonalInfoPage() {
                 className="w-full flex items-center justify-center gap-2 py-3 bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-semibold rounded-xl text-sm transition-all shadow-md"
               >
                 <Icon icon="heroicons:arrow-path" className="w-4 h-4" />
-                Resume my request
+                {t("form.resumePopup.resume")}
               </button>
               {/* Continuer quand même → abandonne l'ancienne */}
               <button
@@ -562,12 +520,13 @@ export default function PersonalInfoPage() {
                 }}
                 className="w-full flex items-center justify-center gap-2 py-2.5 text-gray-500 hover:text-gray-800 font-medium text-sm transition-colors rounded-xl hover:bg-gray-50"
               >
-                Start a new request
+                {t("form.resumePopup.startNew")}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </>
   );
 }

@@ -243,9 +243,7 @@ export default function AddressAutocomplete({
     <div className="relative">
       <div ref={containerRef} className={`w-full ${className}`.trim()} />
       {isLoading && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-black border-t-transparent" />
-        </div>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-5 h-5 rounded bg-gray-100" aria-hidden />
       )}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
