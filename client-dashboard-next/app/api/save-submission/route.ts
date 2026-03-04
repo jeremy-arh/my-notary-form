@@ -111,6 +111,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ id: data?.id });
     }
 
+    // Avant d'insérer, s'assurer qu'il n'existe pas d'autre pending pour cet email
+    // (cas : user qui recommence sur un autre device sans passer par le popup)
+    if (email) {
+      const { data: extras } = await supabase
+        .from("submission")
+        .select("id")
+        .eq("email", email)
+        .eq("status", "pending_payment");
+      if (extras && extras.length > 0) {
+        const ids = extras.map((s: { id: string }) => s.id);
+        await supabase.from("submission").update({ status: "abandoned" }).in("id", ids);
+      }
+    }
+
     const { data, error } = await supabase
       .from("submission")
       .insert(submissionData)

@@ -67,7 +67,19 @@ export default function FormPage() {
     redirect(path);
   };
 
-  const startFresh = () => {
+  const startFresh = async () => {
+    // Abandonner les soumissions en cours en DB avant de nettoyer localStorage
+    const email = resumeData?.formData?.email?.trim();
+    const submissionId = resumeData?.formData?.submissionId;
+    try {
+      if (email || submissionId) {
+        await fetch("/api/abandon-submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(submissionId ? { submissionIds: [submissionId] } : { email }),
+        });
+      }
+    } catch { /* ignore */ }
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(SESSION_KEY);
     redirect("/form/personal-info");

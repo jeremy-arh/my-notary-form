@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getResumePath } from "@/lib/formResume";
 import { initialFormData, type FormData } from "@/lib/formData";
+import { createClient } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "notaryFormData";
+// Flag stocké en sessionStorage pour éviter de re-checker à chaque navigation
+const CHECKED_KEY = "formSessionChecked";
+
 const FORM_STEP_PATHS = [
   "/form/personal-info",
   "/form/choose-services",
@@ -16,27 +20,68 @@ const FORM_STEP_PATHS = [
 ] as const;
 
 /**
- * Redirige uniquement quand l'utilisateur est sur une étape EN AVANT de sa progression
- * (ex: recharge sur /form/documents sans avoir sélectionné de services).
- * Si ?service= est présent et un service est déjà sélectionné, bloque l'accès à choose-services
- * et redirige vers documents (comme l'ancienne version).
+ * - Redirige vers la bonne étape selon la progression (localStorage)
+ * - Si l'utilisateur arrive directement sur une étape sans passer par /form,
+ *   vérifie une fois par session si une soumission en cours existe en DB
+ *   et redirige vers /form pour afficher le popup de reprise.
  */
 export default function FormResumeGuard() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dbChecked = useRef(false);
 
+  // Vérification DB une seule fois par session (user qui bypasse /form)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (pathname === "/form") return;
+    if (dbChecked.current) return;
+    if (sessionStorage.getItem(CHECKED_KEY)) return;
+
+    dbChecked.current = true;
+    sessionStorage.setItem(CHECKED_KEY, "1");
+
+    const checkDB = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) return;
+
+        const res = await fetch(`/api/active-submission?email=${encodeURIComponent(user.email)}`);
+        const { formData: dbFormData, submission } = await res.json();
+        if (!dbFormData || !submission) return;
+
+        // Il y a une soumission en cours en DB
+        // Vérifier si le localStorage est vide ou différent
+        let localData: FormData = initialFormData;
+        try {
+          const raw = window.localStorage.getItem(STORAGE_KEY);
+          if (raw) localData = { ...initialFormData, ...(JSON.parse(raw) as Partial<FormData>) };
+        } catch { /* ignore */ }
+
+        const localSubmissionId = (localData as { submissionId?: string }).submissionId;
+        // Si le localStorage pointe déjà sur la même soumission, pas besoin de popup
+        if (localSubmissionId && localSubmissionId === submission.id) return;
+
+        // localStorage vide ou différent → rediriger vers /form pour le popup
+        const search = searchParams.toString();
+        router.replace(search ? `/form?${search}` : "/form");
+      } catch { /* ignore */ }
+    };
+
+    checkDB();
+  }, [pathname, router, searchParams]);
+
+  // Redirection locale basée sur localStorage
   useEffect(() => {
     if (typeof window === "undefined" || !pathname?.startsWith("/form")) return;
-    if (pathname === "/form") return; // La page /form gère déjà la redirection
+    if (pathname === "/form") return;
 
     let formData: FormData = initialFormData;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) formData = { ...initialFormData, ...(JSON.parse(raw) as Partial<FormData>) };
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
 
     const serviceParam = searchParams.get("service");
     const hasServiceFromUrl = !!serviceParam && (formData.selectedServices?.length ?? 0) > 0;
@@ -57,6 +102,13 @@ export default function FormResumeGuard() {
       router.replace(search ? `${resumePath}?${search}` : resumePath);
     }
   }, [pathname, router, searchParams]);
+
+  // Réinitialiser le flag quand l'utilisateur passe par /form (popup géré)
+  useEffect(() => {
+    if (pathname === "/form") {
+      sessionStorage.removeItem(CHECKED_KEY);
+    }
+  }, [pathname]);
 
   return null;
 }
