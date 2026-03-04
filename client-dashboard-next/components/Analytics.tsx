@@ -27,9 +27,9 @@ export default function Analytics() {
         }}
       />
       <Script
-        src="https://plausible.io/js/script.js"
+        src="https://plausible.io/js/script.tagged-events.js"
         data-domain={PLAUSIBLE_DOMAIN}
-        strategy="lazyOnload"
+        strategy="afterInteractive"
       />
 
       {/* Google Tag Manager */}

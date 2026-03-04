@@ -1,45 +1,22 @@
 /**
- * Plausible Analytics - Direct API Integration
- * Compatible with Next.js (client-side)
- * Documentation: https://plausible.io/docs/events-api
+ * Plausible Analytics - via window.plausible() (client-side)
+ * Requires the Plausible script to be loaded (see components/Analytics.tsx)
  */
 
-const PLAUSIBLE_DOMAIN = "mynotary.io";
-const PLAUSIBLE_API = "https://plausible.io/api/event";
-
-const sendToPlausible = async (eventData: Record<string, unknown>) => {
-  if (typeof window === "undefined") return;
-
-  try {
-    await fetch(PLAUSIBLE_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        domain: PLAUSIBLE_DOMAIN,
-        ...eventData,
-      }),
-    });
-  } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[Plausible] Tracking error:", error);
-    }
+declare global {
+  interface Window {
+    plausible?: (eventName: string, options?: { props?: Record<string, unknown>; callback?: () => void }) => void;
   }
+}
+
+const trackEvent = (eventName: string, props: Record<string, unknown> = {}) => {
+  if (typeof window === "undefined") return;
+  if (typeof window.plausible !== "function") return;
+  window.plausible(eventName, Object.keys(props).length > 0 ? { props } : undefined);
 };
 
-export const trackPageView = (pageName: string, pagePath?: string) => {
-  sendToPlausible({
-    name: "pageview",
-    url: pagePath || (typeof window !== "undefined" ? window.location.href : ""),
-    props: { page_name: pageName },
-  });
-};
-
-export const trackEvent = (eventName: string, props: Record<string, unknown> = {}) => {
-  sendToPlausible({
-    name: eventName,
-    url: typeof window !== "undefined" ? window.location.href : "",
-    props,
-  });
+export const trackPageView = (pageName: string) => {
+  trackEvent("pageview", { page_name: pageName });
 };
 
 export const trackFormStep = (stepNumber: number, stepName: string) => {
