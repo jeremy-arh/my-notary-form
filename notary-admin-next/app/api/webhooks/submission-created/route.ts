@@ -18,13 +18,25 @@ export async function GET(req: Request) {
   if (url.searchParams.get("debug") !== "1") {
     return NextResponse.json({ error: "Méthode non autorisée" }, { status: 405 });
   }
-  const hasSecret = !!process.env.CRON_SECRET?.trim();
+  const raw = process.env.CRON_SECRET;
+  const trimmed = raw?.trim();
+  const hasSecret = !!trimmed;
+  const length = raw?.length ?? 0;
+  const trimmedLength = trimmed?.length ?? 0;
   return NextResponse.json({
     ok: true,
     cronSecretConfigured: hasSecret,
+    diagnostic: {
+      exists: raw !== undefined && raw !== null,
+      length,
+      trimmedLength,
+      isEmpty: length === 0 || trimmedLength === 0,
+    },
     hint: hasSecret
       ? "CRON_SECRET est défini. Vérifiez que le header Authorization est exactement: Bearer <votre_secret>"
-      : "CRON_SECRET manquant dans les variables d'environnement Vercel.",
+      : length === 0
+        ? "CRON_SECRET est vide ou absent. Vercel: supprimez la variable, recréez-la (sans espace en copiant), puis Redeploy."
+        : "CRON_SECRET contient peut-être des espaces/caractères invalides. Vérifiez la valeur sur Vercel.",
   });
 }
 
