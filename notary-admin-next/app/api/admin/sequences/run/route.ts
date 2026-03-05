@@ -113,7 +113,6 @@ async function runSequences(req: Request) {
           if (alreadySent) continue;
           if (sub.status !== triggerStatus) continue;
 
-          const firstName = sub.first_name || "there";
           const vars: Record<string, string> = {
             "{{first_name}}": sub.first_name || "",
             "{{last_name}}": sub.last_name || "",

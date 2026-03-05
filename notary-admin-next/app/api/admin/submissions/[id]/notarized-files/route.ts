@@ -126,7 +126,6 @@ export async function POST(
         continue;
       }
 
-      const ext = file.name.split(".").pop() || "pdf";
       const fileName = `${submissionId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
 
       const { data: uploadData, error: uploadError } = await supabase.storage

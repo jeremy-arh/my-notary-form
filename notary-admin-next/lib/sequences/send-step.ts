@@ -41,7 +41,6 @@ export async function sendSequenceStep(
     return { success: false, channel: step.channel, error: "Submission introuvable" };
   }
 
-  const contactField = step.channel === "email" ? "email" : "phone";
   const contact = step.channel === "email" ? sub.email : sub.phone;
   if (!contact || contact === "") {
     return { success: false, channel: step.channel, error: "Contact manquant" };
