@@ -371,7 +371,7 @@ export async function GET(
         file_name: f.file_name,
         file_url: url,
         file_size: f.file_size ?? undefined,
-        uploaded_at: f.uploaded_at || f.created_at || new Date().toISOString(),
+        uploaded_at: f.uploaded_at || new Date().toISOString(),
       });
     }
 
