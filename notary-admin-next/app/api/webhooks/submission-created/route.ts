@@ -35,7 +35,11 @@ export async function POST(req: Request) {
     const cronSecret = process.env.CRON_SECRET?.trim();
     const expected = cronSecret ? `Bearer ${cronSecret}` : null;
     if (!cronSecret || authHeader !== expected) {
-      console.log("[webhook submission-created] 401: auth manquante ou invalide");
+      console.error("[webhook submission-created] 401: auth invalide", {
+        hasAuthHeader: !!authHeader,
+        authHeaderLength: authHeader?.length ?? 0,
+        hasCronSecret: !!cronSecret,
+      });
       return NextResponse.json(
         {
           error: "Non autorisé",
@@ -47,21 +51,29 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch((e) => {
+      console.error("[webhook submission-created] Erreur parse JSON:", e);
+      return {};
+    });
     const record = body.record ?? body;
     const submissionId = record.id;
     const createdAt = record.created_at;
     const status = record.status ?? "pending_payment";
 
     if (!submissionId || !createdAt) {
-      console.log("[webhook submission-created] 400: payload invalide", { body });
+      console.error("[webhook submission-created] 400: payload invalide", {
+        bodyKeys: Object.keys(body),
+        recordKeys: record ? Object.keys(record) : [],
+        submissionId,
+        createdAt,
+      });
       return NextResponse.json({
         success: false,
         error: "Payload invalide (record.id ou record.created_at manquant)",
       });
     }
 
-    console.log("[webhook submission-created] Planification pour", submissionId);
+    console.log("[webhook submission-created] Planification pour", { submissionId, status, createdAt });
     const { scheduled } = await scheduleSequenceStepsForSubmission(
       submissionId,
       new Date(createdAt),
@@ -74,7 +86,19 @@ export async function POST(req: Request) {
       scheduled,
     });
   } catch (err) {
-    console.error("[webhook submission-created]", err);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[webhook submission-created] Erreur serveur:", {
+      message,
+      stack,
+      err,
+    });
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        message: process.env.NODE_ENV === "development" ? message : undefined,
+      },
+      { status: 500 }
+    );
   }
 }

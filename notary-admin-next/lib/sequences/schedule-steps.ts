@@ -59,7 +59,16 @@ export async function scheduleSequenceStepsForSubmission(
     .eq("trigger_event", "submission_created")
     .or("trigger_status.eq.pending_payment,trigger_status.is.null");
 
-  if (seqError || !sequences?.length) {
+  if (seqError) {
+    console.error("[schedule-steps] Erreur fetch sequences:", {
+      submissionId,
+      error: seqError.message,
+      code: seqError.code,
+    });
+    return { scheduled: 0 };
+  }
+  if (!sequences?.length) {
+    console.log("[schedule-steps] Aucune séquence active pour trigger_status:", triggerStatus);
     return { scheduled: 0 };
   }
 
@@ -71,7 +80,10 @@ export async function scheduleSequenceStepsForSubmission(
 
   for (const seq of sequences) {
     const status = seq.trigger_status || "pending_payment";
-    if (status !== triggerStatus) continue;
+    if (status !== triggerStatus) {
+      console.log("[schedule-steps] Séquence", seq.id, "ignorée: trigger_status", status, "!=", triggerStatus);
+      continue;
+    }
 
     const { data: steps, error: stepsError } = await supabase
       .from("automation_steps")
@@ -80,7 +92,14 @@ export async function scheduleSequenceStepsForSubmission(
       .eq("is_active", true)
       .order("step_order", { ascending: true });
 
-    if (stepsError || !steps?.length) continue;
+    if (stepsError) {
+      console.error("[schedule-steps] Erreur fetch steps:", { sequenceId: seq.id, error: stepsError.message });
+      continue;
+    }
+    if (!steps?.length) {
+      console.log("[schedule-steps] Séquence", seq.id, "sans étapes actives");
+      continue;
+    }
 
     for (const step of steps) {
       const delayMs = delayToMs(step.delay_value, step.delay_unit);
@@ -105,13 +124,24 @@ export async function scheduleSequenceStepsForSubmission(
   }
 
   if (events.length > 0) {
-    await inngest.send(
-      events.map((e) => ({
-        name: e.name,
-        data: e.data,
-        ts: e.ts,
-      }))
-    );
+    try {
+      await inngest.send(
+        events.map((e) => ({
+          name: e.name,
+          data: e.data,
+          ts: e.ts,
+        }))
+      );
+      console.log("[schedule-steps] Inngest.send OK:", events.length, "événement(s)");
+    } catch (inngestErr) {
+      console.error("[schedule-steps] Erreur Inngest.send:", {
+        submissionId,
+        eventCount: events.length,
+        error: inngestErr instanceof Error ? inngestErr.message : String(inngestErr),
+        stack: inngestErr instanceof Error ? inngestErr.stack : undefined,
+      });
+      throw inngestErr;
+    }
   }
 
   return { scheduled: events.length };

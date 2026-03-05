@@ -41,6 +41,7 @@ export const sequenceStepSend = inngest.createFunction(
     };
 
     if (!submissionId || !stepId) {
+      console.error("[inngest sequence-step] Données manquantes:", { submissionId, stepId, eventData: event.data });
       throw new Error("submissionId et stepId requis");
     }
 
@@ -70,12 +71,19 @@ export const sequenceStepSend = inngest.createFunction(
       .single();
 
     if (stepError || !stepData) {
+      console.error("[inngest sequence-step] Étape introuvable:", { stepId, error: stepError?.message });
       throw new Error(`Étape ${stepId} introuvable`);
     }
 
     const result = await sendSequenceStep(submissionId, stepData);
 
     if (!result.success) {
+      console.error("[inngest sequence-step] Échec envoi:", {
+        submissionId,
+        stepId,
+        channel: result.channel,
+        error: result.error,
+      });
       throw new Error(result.error || "Échec envoi");
     }
 

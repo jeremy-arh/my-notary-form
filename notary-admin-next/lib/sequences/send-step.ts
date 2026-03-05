@@ -38,11 +38,13 @@ export async function sendSequenceStep(
     .single();
 
   if (subError || !sub) {
+    console.error("[send-step] Submission introuvable:", { submissionId, stepId: step.id, error: subError?.message });
     return { success: false, channel: step.channel, error: "Submission introuvable" };
   }
 
   const contact = step.channel === "email" ? sub.email : sub.phone;
   if (!contact || contact === "") {
+    console.error("[send-step] Contact manquant:", { submissionId, channel: step.channel, stepId: step.id });
     return { success: false, channel: step.channel, error: "Contact manquant" };
   }
 
@@ -83,6 +85,7 @@ export async function sendSequenceStep(
       const SENDGRID_FROM_NAME = process.env.SENDGRID_FROM_NAME || "MY NOTARY";
 
       if (!SENDGRID_API_KEY) {
+        console.error("[send-step] SENDGRID_API_KEY non configurée");
         return { success: false, channel: "email", error: "SENDGRID_API_KEY non configurée" };
       }
 
@@ -116,6 +119,12 @@ export async function sendSequenceStep(
 
       if (!sgRes.ok) {
         const errText = await sgRes.text();
+        console.error("[send-step] SendGrid erreur:", {
+          status: sgRes.status,
+          submissionId,
+          stepId: step.id,
+          response: errText,
+        });
         return { success: false, channel: "email", error: errText };
       }
 
@@ -143,6 +152,7 @@ export async function sendSequenceStep(
       const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 
       if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
+        console.error("[send-step] Twilio non configuré (variables manquantes)");
         return { success: false, channel: "sms", error: "Twilio non configuré" };
       }
 
@@ -165,6 +175,12 @@ export async function sendSequenceStep(
 
       if (!twilioRes.ok) {
         const errText = await twilioRes.text();
+        console.error("[send-step] Twilio erreur:", {
+          status: twilioRes.status,
+          submissionId,
+          stepId: step.id,
+          response: errText,
+        });
         return { success: false, channel: "sms", error: errText };
       }
 
@@ -182,10 +198,19 @@ export async function sendSequenceStep(
       return { success: true, channel: "sms" };
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : "Erreur";
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[send-step] Exception:", {
+      submissionId,
+      stepId: step.id,
+      channel: step.channel,
+      message,
+      stack,
+    });
     return {
       success: false,
       channel: step.channel,
-      error: err instanceof Error ? err.message : "Erreur",
+      error: message,
     };
   }
 }
