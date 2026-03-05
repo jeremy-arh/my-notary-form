@@ -26,7 +26,7 @@ export interface AutomationSequence {
   description: string | null;
   trigger_event: string;
   trigger_status: string | null;
-  channel: "email" | "sms";
+  channel: "email" | "sms" | "mixed";
   is_active: boolean;
   steps: AutomationStep[];
   created_at: string;
@@ -62,7 +62,7 @@ export function useSequences() {
     description?: string;
     trigger_event: string;
     trigger_status?: string;
-    channel: "email" | "sms";
+    channel: "email" | "sms" | "mixed";
   }) => {
     const res = await fetch("/api/admin/sequences", {
       method: "POST",

@@ -353,6 +353,28 @@ export async function GET(
       .eq("submission_id", id)
       .order("created_at", { ascending: false });
 
+    const { data: notarizedFilesData } = await supabase
+      .from("notarized_files")
+      .select("id, file_name, file_url, file_size, storage_path, uploaded_at")
+      .eq("submission_id", id)
+      .order("uploaded_at", { ascending: false });
+
+    const notarizedFiles: { id: string; file_name: string; file_url: string; file_size?: number; uploaded_at: string }[] = [];
+    for (const f of notarizedFilesData || []) {
+      let url = f.file_url;
+      if (f.storage_path) {
+        const signed = await getSignedUrl(f.storage_path);
+        if (signed) url = signed;
+      }
+      notarizedFiles.push({
+        id: f.id,
+        file_name: f.file_name,
+        file_url: url,
+        file_size: f.file_size ?? undefined,
+        uploaded_at: f.uploaded_at || f.created_at || new Date().toISOString(),
+      });
+    }
+
     return NextResponse.json({
       submission: sub,
       items: orderItems,
@@ -365,6 +387,7 @@ export async function GET(
       signatories,
       emails,
       sms,
+      notarizedFiles,
     });
   } catch (err) {
     console.error("[API admin submissions]", err);

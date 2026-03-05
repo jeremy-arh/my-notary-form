@@ -100,7 +100,7 @@ export default function SequencesManager() {
     description: "",
     trigger_event: "submission_created",
     trigger_status: "pending_payment",
-    channel: "email" as "email" | "sms",
+    channel: "email" as "email" | "sms" | "mixed",
   });
 
   const defaultStepForm = {
@@ -108,6 +108,7 @@ export default function SequencesManager() {
     delay_unit: "hours" as "minutes" | "hours" | "days",
     send_window_start: "" as string | number,
     send_window_end: "" as string | number,
+    channel: "email" as "email" | "sms",
     template_key: "",
     subject: "",
     message_body: "",
@@ -126,7 +127,7 @@ export default function SequencesManager() {
         description: "",
         trigger_event: "submission_created",
         trigger_status: "pending_payment",
-        channel: "email",
+        channel: "email" as "email" | "sms" | "mixed",
       });
     } finally {
       setSaving(false);
@@ -170,7 +171,14 @@ export default function SequencesManager() {
     setShowNewStep(seqId);
   };
 
-  const handleCreateStep = async (seqId: string, channel: "email" | "sms") => {
+  const getStepChannel = (seqId: string): "email" | "sms" => {
+    const seq = sequences.find((s) => s.id === seqId);
+    if (seq?.channel === "mixed") return stepForm.channel;
+    return (seq?.channel as "email" | "sms") || "email";
+  };
+
+  const handleCreateStep = async (seqId: string) => {
+    const channel = getStepChannel(seqId);
     setSaving(true);
     try {
       await createStep(seqId, {
@@ -203,6 +211,7 @@ export default function SequencesManager() {
       delay_unit: step.delay_unit,
       send_window_start: step.send_window_start ?? "",
       send_window_end: step.send_window_end ?? "",
+      channel: step.channel,
       template_key: step.template_key,
       subject: step.subject || "",
       message_body: step.message_body || "",
@@ -215,7 +224,7 @@ export default function SequencesManager() {
     if (!editingStep) return;
     setSaving(true);
     try {
-      await updateStep(editingStep.sequenceId, editingStep.step.id, {
+      const updates: Parameters<typeof updateStep>[2] = {
         delay_value: stepForm.delay_value,
         delay_unit: stepForm.delay_unit,
         send_window_start:
@@ -230,7 +239,10 @@ export default function SequencesManager() {
         subject: stepForm.subject || null,
         message_body: stepForm.message_body || null,
         html_body: stepForm.html_body || null,
-      });
+      };
+      const seq = sequences.find((s) => s.id === editingStep.sequenceId);
+      if (seq?.channel === "mixed") updates.channel = stepForm.channel;
+      await updateStep(editingStep.sequenceId, editingStep.step.id, updates);
       setEditingStep(null);
     } finally {
       setSaving(false);
@@ -264,9 +276,9 @@ export default function SequencesManager() {
     );
   }
 
-  const currentStepChannel =
+  const currentStepChannel: "email" | "sms" =
     showNewStep
-      ? sequences.find((s) => s.id === showNewStep)?.channel || "email"
+      ? getStepChannel(showNewStep)
       : editingStep?.step.channel || "email";
 
   return (
@@ -308,9 +320,19 @@ export default function SequencesManager() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <CardTitle className="text-base">{seq.name}</CardTitle>
                   <Badge
-                    variant={seq.channel === "email" ? "default" : "secondary"}
+                    variant={
+                      seq.channel === "mixed"
+                        ? "outline"
+                        : seq.channel === "email"
+                        ? "default"
+                        : "secondary"
+                    }
                   >
-                    {seq.channel === "email" ? "Email" : "SMS"}
+                    {seq.channel === "mixed"
+                      ? "Mixte"
+                      : seq.channel === "email"
+                      ? "Email"
+                      : "SMS"}
                   </Badge>
                   <Badge
                     variant={seq.is_active ? "default" : "outline"}
@@ -402,10 +424,18 @@ export default function SequencesManager() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      {seq.channel === "mixed" && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px]"
+                        >
+                          {step.channel === "email" ? "Email" : "SMS"}
+                        </Badge>
+                      )}
                       <code className="px-1.5 py-0.5 rounded bg-muted text-[11px]">
                         {step.template_key}
                       </code>
-                      {seq.channel === "email" && step.html_body && (
+                      {(seq.channel === "email" || (seq.channel === "mixed" && step.channel === "email")) && step.html_body && (
                         <Badge
                           variant="outline"
                           className="text-[10px] bg-blue-50 text-blue-700 border-blue-200"
@@ -413,7 +443,7 @@ export default function SequencesManager() {
                           Template personnalisé
                         </Badge>
                       )}
-                      {seq.channel === "sms" && step.message_body && (
+                      {(seq.channel === "sms" || (seq.channel === "mixed" && step.channel === "sms")) && step.message_body && (
                         <Badge
                           variant="outline"
                           className="text-[10px] bg-violet-50 text-violet-700 border-violet-200"
@@ -527,6 +557,32 @@ export default function SequencesManager() {
 
             {/* TAB 1: Paramètres */}
             <TabsContent value="settings" className="space-y-4 pt-2">
+              {(showNewStep && sequences.find((s) => s.id === showNewStep)?.channel === "mixed") ||
+              (editingStep && sequences.find((s) => s.id === editingStep.sequenceId)?.channel === "mixed") ? (
+                <div className="space-y-2">
+                  <Label>Canal de cette étape</Label>
+                  <Select
+                    value={stepForm.channel}
+                    onValueChange={(v) =>
+                      setStepForm((f) => ({
+                        ...f,
+                        channel: v as "email" | "sms",
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Choisissez le canal pour cette étape (séquence mixte)
+                  </p>
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Délai d&apos;envoi</Label>
@@ -713,13 +769,7 @@ export default function SequencesManager() {
               onClick={
                 editingStep
                   ? handleUpdateStep
-                  : () =>
-                      showNewStep &&
-                      handleCreateStep(
-                        showNewStep,
-                        sequences.find((s) => s.id === showNewStep)?.channel ||
-                          "email"
-                      )
+                  : () => showNewStep && handleCreateStep(showNewStep)
               }
               disabled={saving || !stepForm.template_key}
             >
@@ -899,7 +949,7 @@ interface SeqFormData {
   description: string;
   trigger_event: string;
   trigger_status: string;
-  channel: "email" | "sms";
+  channel: "email" | "sms" | "mixed";
 }
 
 function SequenceForm({
@@ -935,17 +985,21 @@ function SequenceForm({
           <Select
             value={form.channel}
             onValueChange={(v) =>
-              setForm((f) => ({ ...f, channel: v as "email" | "sms" }))
+              setForm((f) => ({ ...f, channel: v as "email" | "sms" | "mixed" }))
             }
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="email">Email</SelectItem>
-              <SelectItem value="sms">SMS</SelectItem>
+              <SelectItem value="email">Email uniquement</SelectItem>
+              <SelectItem value="sms">SMS uniquement</SelectItem>
+              <SelectItem value="mixed">Mixte (email + SMS)</SelectItem>
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            Mixte : chaque étape peut être email ou SMS
+          </p>
         </div>
         <div className="space-y-2">
           <Label>Événement déclencheur</Label>

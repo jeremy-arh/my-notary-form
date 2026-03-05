@@ -45,6 +45,10 @@ export async function POST(req: Request) {
     if (!name || !trigger_event || !channel) {
       return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
     }
+    const validChannels = ["email", "sms", "mixed"];
+    if (!validChannels.includes(channel)) {
+      return NextResponse.json({ error: "Canal invalide (email, sms ou mixed)" }, { status: 400 });
+    }
 
     const supabase = createAdminClient();
     const { data, error } = await supabase

@@ -144,6 +144,15 @@ interface OrderTask {
   updated_at: string;
 }
 
+interface NotarizedFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_size?: number;
+  uploaded_at: string;
+  storage_path?: string;
+}
+
 const STATUS_LABELS: Record<string, string> = {
   pending: "En attente",
   pending_payment: "Paiement en attente",
@@ -179,6 +188,9 @@ export default function OrderDetailPage() {
   const [showSendMessage, setShowSendMessage] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const [notarizedFiles, setNotarizedFiles] = useState<NotarizedFile[]>([]);
+  const [uploadingNotarized, setUploadingNotarized] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
   const updateStatus = async (newStatus: "completed" | "cancelled") => {
     if (updating) return;
@@ -225,6 +237,7 @@ export default function OrderDetailPage() {
       setEmails(data.emails || []);
       setSms(data.sms || []);
       setTasks(data.tasks || []);
+      setNotarizedFiles(data.notarizedFiles || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de chargement");
     } finally {
@@ -264,6 +277,14 @@ export default function OrderDetailPage() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 
+  const copyToClipboard = (text: string, label: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(`${label} copié dans le presse-papiers`),
+      () => toast.error("Échec de la copie")
+    );
+  };
+
   const shortId = submission.id.slice(0, 8);
   const deliveryMethod = (submission.data as { delivery_method?: string })?.delivery_method;
 
@@ -281,8 +302,28 @@ export default function OrderDetailPage() {
         <h1 className="text-2xl font-bold">Dossier #{shortId}</h1>
       </div>
 
-      {/* Actions principales (Annuler, Terminé) */}
-      <div className="flex justify-end gap-2">
+      {/* Actions principales (Annuler, Terminé, Planifier séquences) */}
+      <div className="flex justify-end gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={updating}
+          onClick={async () => {
+            try {
+              const res = await fetch(`/api/admin/submissions/${submission.id}/schedule-sequences`, {
+                method: "POST",
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || "Erreur");
+              toast.success(data.message || `${data.scheduled} étape(s) planifiée(s)`);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Erreur");
+            }
+          }}
+        >
+          <Icon icon="lucide:calendar-clock" className="mr-2 h-4 w-4" />
+          Planifier les séquences
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -311,6 +352,7 @@ export default function OrderDetailPage() {
           <TabsTrigger value="overview">Vue d&apos;ensemble</TabsTrigger>
           <TabsTrigger value="signataires">Signataires</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="notarized">Documents notariés ({notarizedFiles.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tâches ({tasks.length})</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
@@ -387,9 +429,10 @@ export default function OrderDetailPage() {
                                             </a>
                                             <a
                                               href={doc.file_url}
-                                              download={doc.name}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
                                               className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
-                                              title="Télécharger"
+                                              title="Ouvrir dans une nouvelle fenêtre"
                                             >
                                               <Icon icon="lucide:download" className="h-3.5 w-3.5" />
                                               Télécharger
@@ -560,57 +603,121 @@ export default function OrderDetailPage() {
                 <CardContent className="space-y-2 text-sm">
                   {client ? (
                     <>
-                      <div>
-                        <span className="text-muted-foreground">Nom :</span>{" "}
-                        {client.first_name} {client.last_name}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => copyToClipboard(`${client.first_name} ${client.last_name}`.trim(), "Nom")}
+                        onKeyDown={(e) => e.key === "Enter" && copyToClipboard(`${client.first_name} ${client.last_name}`.trim(), "Nom")}
+                        className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                      >
+                        <span className="text-muted-foreground">Nom :</span>
+                        <span>{client.first_name} {client.last_name}</span>
+                        <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">Email :</span>{" "}
-                        <a href={`mailto:${client.email}`} className="text-primary hover:underline">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => copyToClipboard(client.email, "Email")}
+                        onKeyDown={(e) => e.key === "Enter" && copyToClipboard(client.email, "Email")}
+                        className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                      >
+                        <span className="text-muted-foreground">Email :</span>
+                        <a href={`mailto:${client.email}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                           {client.email}
                         </a>
+                        <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
                       </div>
                       {client.phone && (
-                        <div>
-                          <span className="text-muted-foreground">Téléphone :</span> {client.phone}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => copyToClipboard(client.phone!, "Téléphone")}
+                          onKeyDown={(e) => e.key === "Enter" && copyToClipboard(client.phone!, "Téléphone")}
+                          className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                        >
+                          <span className="text-muted-foreground">Téléphone :</span>
+                          <span>{client.phone}</span>
+                          <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
                         </div>
                       )}
                       {(client.address || client.city) && (
-                        <div>
-                          <span className="text-muted-foreground">Adresse :</span>{" "}
-                          {[client.address, client.city, client.postal_code, client.country]
-                            .filter(Boolean)
-                            .join(", ")}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => copyToClipboard([client.address, client.city, client.postal_code, client.country].filter(Boolean).join(", "), "Adresse")}
+                          onKeyDown={(e) => e.key === "Enter" && copyToClipboard([client.address, client.city, client.postal_code, client.country].filter(Boolean).join(", "), "Adresse")}
+                          className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                        >
+                          <span className="text-muted-foreground">Adresse :</span>
+                          <span className="break-words">
+                            {[client.address, client.city, client.postal_code, client.country]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </span>
+                          <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
                         </div>
                       )}
                     </>
                   ) : (
                     <>
-                      <div>
-                        <span className="text-muted-foreground">Nom :</span>{" "}
-                        {[submission.first_name, submission.last_name].filter(Boolean).join(" ") || "—"}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => copyToClipboard([submission.first_name, submission.last_name].filter(Boolean).join(" ") || "", "Nom")}
+                        onKeyDown={(e) => e.key === "Enter" && copyToClipboard([submission.first_name, submission.last_name].filter(Boolean).join(" ") || "", "Nom")}
+                        className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                      >
+                        <span className="text-muted-foreground">Nom :</span>
+                        <span>{[submission.first_name, submission.last_name].filter(Boolean).join(" ") || "—"}</span>
+                        {[submission.first_name, submission.last_name].filter(Boolean).join(" ") && (
+                          <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
+                        )}
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">Email :</span>{" "}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => submission.email && copyToClipboard(submission.email, "Email")}
+                        onKeyDown={(e) => e.key === "Enter" && submission.email && copyToClipboard(submission.email!, "Email")}
+                        className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                      >
+                        <span className="text-muted-foreground">Email :</span>
                         {submission.email ? (
-                          <a href={`mailto:${submission.email}`} className="text-primary hover:underline">
+                          <a href={`mailto:${submission.email}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                             {submission.email}
                           </a>
                         ) : (
                           "—"
                         )}
+                        {submission.email && <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />}
                       </div>
                       {submission.phone && (
-                        <div>
-                          <span className="text-muted-foreground">Téléphone :</span> {submission.phone}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => copyToClipboard(submission.phone!, "Téléphone")}
+                          onKeyDown={(e) => e.key === "Enter" && copyToClipboard(submission.phone!, "Téléphone")}
+                          className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                        >
+                          <span className="text-muted-foreground">Téléphone :</span>
+                          <span>{submission.phone}</span>
+                          <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
                         </div>
                       )}
                       {(submission.address || submission.city) && (
-                        <div>
-                          <span className="text-muted-foreground">Adresse :</span>{" "}
-                          {[submission.address, submission.city, submission.postal_code, submission.country]
-                            .filter(Boolean)
-                            .join(", ")}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => copyToClipboard([submission.address, submission.city, submission.postal_code, submission.country].filter(Boolean).join(", "), "Adresse")}
+                          onKeyDown={(e) => e.key === "Enter" && copyToClipboard([submission.address, submission.city, submission.postal_code, submission.country].filter(Boolean).join(", "), "Adresse")}
+                          className="cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-muted/50 transition-colors flex items-center gap-1.5 group"
+                        >
+                          <span className="text-muted-foreground">Adresse :</span>
+                          <span className="break-words">
+                            {[submission.address, submission.city, submission.postal_code, submission.country]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </span>
+                          <Icon icon="lucide:copy" className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
                         </div>
                       )}
                     </>
@@ -717,6 +824,136 @@ export default function OrderDetailPage() {
                       <span>{file.file_name}</span>
                       <Icon icon="lucide:external-link" className="ml-auto h-4 w-4" />
                     </a>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notarized" className="mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle>Documents notariés</CardTitle>
+                  <CardDescription>
+                    Documents uploadés par le notaire. Ils apparaissent sur le dashboard client.
+                  </CardDescription>
+                </div>
+                <label className="cursor-pointer inline-flex">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                    className="hidden"
+                    disabled={uploadingNotarized}
+                    onChange={async (e) => {
+                      const selectedFiles = e.target.files;
+                      if (!selectedFiles?.length) return;
+                      setUploadingNotarized(true);
+                      try {
+                        const formData = new FormData();
+                        for (let i = 0; i < selectedFiles.length; i++) {
+                          formData.append("files", selectedFiles[i]);
+                        }
+                        const res = await fetch(`/api/admin/submissions/${id}/notarized-files`, {
+                          method: "POST",
+                          credentials: "include",
+                          body: formData,
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Erreur lors de l&apos;upload");
+                        if (data.uploaded?.length) {
+                          toast.success(data.message || "Fichier(s) uploadé(s)");
+                          fetchDetail({ skipLoading: true });
+                        }
+                        if (data.errors?.length) {
+                          data.errors.forEach((err: string) => toast.error(err));
+                        }
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Erreur lors de l&apos;upload");
+                      } finally {
+                        setUploadingNotarized(false);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                  <span
+                    className={`inline-flex items-center justify-center rounded-md text-sm font-medium px-4 py-2 ${
+                      uploadingNotarized
+                        ? "opacity-50 cursor-not-allowed bg-muted"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    }`}
+                  >
+                    <Icon icon="lucide:upload" className="mr-2 h-4 w-4" />
+                    {uploadingNotarized ? "Upload en cours..." : "Uploader des documents"}
+                  </span>
+                </label>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {notarizedFiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Aucun document notarié. Cliquez sur &quot;Uploader des documents&quot; pour ajouter des fichiers.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {notarizedFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Icon icon="lucide:file-check" className="h-4 w-4 shrink-0 text-green-600" />
+                        <span className="truncate">{file.file_name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {format(new Date(file.uploaded_at), "d MMM yyyy", { locale: fr })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <a
+                          href={file.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                        >
+                          <Icon icon="lucide:external-link" className="h-3.5 w-3.5" />
+                          Ouvrir
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          disabled={deletingFileId === file.id}
+                          onClick={async () => {
+                            if (!window.confirm(`Supprimer « ${file.file_name} » ?`)) return;
+                            setDeletingFileId(file.id);
+                            try {
+                              const res = await fetch(
+                                `/api/admin/submissions/${id}/notarized-files/${file.id}`,
+                                { method: "DELETE", credentials: "include" }
+                              );
+                              if (!res.ok) {
+                                const data = await res.json();
+                                throw new Error(data.error || "Erreur lors de la suppression");
+                              }
+                              setNotarizedFiles((prev) => prev.filter((f) => f.id !== file.id));
+                              toast.success("Document supprimé");
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : "Erreur lors de la suppression");
+                            } finally {
+                              setDeletingFileId(null);
+                            }
+                          }}
+                        >
+                          <Icon
+                            icon={deletingFileId === file.id ? "lucide:loader-2" : "lucide:trash-2"}
+                            className={`h-4 w-4 ${deletingFileId === file.id ? "animate-spin" : ""}`}
+                          />
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
