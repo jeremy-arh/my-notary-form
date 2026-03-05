@@ -26,6 +26,10 @@ export async function sendClickSendSms(
     { body, to, ...(options?.from && { from: options.from }) },
   ];
 
+  // shorten_urls uniquement si le message contient un lien (ClickSend rejette sinon)
+  const hasUrl = /https?:\/\/|\.io\/|\.com\/|\.fr\//i.test(body);
+  const shortenUrls = options?.shortenUrls !== undefined ? options.shortenUrls : hasUrl;
+
   const res = await fetch("https://rest.clicksend.com/v3/sms/send", {
     method: "POST",
     headers: {
@@ -34,7 +38,7 @@ export async function sendClickSendSms(
     },
     body: JSON.stringify({
       messages,
-      shorten_urls: options?.shortenUrls ?? true,
+      ...(shortenUrls && { shorten_urls: true }),
     }),
   });
 
