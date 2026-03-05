@@ -181,46 +181,22 @@ async function runSequences(req: Request) {
                 vars
               );
 
-              const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-              const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-              const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+              const { sendClickSendSms } = await import("@/lib/sms/clicksend");
+              const senderId = process.env.CLICKSEND_SENDER_ID || undefined;
+              const result = await sendClickSendSms(sub.phone!, messageBody, { from: senderId });
 
-              if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-                results.errors.push("Twilio non configuré");
+              if (!result.success) {
+                results.errors.push(`SMS ${sub.id}: ${result.error}`);
                 continue;
               }
 
-              const formData = new URLSearchParams();
-              formData.append("From", TWILIO_PHONE_NUMBER);
-              formData.append("To", sub.phone!);
-              formData.append("Body", messageBody);
-
-              const twilioRes = await fetch(
-                `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-                {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                  },
-                  body: formData.toString(),
-                }
-              );
-
-              if (!twilioRes.ok) {
-                const errText = await twilioRes.text();
-                results.errors.push(`SMS ${sub.id}: ${errText}`);
-                continue;
-              }
-
-              const twilioData = await twilioRes.json();
               await supabase.from("sms_sent").insert({
                 phone_number: sub.phone,
                 recipient_name: `${sub.first_name || ""} ${sub.last_name || ""}`.trim() || null,
                 sms_type: stepType,
                 message: messageBody,
                 submission_id: sub.id,
-                twilio_message_sid: twilioData.sid || null,
+                provider_message_id: result.messageId || null,
                 sent_at: new Date().toISOString(),
               });
 

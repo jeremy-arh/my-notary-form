@@ -30,6 +30,9 @@ export interface SmsItem {
   sent_at: string;
   delivered_at: string | null;
   failed_at: string | null;
+  provider_message_id: string | null;
+  clicked_at: string | null;
+  clicked_url: string | null;
   submission_id: string | null;
   client_id: string | null;
 }
@@ -48,6 +51,7 @@ export interface SmsStats {
   total: number;
   delivered: number;
   failed: number;
+  clicked: number;
 }
 
 export function useCommunications() {
@@ -68,7 +72,7 @@ export function useCommunications() {
       setEmails(json.emails || []);
       setSms(json.sms || []);
       setEmailStats(json.emailStats || { total: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, dropped: 0, spam: 0 });
-      setSmsStats(json.smsStats || { total: 0, delivered: 0, failed: 0 });
+      setSmsStats(json.smsStats || { total: 0, delivered: 0, failed: 0, clicked: 0 });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {

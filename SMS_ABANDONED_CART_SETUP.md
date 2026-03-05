@@ -20,14 +20,14 @@ Exécutez les migrations suivantes dans le Supabase SQL Editor :
 2. `supabase/migrations/20250120_create_sms_events_table.sql`
 3. `supabase/migrations/20250120_setup_abandoned_cart_sms_cron.sql` (après avoir remplacé `YOUR_PROJECT_REF` et `YOUR_SERVICE_ROLE_KEY`)
 
-### Étape 2 : Configurer les secrets Twilio
+### Étape 2 : Configurer les secrets ClickSend
 
 Ajoutez les secrets suivants dans Supabase Dashboard > Edge Functions > Secrets :
 
 ```bash
-supabase secrets set TWILIO_ACCOUNT_SID=votre_account_sid
-supabase secrets set TWILIO_AUTH_TOKEN=votre_auth_token
-supabase secrets set TWILIO_PHONE_NUMBER=votre_numero_twilio
+supabase secrets set CLICKSEND_USERNAME=votre_username
+supabase secrets set CLICKSEND_API_KEY=votre_api_key
+supabase secrets set CLICKSEND_SENDER_ID=votre_alpha_tag_ou_numero  # Optionnel
 ```
 
 ### Étape 3 : Déployer les Edge Functions
@@ -52,14 +52,15 @@ Stocke tous les SMS envoyés avec :
 - `sms_type` (abandoned_cart_j+1, abandoned_cart_j+3, abandoned_cart_j+10, etc.)
 - `message` (contenu du SMS)
 - `submission_id`, `client_id`
-- `twilio_message_sid` (pour le tracking)
+- `provider_message_id` (ID ClickSend pour le tracking)
 - `sent_at`, `delivered_at`, `failed_at`, `failed_reason`
+- `clicked_at`, `clicked_url` (tracking des clics sur liens raccourcis)
 
 ### `sms_events`
-Stocke tous les événements Twilio (webhooks) avec :
+Stocke tous les événements (webhooks ClickSend DLR) avec :
 - `phone_number`, `submission_id`, `sms_type`
-- `event_type` (sent, delivered, failed, undelivered, etc.)
-- `twilio_message_sid`, `twilio_status`
+- `event_type` (delivered, failed, etc.)
+- `provider_message_id`
 - `error_code`, `error_message`
 
 ## 🔍 Vérification dans le BO
@@ -74,7 +75,7 @@ Les SMS affichent :
 - Message complet
 - Numéro de téléphone
 - Dates d'envoi, livraison, échec
-- Twilio Message SID
+- Provider Message ID (ClickSend)
 
 ## 🧪 Tester
 
@@ -125,7 +126,8 @@ La séquence s'arrête automatiquement si :
 
 ## 📝 Notes importantes
 
-- Les SMS sont envoyés via Twilio
+- Les SMS sont envoyés via ClickSend
 - Les SMS sont trackés dans `sms_sent` et `sms_events`
+- Configurez le webhook DLR ClickSend : Message Settings > Delivery Report Rules > URL : `https://bo.mynotary.io/api/webhooks/clicksend-dlr`
 - Le cron job s'exécute toutes les heures
 - Les SMS sont visibles dans le BO sur les pages SubmissionDetail et ClientDetail

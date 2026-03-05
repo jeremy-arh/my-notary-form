@@ -77,42 +77,14 @@ export async function POST(req: Request) {
     }
 
     if (channel === "sms") {
-      const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-      const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-      const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+      const { sendClickSendSms } = await import("@/lib/sms/clicksend");
+      const senderId = process.env.CLICKSEND_SENDER_ID || undefined;
+      const result = await sendClickSendSms(recipient_phone, sms_body, { from: senderId });
 
-      if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-        return NextResponse.json({ error: "Variables Twilio non configurées" }, { status: 500 });
+      if (!result.success) {
+        console.error("ClickSend error:", result.error);
+        return NextResponse.json({ error: `Erreur ClickSend: ${result.error}` }, { status: 500 });
       }
-
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-      const statusCallback = baseUrl ? `${baseUrl}/api/webhooks/twilio-status` : null;
-
-      const formData = new URLSearchParams();
-      formData.append("From", TWILIO_PHONE_NUMBER);
-      formData.append("To", recipient_phone);
-      formData.append("Body", sms_body);
-      if (statusCallback) formData.append("StatusCallback", statusCallback);
-
-      const twilioRes = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: formData.toString(),
-        }
-      );
-
-      if (!twilioRes.ok) {
-        const errText = await twilioRes.text();
-        console.error("Twilio error:", twilioRes.status, errText);
-        return NextResponse.json({ error: `Erreur Twilio: ${twilioRes.status}` }, { status: 500 });
-      }
-
-      const twilioData = await twilioRes.json();
 
       await supabase.from("sms_sent").insert({
         phone_number: recipient_phone,
@@ -122,7 +94,7 @@ export async function POST(req: Request) {
         message: sms_body,
         submission_id: submission_id || null,
         client_id: client_id || null,
-        twilio_message_sid: twilioData.sid || null,
+        provider_message_id: result.messageId || null,
         sent_at: new Date().toISOString(),
       });
 

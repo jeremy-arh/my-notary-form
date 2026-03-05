@@ -97,6 +97,9 @@ interface SmsSent {
   sent_at: string;
   delivered_at?: string;
   failed_at?: string;
+  provider_message_id?: string;
+  clicked_at?: string;
+  clicked_url?: string;
 }
 
 interface SubmissionFile {
@@ -536,7 +539,17 @@ export default function OrderDetailPage() {
                                 Échoué
                               </span>
                             )}
+                            {s.clicked_at && (
+                              <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">
+                                Cliqué
+                              </span>
+                            )}
                           </div>
+                          {s.provider_message_id && (
+                            <p className="text-[10px] text-muted-foreground mt-1 font-mono truncate" title={s.provider_message_id}>
+                              ID: {s.provider_message_id}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}

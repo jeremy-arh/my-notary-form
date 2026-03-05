@@ -140,7 +140,7 @@ Sélectionnez **Body** > **raw** > **JSON** et utilisez l'un des exemples ci-des
   "message": "SMS sent successfully",
   "recipient": "+33612345678",
   "sms_type": "notification",
-  "twilio_message_sid": "SM1234567890abcdef"
+  "provider_message_id": "BF7AD270-0DE2-418B-B606-71D527D9C1AE"
 }
 ```
 
@@ -156,7 +156,7 @@ ou
 
 ```json
 {
-  "error": "Twilio credentials are not configured"
+  "error": "ClickSend credentials are not configured (CLICKSEND_USERNAME, CLICKSEND_API_KEY)"
 }
 ```
 
@@ -166,10 +166,10 @@ ou
 
 2. **Templates automatiques** : Si vous ne fournissez pas de `message` pour les types `abandoned_cart_*`, un template prédéfini sera utilisé avec le prénom du contact
 
-3. **Environnement Twilio** : Assurez-vous que les variables d'environnement Twilio sont configurées dans Supabase :
-   - `TWILIO_ACCOUNT_SID`
-   - `TWILIO_AUTH_TOKEN`
-   - `TWILIO_PHONE_NUMBER`
+3. **Environnement ClickSend** : Assurez-vous que les variables d'environnement ClickSend sont configurées dans Supabase :
+   - `CLICKSEND_USERNAME`
+   - `CLICKSEND_API_KEY`
+   - `CLICKSEND_SENDER_ID` (optionnel)
 
 4. **Logs** : Le SMS sera automatiquement enregistré dans la table `sms_sent` de votre base de données Supabase
 

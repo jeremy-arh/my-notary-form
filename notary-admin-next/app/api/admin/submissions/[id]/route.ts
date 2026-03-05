@@ -86,7 +86,7 @@ export async function GET(
 
     const clientId = sub.client_id as string | null;
     const emailSelect = "id, email, recipient_name, email_type, subject, sent_at, delivered_at, opened_at, clicked_at, clicked_url, bounced_at, dropped_at, submission_id";
-    const smsSelect = "id, phone_number, recipient_name, sms_type, message, sent_at, delivered_at, failed_at, submission_id";
+    const smsSelect = "id, phone_number, recipient_name, sms_type, message, sent_at, delivered_at, failed_at, provider_message_id, clicked_at, clicked_url, submission_id";
 
     const [signatoriesSettled, emailsBySubSettled, emailsByClientSettled, smsBySubSettled, smsByClientSettled] = await Promise.allSettled([
       supabase
@@ -128,7 +128,7 @@ export async function GET(
     const smsByClientRes = smsByClientSettled.status === "fulfilled" ? smsByClientSettled.value : { data: [] };
 
     type EmailRow = { id: string; email: string; recipient_name?: string; email_type: string; subject: string; sent_at: string; delivered_at?: string; opened_at?: string; clicked_at?: string; clicked_url?: string; bounced_at?: string; dropped_at?: string; submission_id?: string };
-    type SmsRow = { id: string; phone_number: string; recipient_name?: string; sms_type: string; message: string; sent_at: string; delivered_at?: string; failed_at?: string; submission_id?: string };
+    type SmsRow = { id: string; phone_number: string; recipient_name?: string; sms_type: string; message: string; sent_at: string; delivered_at?: string; failed_at?: string; provider_message_id?: string; clicked_at?: string; clicked_url?: string; submission_id?: string };
     const emailsBySubData = (emailsBySubRes.data as EmailRow[]) || [];
     const emailsByClientData = (emailsByClientRes.data as EmailRow[]) || [];
     const seenEmailIds = new Set(emailsBySubData.map((e) => e.id));

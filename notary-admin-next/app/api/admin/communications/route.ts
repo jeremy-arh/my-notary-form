@@ -18,7 +18,7 @@ export async function GET() {
         .limit(500),
       supabase
         .from("sms_sent")
-        .select("id, phone_number, recipient_name, sms_type, message, sent_at, delivered_at, failed_at, submission_id, client_id")
+        .select("id, phone_number, recipient_name, sms_type, message, sent_at, delivered_at, failed_at, provider_message_id, clicked_at, clicked_url, submission_id, client_id")
         .order("sent_at", { ascending: false })
         .limit(500),
     ]);
@@ -40,6 +40,7 @@ export async function GET() {
       total: sms.length,
       delivered: sms.filter((s: Record<string, unknown>) => s.delivered_at).length,
       failed: sms.filter((s: Record<string, unknown>) => s.failed_at).length,
+      clicked: sms.filter((s: Record<string, unknown>) => s.clicked_at).length,
     };
 
     return NextResponse.json({ emails, sms, emailStats, smsStats });

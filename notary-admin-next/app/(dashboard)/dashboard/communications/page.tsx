@@ -154,8 +154,8 @@ export default function CommunicationsPage() {
         />
         <StatCard
           label="Cliqués"
-          value={emailStats.clicked}
-          sub={pct(emailStats.clicked, emailStats.total)}
+          value={emailStats.clicked + smsStats.clicked}
+          sub={pct(emailStats.clicked + smsStats.clicked, totalSent)}
           color="text-violet-600"
         />
         <StatCard
@@ -317,8 +317,13 @@ export default function CommunicationsPage() {
                             <div className="text-sm font-medium">
                               {s.recipient_name || "—"}
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-muted-foreground" title={s.provider_message_id || undefined}>
                               {s.phone_number}
+                              {s.provider_message_id && (
+                                <span className="block text-[10px] font-mono truncate max-w-[140px]" title={s.provider_message_id}>
+                                  {s.provider_message_id}
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -429,6 +434,11 @@ function SmsStatusBadges({ sms }: { sms: SmsItem }) {
       {sms.failed_at && (
         <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-red-100 text-red-800">
           Échoué
+        </span>
+      )}
+      {sms.clicked_at && (
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-800">
+          Cliqué
         </span>
       )}
       {!sms.delivered_at && !sms.failed_at && (

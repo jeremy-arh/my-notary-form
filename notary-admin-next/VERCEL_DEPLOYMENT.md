@@ -29,9 +29,9 @@ Dans **Vercel** → **Project Settings** → **Environment Variables**, ajoutez 
 | `SENDGRID_API_KEY` | Optionnel | Pour les emails |
 | `SENDGRID_FROM_EMAIL` | Optionnel | Email expéditeur |
 | `SENDGRID_FROM_NAME` | Optionnel | Nom expéditeur |
-| `TWILIO_ACCOUNT_SID` | Optionnel | Pour les SMS |
-| `TWILIO_AUTH_TOKEN` | Optionnel | Pour les SMS |
-| `TWILIO_PHONE_NUMBER` | Optionnel | Numéro Twilio |
+| `CLICKSEND_USERNAME` | Optionnel | Pour les SMS |
+| `CLICKSEND_API_KEY` | Optionnel | Pour les SMS |
+| `CLICKSEND_SENDER_ID` | Optionnel | Alpha tag ou numéro expéditeur |
 
 **Important** : Cochez **Production**, **Preview** et **Development** pour chaque variable.
 

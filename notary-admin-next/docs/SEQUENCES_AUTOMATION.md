@@ -91,9 +91,9 @@ Planifie manuellement les étapes Inngest pour une soumission. Utile pour tester
 | `SENDGRID_API_KEY` | Clé API SendGrid |
 | `SENDGRID_FROM_EMAIL` | Email expéditeur |
 | `SENDGRID_FROM_NAME` | Nom expéditeur |
-| `TWILIO_ACCOUNT_SID` | Compte Twilio |
-| `TWILIO_AUTH_TOKEN` | Token Twilio |
-| `TWILIO_PHONE_NUMBER` | Numéro Twilio |
+| `CLICKSEND_USERNAME` | Username API ClickSend |
+| `CLICKSEND_API_KEY` | Clé API ClickSend |
+| `CLICKSEND_SENDER_ID` | Optionnel: alpha tag ou numéro expéditeur |
 | `NEXT_PUBLIC_CLIENT_FORM_URL` | URL du formulaire client |
 
 ### 1. Inngest Cloud
@@ -110,7 +110,19 @@ Planifie manuellement les étapes Inngest pour une soumission. Utile pour tester
 4. **URL** : `https://votre-domaine.vercel.app/api/webhooks/submission-created`
 5. **Headers** : `Authorization` = `Bearer <CRON_SECRET>`
 
-### 3. Développement local
+### 3. Webhook ClickSend DLR (rapports de livraison SMS)
+
+Configurez dans le dashboard ClickSend : **Message Settings** > **Delivery Report Rules** > **URL** :
+
+```
+https://bo.mynotary.io/api/webhooks/clicksend-dlr
+```
+
+(Remplacez par l’URL de votre back-office déployé.)
+
+**Note** : Les SMS utilisent `shorten_urls: true` pour le tracking des clics. Les stats de clics sont disponibles via l'API ClickSend. Un job périodique peut être ajouté pour remplir `clicked_at` et `clicked_url` dans `sms_sent`.
+
+### 4. Développement local
 
 Le webhook ne peut pas atteindre localhost. Pour tester en local, utilisez le bouton « Planifier les séquences » sur chaque fiche de soumission. En production (déployé), le webhook fonctionne automatiquement.
 

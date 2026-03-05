@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendClickSendSms } from "@/lib/sms/clicksend";
 
 const FORM_LINK = process.env.NEXT_PUBLIC_CLIENT_FORM_URL || "https://app.mynotary.io/form";
 const SUPPORT_EMAIL = process.env.SENDGRID_FROM_EMAIL || "support@mynotary.io";
@@ -147,51 +148,25 @@ export async function sendSequenceStep(
         vars
       );
 
-      const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-      const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-      const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+      const senderId = process.env.CLICKSEND_SENDER_ID || undefined;
+      const result = await sendClickSendSms(sub.phone!, messageBody, { from: senderId });
 
-      if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-        console.error("[send-step] Twilio non configuré (variables manquantes)");
-        return { success: false, channel: "sms", error: "Twilio non configuré" };
-      }
-
-      const formData = new URLSearchParams();
-      formData.append("From", TWILIO_PHONE_NUMBER);
-      formData.append("To", sub.phone!);
-      formData.append("Body", messageBody);
-
-      const twilioRes = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: formData.toString(),
-        }
-      );
-
-      if (!twilioRes.ok) {
-        const errText = await twilioRes.text();
-        console.error("[send-step] Twilio erreur:", {
-          status: twilioRes.status,
+      if (!result.success) {
+        console.error("[send-step] ClickSend erreur:", {
           submissionId,
           stepId: step.id,
-          response: errText,
+          error: result.error,
         });
-        return { success: false, channel: "sms", error: errText };
+        return { success: false, channel: "sms", error: result.error };
       }
 
-      const twilioData = await twilioRes.json();
       await supabase.from("sms_sent").insert({
         phone_number: sub.phone,
         recipient_name: `${sub.first_name || ""} ${sub.last_name || ""}`.trim() || null,
         sms_type: step.template_key,
         message: messageBody,
         submission_id: sub.id,
-        twilio_message_sid: twilioData.sid || null,
+        provider_message_id: result.messageId || null,
         sent_at: new Date().toISOString(),
       });
 

@@ -1,3 +1,8 @@
+/**
+ * Webhook Twilio (legacy) - Statuts de livraison SMS.
+ * Conservé pour compatibilité avec les anciens SMS envoyés via Twilio.
+ * Les nouveaux SMS passent par ClickSend → webhook /api/webhooks/clicksend-dlr
+ */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
