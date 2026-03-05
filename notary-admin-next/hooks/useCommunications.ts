@@ -58,7 +58,7 @@ export function useCommunications() {
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [sms, setSms] = useState<SmsItem[]>([]);
   const [emailStats, setEmailStats] = useState<EmailStats>({ total: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, dropped: 0, spam: 0 });
-  const [smsStats, setSmsStats] = useState<SmsStats>({ total: 0, delivered: 0, failed: 0 });
+  const [smsStats, setSmsStats] = useState<SmsStats>({ total: 0, delivered: 0, failed: 0, clicked: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
