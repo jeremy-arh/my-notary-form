@@ -58,7 +58,7 @@ export const sequenceStepSend = inngest.createFunction(
           sendWindowStart,
           sendWindowEnd
         );
-        await step.sleep("wait-window", nextStart);
+        await step.sleepUntil("wait-window", nextStart);
       }
     }
 
