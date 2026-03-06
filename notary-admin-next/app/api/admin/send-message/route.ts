@@ -9,7 +9,9 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
     const body = await req.json();
-    let { channel, recipient_email, recipient_phone, recipient_name, subject, html_body, sms_body, submission_id, client_id } = body;
+    const { channel, recipient_email, recipient_phone, recipient_name, subject, submission_id, client_id } = body;
+    let html_body = body.html_body;
+    let sms_body = body.sms_body;
 
     if (!channel || (channel === "email" && (!recipient_email || !subject || !html_body)) || (channel === "sms" && (!recipient_phone || !sms_body))) {
       return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
