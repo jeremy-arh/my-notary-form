@@ -102,10 +102,8 @@ serve(async (req) => {
         'Content-Type': 'application/json',
         Authorization: `Basic ${auth}`,
       },
-      body: JSON.stringify({
-        messages,
-        shorten_urls: true,
-      }),
+      // shorten_urls: false pour éviter smsg.us (CancelledAfterReview possible)
+      body: JSON.stringify({ messages }),
     })
 
     console.log('📱 [send-sms] ClickSend response status:', clicksendResponse.status)

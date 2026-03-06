@@ -66,6 +66,7 @@ const VARIABLES = [
   { key: "{{subject}}", desc: "Objet" },
   { key: "{{content}}", desc: "Contenu" },
   { key: "{{form_link}}", desc: "Lien formulaire" },
+  { key: "{{service_name}}", desc: "Nom(s) des services" },
   { key: "{{company_name}}", desc: "Entreprise" },
 ];
 
@@ -123,6 +124,7 @@ export function SendMessageDialog({
     "{{last_name}}": recipient.name.split(" ").slice(1).join(" ") || "",
     "{{email}}": recipient.email || "",
     "{{form_link}}": "https://app.mynotary.io/form",
+    "{{service_name}}": "", // Remplacé côté serveur (ou vide si pas de submission)
     "{{company_name}}": "My Notary",
   }), [recipient]);
 

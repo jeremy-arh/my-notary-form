@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { buildFormLink } from "@/lib/sequences/form-link";
 
 export const maxDuration = 60;
 
-const FORM_LINK = process.env.NEXT_PUBLIC_CLIENT_FORM_URL || "https://app.mynotary.io/form";
 const SUPPORT_EMAIL = process.env.SENDGRID_FROM_EMAIL || "support@mynotary.io";
 const COMPANY_NAME = "MY NOTARY";
 
@@ -89,7 +89,7 @@ async function runSequences(req: Request) {
         const contactField = step.channel === "email" ? "email" : "phone";
         const { data: submissions, error: subError } = await supabase
           .from("submission")
-          .select("id, email, phone, first_name, last_name, created_at, status")
+          .select("id, email, phone, first_name, last_name, created_at, status, data")
           .eq("status", triggerStatus)
           .not(contactField, "is", null)
           .neq(contactField, "")
@@ -113,13 +113,55 @@ async function runSequences(req: Request) {
           if (alreadySent) continue;
           if (sub.status !== triggerStatus) continue;
 
+          // Récupérer les noms des services
+          let serviceName = "";
+          const { data: ssData } = await supabase
+            .from("submission_services")
+            .select("services(name)")
+            .eq("submission_id", sub.id);
+          const fromJunction = (ssData as { services: { name: string } | { name: string }[] }[] | null) || [];
+          if (fromJunction.length > 0) {
+            serviceName = fromJunction
+              .map((ss) => (Array.isArray(ss.services) ? ss.services[0]?.name : ss.services?.name))
+              .filter(Boolean)
+              .join(", ");
+          }
+          if (!serviceName) {
+            const subData = (sub as { data?: { selected_services?: string[]; selectedServices?: string[] } }).data;
+            const selectedIds = subData?.selected_services || subData?.selectedServices || [];
+            if (selectedIds.length > 0) {
+              let svcData = (await supabase
+                .from("services")
+                .select("name")
+                .in("service_id", selectedIds)
+                .eq("is_active", true)).data;
+              if (!svcData?.length) {
+                const res = await supabase
+                  .from("services")
+                  .select("name")
+                  .in("id", selectedIds)
+                  .eq("is_active", true);
+                svcData = res.data;
+              }
+              serviceName = ((svcData as { name: string }[]) || []).map((s) => s.name).filter(Boolean).join(", ");
+            }
+          }
+
+          const formLink = buildFormLink({
+            submissionId: sub.id,
+            channel: step.channel,
+            templateKey: stepType,
+            sequenceName: seq.name,
+          });
+
           const vars: Record<string, string> = {
             "{{first_name}}": sub.first_name || "",
             "{{last_name}}": sub.last_name || "",
             "{{email}}": sub.email || "",
-            "{{form_link}}": FORM_LINK,
+            "{{form_link}}": formLink,
             "{{support_email}}": SUPPORT_EMAIL,
             "{{company_name}}": COMPANY_NAME,
+            "{{service_name}}": serviceName,
           };
 
           try {
@@ -183,7 +225,7 @@ async function runSequences(req: Request) {
 
               const { sendClickSendSms } = await import("@/lib/sms/clicksend");
               const senderId = process.env.CLICKSEND_SENDER_ID || undefined;
-              const result = await sendClickSendSms(sub.phone!, messageBody, { from: senderId });
+              const result = await sendClickSendSms(sub.phone!, messageBody, { from: senderId, shortenUrls: false });
 
               if (!result.success) {
                 results.errors.push(`SMS ${sub.id}: ${result.error}`);

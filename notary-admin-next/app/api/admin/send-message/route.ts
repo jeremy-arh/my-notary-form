@@ -9,13 +9,43 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
     const body = await req.json();
-    const { channel, recipient_email, recipient_phone, recipient_name, subject, html_body, sms_body, submission_id, client_id } = body;
+    let { channel, recipient_email, recipient_phone, recipient_name, subject, html_body, sms_body, submission_id, client_id } = body;
 
     if (!channel || (channel === "email" && (!recipient_email || !subject || !html_body)) || (channel === "sms" && (!recipient_phone || !sms_body))) {
       return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
     }
 
     const supabase = createAdminClient();
+
+    // Remplacer {{service_name}} si submission_id fourni
+    let serviceName = "";
+    if (submission_id) {
+      const { data: ssData } = await supabase
+        .from("submission_services")
+        .select("services(name)")
+        .eq("submission_id", submission_id);
+      const fromJunction = (ssData as { services: { name: string } | { name: string }[] }[] | null) || [];
+      if (fromJunction.length > 0) {
+        serviceName = fromJunction
+          .map((ss) => (Array.isArray(ss.services) ? ss.services[0]?.name : ss.services?.name))
+          .filter(Boolean)
+          .join(", ");
+      }
+      if (!serviceName) {
+        const { data: sub } = await supabase.from("submission").select("data").eq("id", submission_id).single();
+        const subData = (sub as { data?: { selected_services?: string[]; selectedServices?: string[] } } | null)?.data;
+        const selectedIds = subData?.selected_services || subData?.selectedServices || [];
+        if (selectedIds.length > 0) {
+          let svcData = (await supabase.from("services").select("name").in("service_id", selectedIds).eq("is_active", true)).data;
+          if (!svcData?.length) {
+            svcData = (await supabase.from("services").select("name").in("id", selectedIds).eq("is_active", true)).data;
+          }
+          serviceName = ((svcData as { name: string }[]) || []).map((s) => s.name).filter(Boolean).join(", ");
+        }
+      }
+    }
+    html_body = (html_body || "").replaceAll("{{service_name}}", serviceName);
+    sms_body = (sms_body || "").replaceAll("{{service_name}}", serviceName);
 
     if (channel === "email") {
       const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
@@ -79,7 +109,7 @@ export async function POST(req: Request) {
     if (channel === "sms") {
       const { sendClickSendSms } = await import("@/lib/sms/clicksend");
       const senderId = process.env.CLICKSEND_SENDER_ID || undefined;
-      const result = await sendClickSendSms(recipient_phone, sms_body, { from: senderId });
+      const result = await sendClickSendSms(recipient_phone, sms_body, { from: senderId, shortenUrls: false });
 
       if (!result.success) {
         console.error("ClickSend error:", result.error);

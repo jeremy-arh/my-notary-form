@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendClickSendSms } from "@/lib/sms/clicksend";
+import { buildFormLink } from "@/lib/sequences/form-link";
 
-const FORM_LINK = process.env.NEXT_PUBLIC_CLIENT_FORM_URL || "https://app.mynotary.io/form";
 const SUPPORT_EMAIL = process.env.SENDGRID_FROM_EMAIL || "support@mynotary.io";
 const COMPANY_NAME = "MY NOTARY";
 
@@ -28,19 +28,54 @@ export async function sendSequenceStep(
     subject: string | null;
     html_body: string | null;
     message_body: string | null;
-  }
+  },
+  options?: { sequenceName?: string }
 ): Promise<SendStepResult> {
   const supabase = createAdminClient();
 
   const { data: sub, error: subError } = await supabase
     .from("submission")
-    .select("id, email, phone, first_name, last_name, status")
+    .select("id, email, phone, first_name, last_name, status, data")
     .eq("id", submissionId)
     .single();
 
   if (subError || !sub) {
     console.error("[send-step] Submission introuvable:", { submissionId, stepId: step.id, error: subError?.message });
     return { success: false, channel: step.channel, error: "Submission introuvable" };
+  }
+
+  // Récupérer les noms des services (submission_services ou data.selected_services)
+  let serviceName = "";
+  const { data: ssData } = await supabase
+    .from("submission_services")
+    .select("services(name)")
+    .eq("submission_id", submissionId);
+  const fromJunction = (ssData as { services: { name: string } | { name: string }[] }[] | null) || [];
+  if (fromJunction.length > 0) {
+    serviceName = fromJunction
+      .map((ss) => (Array.isArray(ss.services) ? ss.services[0]?.name : ss.services?.name))
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (!serviceName) {
+    const data = (sub as { data?: { selected_services?: string[]; selectedServices?: string[] } }).data;
+    const selectedIds = data?.selected_services || data?.selectedServices || [];
+    if (selectedIds.length > 0) {
+      let { data: svcData } = await supabase
+        .from("services")
+        .select("name")
+        .in("service_id", selectedIds)
+        .eq("is_active", true);
+      if (!svcData?.length) {
+        const res = await supabase
+          .from("services")
+          .select("name")
+          .in("id", selectedIds)
+          .eq("is_active", true);
+        svcData = res.data;
+      }
+      serviceName = ((svcData as { name: string }[]) || []).map((s) => s.name).filter(Boolean).join(", ");
+    }
   }
 
   const contact = step.channel === "email" ? sub.email : sub.phone;
@@ -63,13 +98,21 @@ export async function sendSequenceStep(
     return { success: true, channel: step.channel };
   }
 
+  const formLink = buildFormLink({
+    submissionId: sub.id,
+    channel: step.channel,
+    templateKey: step.template_key,
+    sequenceName: options?.sequenceName,
+  });
+
   const vars: Record<string, string> = {
     "{{first_name}}": sub.first_name || "",
     "{{last_name}}": sub.last_name || "",
     "{{email}}": sub.email || "",
-    "{{form_link}}": FORM_LINK,
+    "{{form_link}}": formLink,
     "{{support_email}}": SUPPORT_EMAIL,
     "{{company_name}}": COMPANY_NAME,
+    "{{service_name}}": serviceName,
   };
 
   try {
@@ -149,7 +192,8 @@ export async function sendSequenceStep(
       );
 
       const senderId = process.env.CLICKSEND_SENDER_ID || undefined;
-      const result = await sendClickSendSms(sub.phone!, messageBody, { from: senderId });
+      // shortenUrls: false pour éviter smsg.us (CancelledAfterReview possible avec liens raccourcis)
+      const result = await sendClickSendSms(sub.phone!, messageBody, { from: senderId, shortenUrls: false });
 
       if (!result.success) {
         console.error("[send-step] ClickSend erreur:", {

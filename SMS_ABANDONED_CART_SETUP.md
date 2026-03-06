@@ -1,5 +1,9 @@
 # Configuration de la Séquence SMS pour Panier Abandonné
 
+## ⚠️ Migration vers Inngest
+
+**Les anciens cron jobs** (`send-abandoned-cart-sms`, `send-abandoned-cart-emails`) sont **désactivés** par la migration `20260307_disable_legacy_abandoned_cart_crons.sql`. Les séquences sont maintenant gérées par **Inngest** + table `automation_sequences`. Voir `docs/SEQUENCES_AUTOMATION.md`.
+
 ## 📋 Vue d'ensemble
 
 Ce système envoie automatiquement des SMS de relance aux clients qui ont une submission avec `status = 'pending_payment'`, similaire à la séquence d'emails.

@@ -66,7 +66,7 @@ export const sequenceStepSend = inngest.createFunction(
     const supabase = createAdminClient();
     const { data: stepData, error: stepError } = await supabase
       .from("automation_steps")
-      .select("id, channel, template_key, subject, html_body, message_body")
+      .select("id, channel, template_key, subject, html_body, message_body, sequence_id")
       .eq("id", stepId)
       .single();
 
@@ -75,7 +75,17 @@ export const sequenceStepSend = inngest.createFunction(
       throw new Error(`Étape ${stepId} introuvable`);
     }
 
-    const result = await sendSequenceStep(submissionId, stepData);
+    let sequenceName: string | undefined;
+    if (stepData.sequence_id) {
+      const { data: seq } = await supabase
+        .from("automation_sequences")
+        .select("name")
+        .eq("id", stepData.sequence_id)
+        .single();
+      sequenceName = seq?.name;
+    }
+
+    const result = await sendSequenceStep(submissionId, stepData, { sequenceName });
 
     if (!result.success) {
       console.error("[inngest sequence-step] Échec envoi:", {

@@ -52,7 +52,11 @@ const TEMPLATE_VARIABLES = [
   { key: "{{first_name}}", desc: "Prénom du client" },
   { key: "{{last_name}}", desc: "Nom du client" },
   { key: "{{email}}", desc: "Email du client" },
-  { key: "{{form_link}}", desc: "Lien vers le formulaire" },
+  {
+    key: "{{form_link}}",
+    desc: "Lien formulaire avec submissionId + UTM (ex: /form?submissionId=xxx&utm_source=mynotary&utm_medium=email&utm_campaign=...)",
+  },
+  { key: "{{service_name}}", desc: "Nom(s) des services sélectionnés (ex: Certification, Notarisation)" },
   { key: "{{support_email}}", desc: "Email de support" },
   { key: "{{company_name}}", desc: "Nom de l'entreprise" },
 ];
@@ -848,7 +852,9 @@ const SAMPLE_VARS: Record<string, string> = {
   "{{first_name}}": "Jean",
   "{{last_name}}": "Dupont",
   "{{email}}": "jean.dupont@email.com",
-  "{{form_link}}": "https://app.mynotary.io/form",
+  "{{form_link}}":
+    "https://app.mynotary.io/form?submissionId=xxx&utm_source=mynotary&utm_medium=email&utm_campaign=abandoned_cart_j+1",
+  "{{service_name}}": "Certification de document",
   "{{support_email}}": "support@mynotary.io",
   "{{company_name}}": "My Notary",
 };

@@ -58,6 +58,7 @@ const VARIABLES = [
   { key: "{{last_name}}", desc: "Nom du client" },
   { key: "{{email}}", desc: "Email du client" },
   { key: "{{form_link}}", desc: "Lien formulaire" },
+  { key: "{{service_name}}", desc: "Nom(s) des services" },
   { key: "{{company_name}}", desc: "Nom de l'entreprise" },
 ];
 
@@ -111,6 +112,7 @@ export default function GeneralTemplateEditor() {
       .replaceAll("{{last_name}}", "Dupont")
       .replaceAll("{{email}}", "jean@example.com")
       .replaceAll("{{form_link}}", "https://app.mynotary.io/form")
+      .replaceAll("{{service_name}}", "Certification de document")
       .replaceAll("{{company_name}}", "My Notary");
   }, [template]);
 

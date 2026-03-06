@@ -75,7 +75,8 @@ Planifie manuellement les étapes Inngest pour une soumission. Utile pour tester
 | `{{first_name}}` | Prénom du client |
 | `{{last_name}}` | Nom du client |
 | `{{email}}` | Email du client |
-| `{{form_link}}` | Lien vers le formulaire client |
+| `{{form_link}}` | Lien formulaire avec `submissionId` + UTM (`/form?submissionId=xxx&utm_source=mynotary&utm_medium=email|sms&utm_campaign=template_key`) |
+| `{{service_name}}` | Nom(s) des services sélectionnés par le client (ex: Certification, Notarisation) |
 | `{{support_email}}` | Email de support |
 | `{{company_name}}` | Nom de l'entreprise |
 
@@ -120,7 +121,7 @@ https://bo.mynotary.io/api/webhooks/clicksend-dlr
 
 (Remplacez par l’URL de votre back-office déployé.)
 
-**Note** : Les SMS utilisent `shorten_urls: true` pour le tracking des clics. Les stats de clics sont disponibles via l'API ClickSend. Un job périodique peut être ajouté pour remplir `clicked_at` et `clicked_url` dans `sms_sent`.
+**Note** : `shorten_urls` est désactivé pour éviter CancelledAfterReview (liens smsg.us parfois bloqués). Les URLs complètes (ex. app.mynotary.io/form) sont utilisées.
 
 ### 4. Développement local
 
@@ -139,8 +140,10 @@ npm install
 
 ## Migration base de données
 
-Exécutez la migration pour activer le canal `mixed` :
+Exécutez la migration pour activer le canal `mixed` et **désactiver les anciens cron jobs** (séquences en dur) :
 
 ```bash
 supabase db push
 ```
+
+La migration `20260307_disable_legacy_abandoned_cart_crons.sql` désactive les cron jobs `send-abandoned-cart-sms` et `send-abandoned-cart-emails` pour éviter les doublons avec les séquences Inngest.
