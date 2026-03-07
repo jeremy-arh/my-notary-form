@@ -113,6 +113,34 @@ export default function PersonalInfoPage() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Quand connecté : charger le profil client et mettre à jour le formulaire (toujours les infos à jour)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const supabase = createClient();
+    const loadProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return;
+      const { data: client } = await supabase
+        .from("client")
+        .select("first_name, last_name, email, phone, address, city, postal_code, country")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (client) {
+        updateFormData({
+          firstName: client.first_name ?? "",
+          lastName: client.last_name ?? "",
+          email: client.email ?? user.email ?? "",
+          phone: client.phone ?? "",
+          address: client.address ?? "",
+          city: client.city ?? "",
+          postalCode: client.postal_code ?? "",
+          country: client.country ?? "",
+        });
+      }
+    };
+    loadProfile();
+  }, [isLoggedIn, updateFormData]);
+
   useEffect(() => {
     if (isLoggedIn) return;
     const timer = setTimeout(() => {
