@@ -12,7 +12,14 @@ import { calculateTotalAmount } from "@/lib/utils/pricing";
 import { initCrisp } from "@/lib/utils/crisp";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getStepValidation } from "@/lib/utils/stepValidation";
-import { trackPageView as trackPageViewPlausible, trackFormStep as trackFormStepPlausible } from "@/lib/utils/plausible";
+import {
+  trackFormStart as trackFormStartPlausible,
+  trackPersonalInfoCompleted,
+  trackServicesSelected,
+  trackDocumentsUploaded,
+  trackSignatoriesAdded,
+  trackDeliveryMethodSelected,
+} from "@/lib/utils/plausible";
 import { trackPageView, trackFormStep, trackFormStart } from "@/lib/utils/gtm";
 import { toast } from "sonner";
 import FormLayoutContent from "./FormLayoutContent";
@@ -60,10 +67,10 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
   useEffect(() => {
     const stepData = FORM_STEPS.find((s) => s.path === pathname);
     if (stepData) {
-      trackPageViewPlausible(stepData.name);
       trackPageView(stepData.name, pathname);
       if (currentStep === 1 && !hasTrackedFormStart.current) {
         hasTrackedFormStart.current = true;
+        trackFormStartPlausible();
         trackFormStart({
           formName: "notarization_form",
           serviceType: "Document Notarization",
@@ -135,10 +142,31 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
     setIsContinuing(true);
     try {
       const stepData = FORM_STEPS[currentStep - 1];
-      if (stepData) {
-        trackFormStepPlausible(currentStep, stepData.name);
-        trackFormStep(currentStep, stepData.name);
+      if (stepData) trackFormStep(currentStep, stepData.name);
+
+      // Plausible funnel events - exactement comme client-dashboard
+      if (currentStep === 1) {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        trackPersonalInfoCompleted(!!user);
+      } else if (currentStep === 2) {
+        trackServicesSelected(
+          formData.selectedServices?.length ?? 0,
+          formData.selectedServices ?? []
+        );
+      } else if (currentStep === 3) {
+        const totalDocs = Object.values(formData.serviceDocuments ?? {}).reduce(
+          (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
+          0
+        );
+        const servicesWithDocs = Object.keys(formData.serviceDocuments ?? {}).length;
+        trackDocumentsUploaded(totalDocs, servicesWithDocs);
+      } else if (currentStep === 4) {
+        trackSignatoriesAdded(formData.signatories?.length ?? 0);
+      } else if (currentStep === 5) {
+        trackDeliveryMethodSelected(formData.deliveryMethod ?? "email");
       }
+
       const isPersonalInfoStep = currentStep === 1;
       const result = await doSave(isPersonalInfoStep ? { createAccount: true } : undefined);
 

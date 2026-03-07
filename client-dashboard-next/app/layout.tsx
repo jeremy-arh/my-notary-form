@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import Analytics from "@/components/Analytics";
+import PlausibleScripts from "@/components/PlausibleScripts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased min-h-screen bg-[#f9fafb]" suppressHydrationWarning>
+        <PlausibleScripts />
         <Analytics />
         {children}
         <Toaster richColors position="top-right" />

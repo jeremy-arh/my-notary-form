@@ -4,7 +4,6 @@ import Script from "next/script";
 import { useEffect } from "react";
 import { initGTM } from "@/lib/utils/gtm";
 
-const PLAUSIBLE_DOMAIN = "mynotary.io";
 const GTM_ID = "GTM-PSHQGM2J";
 
 export default function Analytics() {
@@ -14,24 +13,7 @@ export default function Analytics() {
 
   return (
     <>
-      {/* Plausible Analytics - identique à l'ancienne version (client-dashboard) */}
-      <Script
-        id="plausible-init"
-        strategy="beforeInteractive"
-        dangerouslySetInnerHTML={{
-          __html: `
-            window.plausible = window.plausible || function() {
-              (window.plausible.q = window.plausible.q || []).push(arguments);
-            };
-          `,
-        }}
-      />
-      <Script
-        src="https://plausible.io/js/script.js"
-        data-domain={PLAUSIBLE_DOMAIN}
-        strategy="beforeInteractive"
-      />
-
+      {/* Plausible chargé via PlausibleScripts dans le head (layout) */}
       {/* Google Tag Manager */}
       <Script
         id="gtm-init"

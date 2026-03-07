@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
-import { trackPaymentSuccess as trackPaymentSuccessPlausible } from "@/lib/utils/plausible";
+import { trackPaymentCompleted } from "@/lib/utils/plausible";
 import { trackPaymentSuccess } from "@/lib/utils/gtm";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -55,11 +55,11 @@ function PaymentSuccessContent() {
             /* ignore */
           }
 
-          trackPaymentSuccessPlausible({
+          trackPaymentCompleted({
             transactionId: data.transactionId || sessionId,
-            amount: data.amount ?? 0,
-            currency: data.currency || "EUR",
+            totalAmount: data.amount ?? 0,
             submissionId: data.submissionId,
+            currency: data.currency || "EUR",
           });
           trackPaymentSuccess({
             submissionId: data.submissionId,

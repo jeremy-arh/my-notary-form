@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { Icon } from "@iconify/react";
-import { trackPaymentFailure as trackPaymentFailurePlausible } from "@/lib/utils/plausible";
 import { trackPaymentFailure } from "@/lib/utils/gtm";
 import { useEffect } from "react";
 
 export default function PaymentFailedPage() {
   useEffect(() => {
-    trackPaymentFailurePlausible({ message: "Payment cancelled or failed" });
     trackPaymentFailure({ message: "Payment cancelled or failed" });
   }, []);
 

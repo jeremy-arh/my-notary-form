@@ -18,13 +18,12 @@ import {
   ADDITIONAL_SIGNATORY_PRICE_EUR,
 } from "@/lib/utils/pricing";
 import { formatPriceSync, convertPriceSync } from "@/lib/utils/currency";
-import { trackFormSubmissionStart as trackFormSubmissionStartPlausible } from "@/lib/utils/plausible";
+import { trackSummaryViewed, trackPaymentInitiated } from "@/lib/utils/plausible";
 import {
   trackFormSubmissionStart,
   trackBeginCheckout,
   trackPaymentFailure,
 } from "@/lib/utils/gtm";
-import { trackPaymentFailure as trackPaymentFailurePlausible } from "@/lib/utils/plausible";
 
 type DocFile = {
   name: string;
@@ -193,10 +192,14 @@ export default function SummaryPage() {
 
     setIsSubmitting(true);
     try {
-      // Track form submission start + begin checkout (Plausible + GTM)
-      trackFormSubmissionStartPlausible(formData);
-      trackFormSubmissionStart(formData);
+      // Plausible: payment_initiated (comme client-dashboard)
       const totalAmount = getTotalAmount();
+      trackPaymentInitiated({
+        totalAmount,
+        servicesCount: formData.selectedServices?.length ?? 0,
+        currency,
+      });
+      trackFormSubmissionStart(formData);
       trackBeginCheckout({
         currency,
         value: totalAmount,
@@ -334,7 +337,6 @@ export default function SummaryPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Payment failed";
       toast.error(message);
-      trackPaymentFailurePlausible({ message });
       trackPaymentFailure({ message });
     } finally {
       setIsSubmitting(false);
@@ -357,6 +359,15 @@ export default function SummaryPage() {
   useEffect(() => {
     registerContinueHandler(handlePay);
   }, [registerContinueHandler, handlePay]);
+
+  useEffect(() => {
+    trackSummaryViewed({
+      servicesCount: formData.selectedServices?.length ?? 0,
+      documentsCount: totalDocuments,
+      signatoriesCount: formData.signatories?.length ?? 0,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const truncateFileName = (fileName: string) => {
     if (isMobile && fileName.length > 30) {
