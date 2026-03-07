@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { toast } from "sonner";
@@ -8,8 +8,9 @@ import { useFormData } from "@/contexts/FormContext";
 import { useFormActions } from "@/contexts/FormActionsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useTranslation } from "@/hooks/useTranslation";
-import { DELIVERY_POSTAL_PRICE_EUR } from "@/lib/utils/pricing";
-import { formatPriceSync, convertPriceRoundUpSync } from "@/lib/utils/currency";
+import { DELIVERY_OPTIONS, type DeliveryOptionKey } from "@/lib/utils/pricing";
+import { formatPriceSync, convertPriceSync } from "@/lib/utils/currency";
+import DeliveryAddressModal from "@/components/form/DeliveryAddressModal";
 
 export default function DeliveryPage() {
   const router = useRouter();
@@ -18,40 +19,80 @@ export default function DeliveryPage() {
   const { currency } = useCurrency();
   const { t } = useTranslation();
 
+  const [showPostalModal, setShowPostalModal] = useState(false);
+
   const deliveryMethod = formData.deliveryMethod ?? null;
+  const deliveryOption = (formData.deliveryOption as DeliveryOptionKey) ?? null;
 
-  // Toujours calculer le prix converti pour l'affichage de l'option postale
-  const convertedPrice =
-    currency === "EUR"
-      ? formatPriceSync(Math.ceil(DELIVERY_POSTAL_PRICE_EUR), "EUR")
-      : formatPriceSync(convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency), currency);
+  const formatDeliveryPrice = useCallback(
+    (eurPrice: number) => {
+      const amount =
+        currency === "EUR"
+          ? eurPrice
+          : convertPriceSync(eurPrice, currency);
+      return formatPriceSync(amount, currency);
+    },
+    [currency]
+  );
 
-  const handleSelect = useCallback(
-    (method: string) => {
-      updateFormData({ deliveryMethod: method });
+  const priceRange = `${formatDeliveryPrice(DELIVERY_OPTIONS.standard.priceEUR)} - ${formatDeliveryPrice(DELIVERY_OPTIONS.express.priceEUR)}`;
+
+  const handlePostalClick = useCallback(() => {
+    setShowPostalModal(true);
+  }, []);
+
+  const handlePostalConfirm = useCallback(
+    (data: {
+      deliveryAddress: string;
+      deliveryCity: string;
+      deliveryPostalCode: string;
+      deliveryCountry: string;
+      deliveryOption: DeliveryOptionKey;
+      deliveryPriceEUR: number;
+      usePersonalAddressForDelivery: boolean;
+    }) => {
+      updateFormData({
+        deliveryMethod: "postal",
+        ...data,
+      });
+      setShowPostalModal(false);
     },
     [updateFormData]
   );
 
-  const getDeliveryDescription = useCallback(() => {
-    const desc = t("form.steps.delivery.postDescription");
-    if (convertedPrice) {
-      return desc.replace(/€?\s*\d+[.,]\d+\s*€?/gi, `${convertedPrice} `).replace(/\s+/g, " ").trim();
-    }
-    return desc;
-  }, [convertedPrice, t]);
+  const handleEmailSelect = useCallback(() => {
+    updateFormData({
+      deliveryMethod: "email",
+      deliveryOption: null,
+      deliveryPriceEUR: undefined,
+      deliveryAddress: undefined,
+      deliveryCity: undefined,
+      deliveryPostalCode: undefined,
+      deliveryCountry: undefined,
+      usePersonalAddressForDelivery: undefined,
+    });
+  }, [updateFormData]);
 
   const handleNext = useCallback(() => {
     if (!deliveryMethod) {
       toast.error(t("form.steps.summary.missingDelivery"));
       return;
     }
+    if (deliveryMethod === "postal" && !deliveryOption) {
+      toast.error(t("form.delivery.modal.errorOption"));
+      return;
+    }
     router.push("/form/summary");
-  }, [deliveryMethod, router, t]);
+  }, [deliveryMethod, deliveryOption, router, t]);
 
   useEffect(() => {
     registerContinueHandler(handleNext);
   }, [registerContinueHandler, handleNext]);
+
+  const postalConfigured = deliveryMethod === "postal" && deliveryOption;
+  const deliveryAddress = [formData.deliveryAddress, formData.deliveryCity, formData.deliveryPostalCode, formData.deliveryCountry]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div className="h-full w-full flex flex-col">
@@ -69,26 +110,31 @@ export default function DeliveryPage() {
         style={{ minHeight: 0 }}
       >
         <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">
-          <button
-            type="button"
-            onClick={() => handleSelect("postal")}
-            className={`w-full text-left bg-white rounded-xl sm:rounded-2xl border transition-all flex items-stretch overflow-hidden ${
+          {/* Postal option */}
+          <div
+            className={`w-full text-left bg-white rounded-xl sm:rounded-2xl border transition-all overflow-hidden ${
               deliveryMethod === "postal"
                 ? "border-black shadow-lg"
                 : "border-gray-200 hover:border-gray-300 hover:shadow-md"
             }`}
           >
-            <div className="flex items-center p-4 sm:p-5 flex-1">
+            <button
+              type="button"
+              onClick={handlePostalClick}
+              className="w-full flex items-center p-4 sm:p-5"
+            >
               <div className="mr-4 sm:mr-5 flex-shrink-0">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
                   <Icon icon="heroicons:envelope" className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
                 </div>
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm sm:text-base font-semibold text-gray-900">
                   {t("form.steps.delivery.postTitle")}
                 </p>
-                <p className="mt-1 text-xs sm:text-sm text-gray-600">{getDeliveryDescription()}</p>
+                <p className="mt-1 text-xs sm:text-sm text-gray-600">
+                  {t("form.steps.delivery.postDescriptionRange", { range: priceRange })}
+                </p>
               </div>
               <div className="ml-3 sm:ml-4 flex items-center">
                 <div
@@ -101,12 +147,47 @@ export default function DeliveryPage() {
                   )}
                 </div>
               </div>
-            </div>
-          </button>
+            </button>
 
+            {postalConfigured && (
+              <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-gray-100">
+                <div className="pt-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon
+                        icon={deliveryOption === "express" ? "heroicons:bolt" : "heroicons:truck"}
+                        className="w-4 h-4 text-gray-600"
+                      />
+                      <span className="text-xs sm:text-sm font-medium text-gray-900">
+                        {t(`form.delivery.modal.option.${deliveryOption}.title`)}
+                      </span>
+                    </div>
+                    <span className="text-xs sm:text-sm font-bold text-gray-900">
+                      {formatDeliveryPrice(formData.deliveryPriceEUR!)}
+                    </span>
+                  </div>
+                  {deliveryAddress && (
+                    <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                      <Icon icon="heroicons:map-pin" className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{deliveryAddress}</span>
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowPostalModal(true); }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1"
+                  >
+                    {t("form.delivery.modal.modify")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Email option */}
           <button
             type="button"
-            onClick={() => handleSelect("email")}
+            onClick={handleEmailSelect}
             className={`w-full text-left bg-white rounded-xl sm:rounded-2xl border transition-all flex items-stretch overflow-hidden ${
               deliveryMethod === "email"
                 ? "border-black shadow-lg"
@@ -149,6 +230,12 @@ export default function DeliveryPage() {
           </div>
         </div>
       </div>
+
+      <DeliveryAddressModal
+        open={showPostalModal}
+        onClose={() => setShowPostalModal(false)}
+        onConfirm={handlePostalConfirm}
+      />
     </div>
   );
 }

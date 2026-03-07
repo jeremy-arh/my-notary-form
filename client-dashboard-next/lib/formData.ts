@@ -12,6 +12,13 @@ export interface FormData {
   selectedServices: string[];
   serviceDocuments: Record<string, unknown[]>;
   deliveryMethod: string | null;
+  deliveryAddress?: string;
+  deliveryCity?: string;
+  deliveryPostalCode?: string;
+  deliveryCountry?: string;
+  deliveryOption?: "standard" | "express" | null;
+  deliveryPriceEUR?: number;
+  usePersonalAddressForDelivery?: boolean;
   signatories: unknown[];
   isSignatory: boolean;
   currency: string;

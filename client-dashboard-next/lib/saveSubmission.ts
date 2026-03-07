@@ -15,12 +15,19 @@ const getSessionId = (): string => {
   return sessionId;
 };
 
+export type SaveResult = {
+  id?: string;
+  autoLoginAccessToken?: string;
+  autoLoginRefreshToken?: string;
+} | null;
+
 export async function saveSubmission(
   formData: FormData,
   currentStep: number,
   completedSteps: number[],
-  totalAmount: number | null
-): Promise<{ id: string } | null> {
+  totalAmount: number | null,
+  options?: { createAccount?: boolean }
+): Promise<SaveResult> {
   try {
     const sessionId = getSessionId();
     const res = await fetch("/api/save-submission", {
@@ -32,6 +39,7 @@ export async function saveSubmission(
         completedSteps,
         totalAmount,
         sessionId,
+        createAccount: options?.createAccount ?? false,
       }),
     });
     const data = await res.json();
@@ -42,7 +50,12 @@ export async function saveSubmission(
       }
       throw new Error(msg);
     }
-    return data.id ? { id: data.id } : null;
+
+    return {
+      id: data.id,
+      autoLoginAccessToken: data.autoLoginAccessToken,
+      autoLoginRefreshToken: data.autoLoginRefreshToken,
+    };
   } catch (err) {
     console.error("[saveSubmission]", err);
     return null;

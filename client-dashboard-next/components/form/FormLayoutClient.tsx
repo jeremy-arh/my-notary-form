@@ -6,7 +6,8 @@ import { useFormActions } from "@/contexts/FormActionsContext";
 import { useFormData } from "@/contexts/FormContext";
 import { useServices } from "@/contexts/ServicesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { saveSubmission } from "@/lib/saveSubmission";
+import { saveSubmission, type SaveResult } from "@/lib/saveSubmission";
+import { createClient } from "@/lib/supabase/client";
 import { calculateTotalAmount } from "@/lib/utils/pricing";
 import { initCrisp } from "@/lib/utils/crisp";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -73,16 +74,16 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
     }
   }, [pathname, currentStep]);
 
-  const doSave = useCallback(async () => {
+  const doSave = useCallback(async (opts?: { createAccount?: boolean }): Promise<SaveResult> => {
     const hasProgress =
       (formData.selectedServices?.length ?? 0) > 0 ||
       Object.keys(formData.serviceDocuments ?? {}).length > 0 ||
       !!formData.firstName?.trim() ||
       !!formData.lastName?.trim() ||
       !!formData.email?.trim();
-    if (!hasProgress) return;
+    if (!hasProgress) return null;
     const totalAmount = calculateTotalAmount(formData, servicesMap, optionsMap, currency);
-    await saveSubmission(formData, currentStep, completedSteps, totalAmount);
+    return saveSubmission(formData, currentStep, completedSteps, totalAmount, opts);
   }, [formData, currentStep, completedSteps, servicesMap, optionsMap, currency]);
 
   useEffect(() => {
@@ -137,7 +138,28 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
         trackFormStepPlausible(currentStep, stepData.name);
         trackFormStep(currentStep, stepData.name);
       }
-      await doSave();
+      const isPersonalInfoStep = currentStep === 1;
+      const result = await doSave(isPersonalInfoStep ? { createAccount: true } : undefined);
+
+      // Auto-login après inscription à l'étape personal-info
+      if (isPersonalInfoStep && result?.autoLoginAccessToken && result?.autoLoginRefreshToken) {
+        console.log("[handleContinue] Auto-login: setting session...");
+        try {
+          const supabase = createClient();
+          const { error } = await supabase.auth.setSession({
+            access_token: result.autoLoginAccessToken,
+            refresh_token: result.autoLoginRefreshToken,
+          });
+          if (error) {
+            console.warn("[handleContinue] Auto-login setSession failed:", error.message);
+          } else {
+            console.log("[handleContinue] Auto-login SUCCESS");
+          }
+        } catch (e) {
+          console.warn("[handleContinue] Auto-login error:", e);
+        }
+      }
+
       await triggerContinue();
     } finally {
       setIsContinuing(false);

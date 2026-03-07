@@ -54,6 +54,7 @@ export default function PersonalInfoPage() {
   const { t } = useTranslation();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [emailExists, setEmailExists] = useState(false);
+  const [emailExistsAttempted, setEmailExistsAttempted] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -68,6 +69,7 @@ export default function PersonalInfoPage() {
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
     if (field === "email") {
       if (emailExists) setEmailExists(false);
+      if (emailExistsAttempted) setEmailExistsAttempted(false);
       if (magicLinkSent) setMagicLinkSent(false);
     }
   };
@@ -133,12 +135,17 @@ export default function PersonalInfoPage() {
   };
 
   useEffect(() => {
+    const supabase = createClient();
     const checkAuth = async () => {
-      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       setIsLoggedIn(!!user);
     };
     checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -194,8 +201,11 @@ export default function PersonalInfoPage() {
     } else if (!isValidPhoneNumber(formData.phone)) {
       newErrors.phone = t("form.steps.personalInfo.validationPhoneInvalid");
     }
-    if (!isLoggedIn && emailExists) newErrors.email = t("form.steps.personalInfo.emailExists");
     setErrors(newErrors);
+    if (!isLoggedIn && emailExists) {
+      setEmailExistsAttempted(true);
+      return false;
+    }
     return Object.keys(newErrors).length === 0;
   }, [formData, emailExists, isLoggedIn, t]);
 
@@ -238,10 +248,11 @@ export default function PersonalInfoPage() {
         const popupAlreadyShown = typeof window !== "undefined" && sessionStorage.getItem(POPUP_SHOWN_KEY) === "1";
 
         if (!hasDetail || popupAlreadyShown) {
-          // Détail vide ou popup déjà affiché cette session → reprendre directement sans popup
           const sessionId = (submission.data?.session_id as string) ?? "";
           const { sessionId: _s, submissionId: _si, ...rest } = fd;
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...rest, submissionId: submission.id }));
+          const serialized = JSON.stringify({ ...rest, submissionId: submission.id });
+          window.localStorage.setItem(STORAGE_KEY, serialized);
+          window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: serialized }));
           if (sessionId) window.localStorage.setItem(SESSION_KEY, sessionId);
           const path = getResumePath({ ...initialFormData, ...(rest as typeof initialFormData) });
           const search = searchParams.toString();
@@ -384,8 +395,14 @@ export default function PersonalInfoPage() {
                   <span>{errors.email}</span>
                 </p>
               )}
-              {!isLoggedIn && emailExists && !errors.email && (
-                <div className={`mt-2 p-3 rounded-xl ${magicLinkSent ? "bg-emerald-50 border border-emerald-200" : "bg-gray-50 border border-gray-200"}`}>
+              {!isLoggedIn && emailExists && (
+                <div className={`mt-2 p-3 rounded-xl transition-colors ${
+                  magicLinkSent
+                    ? "bg-emerald-50 border border-emerald-200"
+                    : emailExistsAttempted
+                      ? "bg-red-50 border border-red-300"
+                      : "bg-gray-50 border border-gray-200"
+                }`}>
                   {magicLinkSent ? (
                     <p className="text-sm text-emerald-800 flex items-center gap-2">
                       <Icon icon="heroicons:check-circle" className="w-4 h-4 flex-shrink-0 text-emerald-600" />
@@ -393,12 +410,18 @@ export default function PersonalInfoPage() {
                     </p>
                   ) : (
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <p className="text-sm text-gray-600">{t("form.steps.personalInfo.emailExistsMagicLink")}</p>
+                      <p className={`text-sm ${emailExistsAttempted ? "text-red-700 font-medium" : "text-gray-600"}`}>
+                        {t("form.steps.personalInfo.emailExistsMagicLink")}
+                      </p>
                       <button
                         type="button"
                         onClick={handleSendMagicLink}
                         disabled={sendingMagicLink}
-                        className="shrink-0 px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        className={`shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                          emailExistsAttempted
+                            ? "bg-red-600 text-white hover:bg-red-700"
+                            : "bg-gray-900 text-white hover:bg-gray-800"
+                        }`}
                       >
                         {sendingMagicLink ? t("form.steps.personalInfo.sendingMagicLink") : t("form.steps.personalInfo.sendMagicLink")}
                       </button>
@@ -589,7 +612,9 @@ export default function PersonalInfoPage() {
                   const sessionId = (activeSubmission.data?.session_id as string) ?? "";
                   const submissionId = activeSubmission.id;
                   const { sessionId: _s, submissionId: _si, ...rest } = fd as { sessionId?: string; submissionId?: string; [key: string]: unknown };
-                  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...rest, submissionId }));
+                  const serialized = JSON.stringify({ ...rest, submissionId });
+                  window.localStorage.setItem(STORAGE_KEY, serialized);
+                  window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: serialized }));
                   if (sessionId) window.localStorage.setItem(SESSION_KEY, sessionId);
                   const path = getResumePath({ ...initialFormData, ...(rest as typeof initialFormData) });
                   const search = searchParams.toString();

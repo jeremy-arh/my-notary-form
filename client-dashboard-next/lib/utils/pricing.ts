@@ -4,8 +4,23 @@
 
 import { convertPriceSync, convertPriceRoundUpSync } from "./currency";
 
-const DELIVERY_POSTAL_PRICE_EUR = 29.95;
+// Marge commerciale ajoutée à chaque prix de livraison
+export const DELIVERY_MARGIN_EUR = 20;
+
+// Fallback prices used only when the /api/delivery-price call hasn't resolved yet.
+// Base Pingen (3 pages B&W, France): standard €1.53, express €7.28
+// + DELIVERY_MARGIN_EUR sur chaque prix
+const DELIVERY_POSTAL_PRICE_EUR = 1.53 + DELIVERY_MARGIN_EUR; // 21.53
 const ADDITIONAL_SIGNATORY_PRICE_EUR = 45;
+
+export const DELIVERY_OPTIONS = {
+  // Pingen standard, 3-page B&W letter, France via La Poste + marge
+  standard: { priceEUR: 1.53 + DELIVERY_MARGIN_EUR, deliveryDays: "2-4" },
+  // Pingen express/recommandé, 3-page B&W letter, France via La Poste + marge
+  express: { priceEUR: 7.28 + DELIVERY_MARGIN_EUR, deliveryDays: "2-4" },
+} as const;
+
+export type DeliveryOptionKey = keyof typeof DELIVERY_OPTIONS;
 
 export type ServiceRecord = {
   service_id: string;
@@ -86,6 +101,7 @@ export function calculateTotalAmount(
     selectedServices?: string[];
     serviceDocuments?: Record<string, unknown[]>;
     deliveryMethod?: string | null;
+    deliveryPriceEUR?: number;
     signatories?: unknown[];
   },
   servicesMap: Record<string, ServiceRecord>,
@@ -115,7 +131,8 @@ export function calculateTotalAmount(
     }
   });
   if (formData.deliveryMethod === "postal") {
-    total += currency === "EUR" ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR) : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+    const deliveryCostEUR = formData.deliveryPriceEUR ?? DELIVERY_POSTAL_PRICE_EUR;
+    total += currency === "EUR" ? Math.ceil(deliveryCostEUR) : convertPriceRoundUpSync(deliveryCostEUR, currency);
   }
   const signatoriesCount = formData.signatories?.length ?? 0;
   if (signatoriesCount > 1) {

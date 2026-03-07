@@ -27,14 +27,6 @@ function convertPriceToMatchClient(eurAmount: number, targetCurrency: string): n
   return Math.round(eurAmount * rate * 100) / 100;
 }
 
-/** Delivery et signataires : arrondi à l'unité supérieure */
-function convertPriceRoundUpToMatchClient(eurAmount: number, targetCurrency: string): number {
-  if (!eurAmount || !targetCurrency) return eurAmount;
-  if (targetCurrency.toUpperCase() === "EUR") return Math.ceil(eurAmount);
-  const rate = CLIENT_FALLBACK_RATES[targetCurrency.toUpperCase()] ?? 1;
-  const converted = eurAmount * rate;
-  return Math.ceil(converted);
-}
 
 export async function POST(request: NextRequest) {
   let formData: Record<string, unknown> = {};
@@ -497,7 +489,7 @@ export async function POST(request: NextRequest) {
       (formData.deliveryPostalCostEUR as number) || 0;
 
     if (deliveryMethod === "postal" && deliveryPostalCostEUR > 0) {
-      const deliveryCostInCurrency = convertPriceRoundUpToMatchClient(
+      const deliveryCostInCurrency = convertPriceToMatchClient(
         deliveryPostalCostEUR,
         currency
       );
@@ -505,12 +497,16 @@ export async function POST(request: NextRequest) {
         currency === "JPY"
           ? Math.round(deliveryCostInCurrency)
           : Math.round(deliveryCostInCurrency * 100);
+      const deliveryOption = (formData.deliveryOption as string) || "standard";
+      const deliveryLabel = deliveryOption === "express"
+        ? "Physical Delivery (Express)"
+        : "Physical Delivery (Standard)";
       lineItems.push({
         price_data: {
           currency: stripeCurrency,
           product_data: {
-            name: "Physical Delivery (DHL Express)",
-            description: `Postal delivery via DHL Express (${deliveryPostalCostEUR} EUR)`,
+            name: deliveryLabel,
+            description: `Postal delivery - ${deliveryOption} (${deliveryPostalCostEUR} EUR)`,
           },
           unit_amount: unitAmount,
         },
@@ -528,7 +524,7 @@ export async function POST(request: NextRequest) {
         : 0);
 
     if (additionalSignatoriesCount > 0 && additionalSignatoriesCostEUR > 0) {
-      const costInTargetCurrency = convertPriceRoundUpToMatchClient(
+      const costInTargetCurrency = convertPriceToMatchClient(
         additionalSignatoriesCostEUR,
         currency
       );

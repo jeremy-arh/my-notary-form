@@ -43,7 +43,10 @@ export default function FormPage() {
           const { formData } = await res.json();
           if (formData) {
             const { sessionId, submissionId, ...rest } = formData;
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...rest, submissionId }));
+            const serialized = JSON.stringify({ ...rest, submissionId });
+            window.localStorage.setItem(STORAGE_KEY, serialized);
+            // Déclencher manuellement pour que useLocalStorage dans le layout détecte le changement
+            window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: serialized }));
             if (sessionId) window.localStorage.setItem(SESSION_KEY, String(sessionId));
             const path = getResumePath({ ...initialFormData, ...rest });
             redirect(path);
@@ -62,7 +65,9 @@ export default function FormPage() {
           const { formData, submission } = await res.json();
           if (formData && submission && (formData.selectedServices?.length > 0 || formData.firstName)) {
             const { sessionId, submissionId, ...rest } = formData;
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...rest, submissionId }));
+            const serialized = JSON.stringify({ ...rest, submissionId });
+            window.localStorage.setItem(STORAGE_KEY, serialized);
+            window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: serialized }));
             if (sessionId) window.localStorage.setItem(SESSION_KEY, String(sessionId));
           }
         }

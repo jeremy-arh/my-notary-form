@@ -122,6 +122,16 @@ export default function AddressAutocomplete({
         `;
         document.head.appendChild(style);
       }
+      if (!document.getElementById("address-autocomplete-pac-zindex")) {
+        const pacStyle = document.createElement("style");
+        pacStyle.id = "address-autocomplete-pac-zindex";
+        pacStyle.textContent = `
+          .pac-container {
+            z-index: 100000 !important;
+          }
+        `;
+        document.head.appendChild(pacStyle);
+      }
 
       containerRef.current.innerHTML = "";
       containerRef.current.appendChild(input);

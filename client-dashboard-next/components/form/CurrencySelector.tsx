@@ -24,10 +24,14 @@ export default function CurrencySelector({ openDirection = "bottom" }: { openDir
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const insideDropdown = dropdownRef.current?.contains(target);
+      const insideModal = modalRef.current?.contains(target);
+      if (!insideDropdown && !insideModal) {
         setIsOpen(false);
       }
     };
@@ -82,7 +86,10 @@ export default function CurrencySelector({ openDirection = "bottom" }: { openDir
           {/* Mobile: full-screen modal */}
           {typeof document !== "undefined" &&
             createPortal(
-              <div className="fixed inset-0 z-[9999] flex flex-col bg-white sm:hidden">
+              <div
+                ref={(el) => { modalRef.current = el; }}
+                className="fixed inset-0 z-[9999] flex flex-col bg-white sm:hidden"
+              >
                 <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 shrink-0">
                   <h2 className="text-base font-semibold text-gray-900">{t("selector.currency")}</h2>
                   <button

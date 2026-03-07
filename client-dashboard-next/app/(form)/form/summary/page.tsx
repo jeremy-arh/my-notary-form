@@ -17,7 +17,7 @@ import {
   DELIVERY_POSTAL_PRICE_EUR,
   ADDITIONAL_SIGNATORY_PRICE_EUR,
 } from "@/lib/utils/pricing";
-import { formatPriceSync, convertPriceSync, convertPriceRoundUpSync } from "@/lib/utils/currency";
+import { formatPriceSync, convertPriceSync } from "@/lib/utils/currency";
 import { trackFormSubmissionStart as trackFormSubmissionStartPlausible } from "@/lib/utils/plausible";
 import {
   trackFormSubmissionStart,
@@ -76,30 +76,26 @@ export default function SummaryPage() {
 
   useEffect(() => {
     if (formData.deliveryMethod === "postal") {
+      const costEUR = (formData.deliveryPriceEUR as number) ?? DELIVERY_POSTAL_PRICE_EUR;
       const amount =
         currency === "EUR"
-          ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR)
-          : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+          ? costEUR
+          : convertPriceSync(costEUR, currency);
       setConvertedDeliveryPrice(formatPriceSync(amount, currency));
     } else {
       setConvertedDeliveryPrice("");
     }
-  }, [formData.deliveryMethod, currency]);
+  }, [formData.deliveryMethod, formData.deliveryPriceEUR, currency]);
 
   const getDeliveryDescription = useCallback(() => {
-    const description =
-      formData.deliveryMethod === "postal"
-        ? t("form.steps.delivery.postDescription")
-        : t("form.steps.delivery.emailDescription");
-
-    if (formData.deliveryMethod === "postal" && convertedDeliveryPrice) {
-      return description
-        .replace(/€?\s*\d+[.,]\d+\s*€?/gi, `${convertedDeliveryPrice} `)
-        .replace(/\s+/g, " ")
-        .trim();
+    if (formData.deliveryMethod === "postal" && formData.deliveryOption) {
+      return t(`form.delivery.modal.option.${formData.deliveryOption}.title`);
     }
-    return description;
-  }, [formData.deliveryMethod, convertedDeliveryPrice, t]);
+    if (formData.deliveryMethod === "email") {
+      return t("form.steps.delivery.emailDescription");
+    }
+    return t("form.steps.delivery.postDescription");
+  }, [formData.deliveryMethod, formData.deliveryOption, t]);
 
   const getTotalAmount = useCallback(() => {
     let total = 0;
@@ -118,10 +114,11 @@ export default function SummaryPage() {
       }
     });
     if (formData.deliveryMethod === "postal") {
+      const deliveryCostEUR = (formData.deliveryPriceEUR as number) ?? DELIVERY_POSTAL_PRICE_EUR;
       total +=
         currency === "EUR"
-          ? Math.ceil(DELIVERY_POSTAL_PRICE_EUR)
-          : convertPriceRoundUpSync(DELIVERY_POSTAL_PRICE_EUR, currency);
+          ? deliveryCostEUR
+          : convertPriceSync(deliveryCostEUR, currency);
     }
     const signatoriesCount = formData.signatories?.length ?? 0;
     if (signatoriesCount > 1) {
@@ -129,11 +126,11 @@ export default function SummaryPage() {
       const signatoriesCostEUR = additionalCount * ADDITIONAL_SIGNATORY_PRICE_EUR;
       total +=
         currency === "EUR"
-          ? Math.ceil(signatoriesCostEUR)
-          : convertPriceRoundUpSync(signatoriesCostEUR, currency);
+          ? signatoriesCostEUR
+          : convertPriceSync(signatoriesCostEUR, currency);
     }
     return total;
-  }, [formData.selectedServices, formData.serviceDocuments, formData.deliveryMethod, formData.signatories, servicesMap, optionsMap, currency]);
+  }, [formData.selectedServices, formData.serviceDocuments, formData.deliveryMethod, formData.deliveryPriceEUR, formData.signatories, servicesMap, optionsMap, currency]);
 
   const getMissingInfo = useCallback(() => {
     const missing: { key: string; label: string; action: () => void }[] = [];
@@ -229,8 +226,8 @@ export default function SummaryPage() {
       const additionalSignatoriesCostEUR = additionalSignatoriesCount * ADDITIONAL_SIGNATORY_PRICE_EUR;
       const additionalSignatoriesCost =
         currency === "EUR"
-          ? Math.ceil(additionalSignatoriesCostEUR)
-          : convertPriceRoundUpSync(additionalSignatoriesCostEUR, currency);
+          ? additionalSignatoriesCostEUR
+          : convertPriceSync(additionalSignatoriesCostEUR, currency);
 
       (formData.selectedServices ?? []).forEach((sid) => {
         const service = servicesMap[sid];
@@ -266,7 +263,10 @@ export default function SummaryPage() {
       }
 
       if (formData.deliveryMethod === "postal") {
-        const deliveryName = t("form.steps.delivery.postTitle");
+        const optionKey = formData.deliveryOption as string;
+        const deliveryName = optionKey
+          ? `${t("form.steps.delivery.postTitle")} - ${t(`form.delivery.modal.option.${optionKey}.title`)}`
+          : t("form.steps.delivery.postTitle");
         localizedNames["delivery_postal"] = deliveryName;
         localizedLineItems.push({
           type: "delivery",
@@ -287,7 +287,10 @@ export default function SummaryPage() {
         additionalSignatoriesCost,
         additionalSignatoriesCostEUR,
         deliveryMethod: formData.deliveryMethod,
-        deliveryPostalCostEUR: formData.deliveryMethod === "postal" ? DELIVERY_POSTAL_PRICE_EUR : 0,
+        deliveryOption: formData.deliveryOption ?? null,
+        deliveryPostalCostEUR: formData.deliveryMethod === "postal"
+          ? ((formData.deliveryPriceEUR as number) ?? DELIVERY_POSTAL_PRICE_EUR)
+          : 0,
         language,
         localizedLineItems,
         localizedNames,
@@ -419,8 +422,8 @@ export default function SummaryPage() {
             <span className="text-xs sm:text-sm font-semibold text-gray-900">
               {formatPriceSync(
                 currency === "EUR"
-                  ? Math.ceil((formData.signatories.length - 1) * ADDITIONAL_SIGNATORY_PRICE_EUR)
-                  : convertPriceRoundUpSync((formData.signatories.length - 1) * ADDITIONAL_SIGNATORY_PRICE_EUR, currency),
+                  ? (formData.signatories.length - 1) * ADDITIONAL_SIGNATORY_PRICE_EUR
+                  : convertPriceSync((formData.signatories.length - 1) * ADDITIONAL_SIGNATORY_PRICE_EUR, currency),
                 currency
               )}
             </span>
@@ -432,10 +435,12 @@ export default function SummaryPage() {
         formData.deliveryMethod === "postal" && (
           <div className="flex justify-between items-center pt-2 border-t border-gray-200">
             <span className="text-xs sm:text-sm text-gray-700">
-              + {t("form.steps.summary.delivery")}
+              + {formData.deliveryOption
+                ? t(`form.delivery.modal.option.${formData.deliveryOption}.title`)
+                : t("form.steps.summary.delivery")}
             </span>
             <span className="text-xs sm:text-sm font-semibold text-gray-900">
-              {convertedDeliveryPrice || formatPriceSync(Math.ceil(DELIVERY_POSTAL_PRICE_EUR), "EUR")}
+              {convertedDeliveryPrice}
             </span>
           </div>
         )}
@@ -582,9 +587,9 @@ export default function SummaryPage() {
                       onClick={() => router.push("/form/documents")}
                       className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
                     >
-<Icon icon="heroicons:pencil-square" className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">{t("form.steps.summary.edit")}</span>
-                  </button>
+                      <Icon icon="heroicons:pencil-square" className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span>{t("form.steps.summary.edit")}</span>
+                    </button>
                 </div>
                 {totalDocuments === 0 ? (
                     <button
@@ -708,7 +713,7 @@ export default function SummaryPage() {
                       className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
                     >
                       <Icon icon="heroicons:pencil-square" className="w-3 h-3 sm:w-4 sm:h-4" />
-                      <span className="hidden sm:inline">{t("form.steps.summary.edit")}</span>
+                      <span>{t("form.steps.summary.edit")}</span>
                     </button>
                   </div>
                   <div className="space-y-2 sm:space-y-3">
@@ -722,7 +727,7 @@ export default function SummaryPage() {
                             {sig.firstName || sig.first_name} {sig.lastName || sig.last_name}
                             {i > 0 && (
                               <span className="ml-1.5 text-orange-600 text-[9px] sm:text-[10px]">
-                                (+{formatPriceSync(convertPriceRoundUpSync(ADDITIONAL_SIGNATORY_PRICE_EUR, currency), currency)})
+                                (+{formatPriceSync(convertPriceSync(ADDITIONAL_SIGNATORY_PRICE_EUR, currency), currency)})
                               </span>
                             )}
                           </p>
@@ -744,12 +749,12 @@ export default function SummaryPage() {
                   <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
                     {t("form.steps.summary.personalInfo")}
                   </h3>
-                  <button
+                    <button
                     onClick={() => router.push("/form/personal-info")}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
                   >
                     <Icon icon="heroicons:pencil-square" className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">{t("form.steps.summary.edit")}</span>
+                    <span>{t("form.steps.summary.edit")}</span>
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
@@ -798,20 +803,20 @@ export default function SummaryPage() {
                   <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
                     {t("form.steps.summary.delivery")}
                   </h3>
-                  <button
-                    onClick={() => router.push("/form/delivery")}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
-                  >
-                    <Icon icon="heroicons:pencil-square" className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">{t("form.steps.summary.edit")}</span>
-                  </button>
+                    <button
+                      onClick={() => router.push("/form/delivery")}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      <Icon icon="heroicons:pencil-square" className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span>{t("form.steps.summary.edit")}</span>
+                    </button>
                 </div>
                 <div className="flex items-start space-x-3 sm:space-x-4">
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
                       {formData.deliveryMethod === "postal" ? (
                         <Icon
-                          icon="heroicons:envelope"
+                          icon={formData.deliveryOption === "express" ? "heroicons:bolt" : "heroicons:envelope"}
                           className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700"
                         />
                       ) : (
@@ -826,6 +831,16 @@ export default function SummaryPage() {
                         : t("form.steps.delivery.emailTitle")}
                     </p>
                     <p className="text-[10px] sm:text-xs text-gray-600">{getDeliveryDescription()}</p>
+                    {formData.deliveryMethod === "postal" && formData.deliveryAddress && (
+                      <p className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-1">
+                        <Icon icon="heroicons:map-pin" className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">
+                          {[formData.deliveryAddress, formData.deliveryCity, formData.deliveryPostalCode, formData.deliveryCountry]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </span>
+                      </p>
+                    )}
                     {formData.deliveryMethod === "postal" && convertedDeliveryPrice && (
                       <p className="text-[10px] sm:text-xs font-semibold text-gray-900 mt-1">
                         {t("form.steps.summary.deliveryPrice")}: {convertedDeliveryPrice}

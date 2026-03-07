@@ -32,6 +32,20 @@ type SubmissionRow = {
     documents?: Record<string, unknown[]>;
     delivery_method?: string;
     deliveryMethod?: string;
+    delivery_option?: string;
+    deliveryOption?: string;
+    delivery_price_eur?: number;
+    deliveryPriceEUR?: number;
+    delivery_address?: string;
+    deliveryAddress?: string;
+    delivery_city?: string;
+    deliveryCity?: string;
+    delivery_postal_code?: string;
+    deliveryPostalCode?: string;
+    delivery_country?: string;
+    deliveryCountry?: string;
+    use_personal_address_for_delivery?: boolean;
+    usePersonalAddressForDelivery?: boolean;
     signatories?: unknown[];
     is_signatory?: boolean;
     currency?: string;
@@ -57,6 +71,13 @@ function submissionToFormData(s: SubmissionRow) {
     selectedServices: d.selectedServices ?? d.selected_services ?? [],
     serviceDocuments: d.serviceDocuments ?? d.documents ?? {},
     deliveryMethod: d.deliveryMethod ?? d.delivery_method ?? null,
+    deliveryOption: d.deliveryOption ?? d.delivery_option ?? null,
+    deliveryPriceEUR: d.deliveryPriceEUR ?? d.delivery_price_eur ?? undefined,
+    deliveryAddress: d.deliveryAddress ?? d.delivery_address ?? undefined,
+    deliveryCity: d.deliveryCity ?? d.delivery_city ?? undefined,
+    deliveryPostalCode: d.deliveryPostalCode ?? d.delivery_postal_code ?? undefined,
+    deliveryCountry: d.deliveryCountry ?? d.delivery_country ?? undefined,
+    usePersonalAddressForDelivery: d.usePersonalAddressForDelivery ?? d.use_personal_address_for_delivery ?? undefined,
     signatories: d.signatories ?? [],
     isSignatory: d.is_signatory ?? false,
     currency: d.currency ?? "EUR",
