@@ -49,6 +49,7 @@ export default function DeliveryPage() {
       deliveryCountry: string;
       deliveryOption: DeliveryOptionKey;
       deliveryPriceEUR: number;
+      deliveryCarrier?: string;
       usePersonalAddressForDelivery: boolean;
     }) => {
       updateFormData({

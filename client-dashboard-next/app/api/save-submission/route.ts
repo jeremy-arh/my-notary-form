@@ -284,6 +284,7 @@ export async function POST(request: NextRequest) {
         delivery_method: formData?.deliveryMethod ?? null,
         delivery_option: formData?.deliveryOption ?? null,
         delivery_price_eur: formData?.deliveryPriceEUR ?? null,
+        delivery_carrier: formData?.deliveryCarrier ?? null,
         delivery_address: formData?.deliveryAddress ?? null,
         delivery_city: formData?.deliveryCity ?? null,
         delivery_postal_code: formData?.deliveryPostalCode ?? null,

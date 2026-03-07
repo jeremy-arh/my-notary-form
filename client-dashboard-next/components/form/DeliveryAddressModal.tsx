@@ -80,6 +80,7 @@ interface DeliveryAddressModalProps {
     deliveryCountry: string;
     deliveryOption: DeliveryOptionKey;
     deliveryPriceEUR: number;
+    deliveryCarrier?: string;
     usePersonalAddressForDelivery: boolean;
   }) => void;
 }
@@ -231,6 +232,7 @@ export default function DeliveryAddressModal({
 
     const priceState = selectedOption ? dynamicPrices[selectedOption] : null;
     const priceEUR = priceState?.priceEUR ?? DELIVERY_OPTIONS[selectedOption!]?.priceEUR ?? 0;
+    const carrier = priceState?.carrier;
 
     onConfirm({
       deliveryAddress: finalAddress,
@@ -239,6 +241,7 @@ export default function DeliveryAddressModal({
       deliveryCountry: finalCountry,
       deliveryOption: selectedOption!,
       deliveryPriceEUR: priceEUR,
+      deliveryCarrier: carrier,
       usePersonalAddressForDelivery: usePersonalAddress,
     });
   }, [

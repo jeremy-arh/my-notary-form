@@ -20,6 +20,7 @@ import {
 import { FUNNEL_LABELS } from "@/hooks/usePipeline";
 import { toast } from "sonner";
 import { SendMessageDialog } from "@/components/shared/SendMessageDialog";
+import { SendPostalDialog } from "@/components/shared/SendPostalDialog";
 import { CreateTaskDialogManual } from "@/components/tasks/CreateTaskDialogManual";
 import {
   Select,
@@ -170,6 +171,62 @@ const DELIVERY_LABELS: Record<string, string> = {
   email: "Email",
 };
 
+// Transporteurs avec option "Recommandé" (La Poste, Swiss Post, bpost) au lieu de "Livraison express"
+const RECOMMANDE_CARRIERS = new Set(["laposte", "postch", "bpost"]);
+
+// Dérivation du transporteur par pays (fallback pour anciennes commandes sans delivery_carrier)
+const CARRIER_BY_COUNTRY: Record<string, { standard: string; express: string }> = {
+  FR: { standard: "laposte", express: "laposte" },
+  DE: { standard: "deutschepost", express: "dhl" },
+  CH: { standard: "postch", express: "postch" },
+  GB: { standard: "royalmail", express: "dhl" },
+  NL: { standard: "postnl", express: "dhl" },
+  AT: { standard: "austrianpost", express: "dhl" },
+  BE: { standard: "bpost", express: "bpost" },
+  LU: { standard: "bpost", express: "dhl" },
+  IN: { standard: "indiapost", express: "dhl" },
+};
+const COUNTRY_ALIASES: Record<string, string> = {
+  FRANCE: "FR", ARGENTINE: "AR", ARGENTINA: "AR", "BRÉSIL": "BR", BRASIL: "BR", BRAZIL: "BR",
+  "UNITED STATES": "US", USA: "US", "ÉTATS-UNIS": "US", "ETATS-UNIS": "US", CANADA: "CA", AUSTRALIA: "AU",
+  VIETNAM: "VN", SPAIN: "ES", ESPAGNE: "ES", ITALY: "IT", ITALIE: "IT", GERMANY: "DE", ALLEMAGNE: "DE",
+  SWITZERLAND: "CH", SUISSE: "CH", BELGIUM: "BE", BELGIQUE: "BE", NETHERLANDS: "NL", "PAYS-BAS": "NL",
+  "UNITED KINGDOM": "GB", UK: "GB", PORTUGAL: "PT", MEXICO: "MX", MEXIQUE: "MX",
+};
+function normalizeCountryCode(raw: string): string {
+  if (!raw || typeof raw !== "string") return "";
+  const t = raw.trim().toUpperCase();
+  if (t.length === 2) return t;
+  return COUNTRY_ALIASES[t] ?? t.slice(0, 2);
+}
+function deriveCarrierFromCountry(country: string, option: string): string | null {
+  const code = normalizeCountryCode(country);
+  const map = CARRIER_BY_COUNTRY[code];
+  if (map) return option === "express" ? map.express : map.standard;
+  return option === "express" ? "dhl" : "dhl";
+}
+
+const CARRIER_NAMES: Record<string, string> = {
+  laposte: "La Poste",
+  dhl: "DHL",
+  deutschepost: "Deutsche Post",
+  royalmail: "Royal Mail",
+  postnl: "PostNL",
+  bpost: "bpost",
+  postch: "Swiss Post",
+  austrianpost: "Österreichische Post",
+  indiapost: "India Post",
+};
+
+function getDeliveryOptionLabel(option: string, carrier?: string | null): string {
+  if (option === "standard") return "Livraison standard";
+  if (option === "express") {
+    if (carrier && RECOMMANDE_CARRIERS.has(carrier.toLowerCase())) return "Recommandé";
+    return "Livraison express";
+  }
+  return option || "—";
+}
+
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -190,6 +247,7 @@ export default function OrderDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [showSendMessage, setShowSendMessage] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
+  const [showSendPostal, setShowSendPostal] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
   const [notarizedFiles, setNotarizedFiles] = useState<NotarizedFile[]>([]);
   const [uploadingNotarized, setUploadingNotarized] = useState(false);
@@ -289,7 +347,26 @@ export default function OrderDetailPage() {
   };
 
   const shortId = submission.id.slice(0, 8);
-  const deliveryMethod = (submission.data as { delivery_method?: string })?.delivery_method;
+  const dataRaw = submission.data as { delivery_method?: string; deliveryMethod?: string } | null;
+  const deliveryMethod = dataRaw?.delivery_method ?? dataRaw?.deliveryMethod;
+  const usePersonalAddress = (submission.data as { use_personal_address_for_delivery?: boolean })?.use_personal_address_for_delivery ?? true;
+  const data = submission.data as {
+    delivery_address?: string;
+    delivery_city?: string;
+    delivery_postal_code?: string;
+    delivery_country?: string;
+    delivery_option?: string;
+    delivery_carrier?: string;
+    delivery_price_eur?: number;
+    deliveryMethod?: string;
+  } | null;
+  const deliveryAddress = {
+    name: [submission.first_name, submission.last_name].filter(Boolean).join(" ") || "Client",
+    address: usePersonalAddress ? (submission.address ?? "") : (data?.delivery_address ?? ""),
+    city: usePersonalAddress ? (submission.city ?? "") : (data?.delivery_city ?? ""),
+    postalCode: usePersonalAddress ? (submission.postal_code ?? "") : (data?.delivery_postal_code ?? ""),
+    country: usePersonalAddress ? (submission.country ?? "") : (data?.delivery_country ?? ""),
+  };
 
   return (
     <div className="space-y-6">
@@ -307,6 +384,16 @@ export default function OrderDetailPage() {
 
       {/* Actions principales (Annuler, Terminé, Planifier séquences) */}
       <div className="flex justify-end gap-2 flex-wrap">
+        {(deliveryMethod === "postal" || deliveryMethod === "physical") && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSendPostal(true)}
+          >
+            <Icon icon="lucide:send" className="mr-2 h-4 w-4" />
+            Envoyer par courrier
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -356,6 +443,7 @@ export default function OrderDetailPage() {
           <TabsTrigger value="signataires">Signataires</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="notarized">Documents notariés ({notarizedFiles.length})</TabsTrigger>
+          <TabsTrigger value="delivery">Livraison</TabsTrigger>
           <TabsTrigger value="tasks">Tâches ({tasks.length})</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
@@ -974,6 +1062,76 @@ export default function OrderDetailPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="delivery" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Livraison</CardTitle>
+              <CardDescription>
+                Méthode de livraison choisie par le client et adresse d&apos;expédition
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Méthode</p>
+                <p className="mt-1 font-medium">
+                  {deliveryMethod ? (DELIVERY_LABELS[deliveryMethod] || deliveryMethod) : "—"}
+                </p>
+              </div>
+              {(deliveryMethod === "postal" || deliveryMethod === "physical") && (
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Adresse de livraison</p>
+                    <p className="mt-1">
+                      {deliveryAddress.name}
+                      <br />
+                      {[deliveryAddress.address, deliveryAddress.postalCode, deliveryAddress.city, deliveryAddress.country]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                    </p>
+                  </div>
+                  {data?.delivery_option && (() => {
+                    const effectiveCarrier = data.delivery_carrier ?? deriveCarrierFromCountry(deliveryAddress.country || "", data.delivery_option);
+                    const carrierDisplay = effectiveCarrier ? (CARRIER_NAMES[effectiveCarrier.toLowerCase()] ?? effectiveCarrier) : null;
+                    return (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Option</p>
+                        <p className="mt-1">
+                          {getDeliveryOptionLabel(data.delivery_option, effectiveCarrier)}
+                          {carrierDisplay && (
+                            <span className="text-muted-foreground font-normal">
+                              {" "}via {carrierDisplay}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                  {data?.delivery_price_eur != null && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Prix livraison</p>
+                      <p className="mt-1 font-medium">{formatCurrency(data.delivery_price_eur)}</p>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowSendPostal(true)}
+                    className="mt-2"
+                  >
+                    <Icon icon="lucide:send" className="mr-2 h-4 w-4" />
+                    Envoyer les documents par courrier
+                  </Button>
+                </>
+              )}
+              {(!deliveryMethod || deliveryMethod === "email") && (
+                <p className="text-sm text-muted-foreground">
+                  Livraison par email. Les documents seront envoyés au client par voie électronique.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="tasks" className="mt-6">
           <Card>
             <CardHeader>
@@ -1128,6 +1286,16 @@ export default function OrderDetailPage() {
           }}
           submissionId={submission.id}
           clientId={submission.client_id}
+          onSuccess={() => fetchDetail({ skipLoading: true })}
+        />
+      )}
+      {submission && (deliveryMethod === "postal" || deliveryMethod === "physical") && (
+        <SendPostalDialog
+          open={showSendPostal}
+          onOpenChange={setShowSendPostal}
+          submissionId={submission.id}
+          files={notarizedFiles}
+          address={deliveryAddress}
           onSuccess={() => fetchDetail({ skipLoading: true })}
         />
       )}

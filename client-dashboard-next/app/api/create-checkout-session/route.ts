@@ -341,6 +341,7 @@ export async function POST(request: NextRequest) {
           delivery_method: (formData.deliveryMethod ?? formData.delivery_method) ?? null,
           delivery_option: (formData.deliveryOption ?? formData.delivery_option) ?? null,
           delivery_price_eur: (formData.deliveryPriceEUR ?? formData.deliveryPostalCostEUR ?? formData.delivery_price_eur) ?? null,
+          delivery_carrier: (formData.deliveryCarrier ?? formData.delivery_carrier) ?? null,
           delivery_address: (formData.deliveryAddress ?? formData.delivery_address) ?? null,
           delivery_city: (formData.deliveryCity ?? formData.delivery_city) ?? null,
           delivery_postal_code: (formData.deliveryPostalCode ?? formData.delivery_postal_code) ?? null,
@@ -526,7 +527,7 @@ export async function POST(request: NextRequest) {
           currency: stripeCurrency,
           product_data: {
             name: deliveryLabel,
-            description: `Postal delivery - ${deliveryOption} (${deliveryPostalCostEUR} EUR)`,
+            description: `Postal delivery - ${deliveryOption}`,
           },
           unit_amount: unitAmount,
         },

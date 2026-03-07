@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
@@ -9,48 +8,19 @@ import "react-phone-number-input/style.css";
 import { createClient } from "@/lib/supabase/client";
 import { useFormData } from "@/contexts/FormContext";
 import { useFormActions } from "@/contexts/FormActionsContext";
-import { useServices } from "@/contexts/ServicesContext";
 import { useTranslation } from "@/hooks/useTranslation";
 import AddressAutocomplete from "@/components/form/AddressAutocomplete";
-import { getResumePath, getResumeStepIndex } from "@/lib/formResume";
+import { getResumePath } from "@/lib/formResume";
 import { initialFormData } from "@/lib/formData";
 
 const STORAGE_KEY = "notaryFormData";
 const SESSION_KEY = "formSessionId";
-const POPUP_SHOWN_KEY = "resumePopupShown";
-
-const STEP_KEYS = [
-  "form.resumePopup.stepPersonalInfo",
-  "form.resumePopup.stepChooseServices",
-  "form.resumePopup.stepDocuments",
-  "form.resumePopup.stepSignatories",
-  "form.resumePopup.stepDelivery",
-  "form.resumePopup.stepSummary",
-] as const;
-
-type ActiveSubmission = {
-  id: string;
-  created_at?: string;
-  data?: {
-    selectedServices?: string[];
-    serviceDocuments?: Record<string, unknown[]>;
-    signatories?: unknown[];
-    deliveryMethod?: string;
-    delivery_method?: string;
-    session_id?: string;
-    [key: string]: unknown;
-  };
-  first_name?: string;
-  last_name?: string;
-  [key: string]: unknown;
-};
 
 export default function PersonalInfoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { formData, updateFormData } = useFormData();
   const { registerContinueHandler, registerStepValidationOverride } = useFormActions();
-  const { servicesMap, optionsMap, getServiceName, getOptionName } = useServices();
   const { t } = useTranslation();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [emailExists, setEmailExists] = useState(false);
@@ -59,11 +29,6 @@ export default function PersonalInfoPage() {
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [phoneDefaultCountry, setPhoneDefaultCountry] = useState<string | undefined>("FR");
-  const [activeSubmission, setActiveSubmission] = useState<ActiveSubmission | null>(null);
-  const [activeFormData, setActiveFormData] = useState<Record<string, unknown> | null>(null);
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-  const [resumeCreatedAt, setResumeCreatedAt] = useState<string | undefined>(undefined);
-
   const handleChange = (field: string, value: string) => {
     updateFormData({ [field]: value });
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -240,36 +205,22 @@ export default function PersonalInfoPage() {
       const { formData: dbFd, submission } = await res.json();
       if (submission && submission.id !== currentSubmissionId) {
         const fd = dbFd as Record<string, unknown>;
-        const serviceIds = (fd.selectedServices as string[] | undefined) ?? [];
-        const signatories = (fd.signatories as unknown[] | undefined) ?? [];
-        const delivery = fd.deliveryMethod ?? fd.delivery_method;
-        const hasDetail = serviceIds.length > 0 || signatories.length > 0 || !!delivery;
-
-        const popupAlreadyShown = typeof window !== "undefined" && sessionStorage.getItem(POPUP_SHOWN_KEY) === "1";
-
-        if (!hasDetail || popupAlreadyShown) {
-          const sessionId = (submission.data?.session_id as string) ?? "";
-          const { sessionId: _s, submissionId: _si, ...rest } = fd;
-          const serialized = JSON.stringify({ ...rest, submissionId: submission.id });
-          window.localStorage.setItem(STORAGE_KEY, serialized);
-          window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: serialized }));
-          if (sessionId) window.localStorage.setItem(SESSION_KEY, sessionId);
-          const path = getResumePath({ ...initialFormData, ...(rest as typeof initialFormData) });
-          const search = searchParams.toString();
-          router.replace(search ? `${path}?${search}` : path);
-          return;
-        }
-
-        sessionStorage.setItem(POPUP_SHOWN_KEY, "1");
-        setActiveSubmission(submission);
-        setActiveFormData(dbFd);
-        setPendingNavigation("next");
+        const sessionId = (submission.data?.session_id as string) ?? "";
+        const { sessionId: _s, submissionId: _si, ...rest } = fd;
+        const toApply = { ...initialFormData, ...rest, submissionId: submission.id };
+        updateFormData(toApply);
+        const serialized = JSON.stringify({ ...rest, submissionId: submission.id });
+        window.localStorage.setItem(STORAGE_KEY, serialized);
+        if (sessionId) window.localStorage.setItem(SESSION_KEY, sessionId);
+        const path = getResumePath(toApply as typeof initialFormData);
+        const search = searchParams.toString();
+        router.replace(search ? `${path}?${search}` : path);
         return;
       }
     } catch { /* ignore, continuer */ }
 
     navigateNext();
-  }, [validate, formData.email, navigateNext, router, searchParams]);
+  }, [validate, formData.email, navigateNext, router, searchParams, updateFormData]);
 
   useEffect(() => {
     registerContinueHandler(handleNext);
@@ -284,9 +235,13 @@ export default function PersonalInfoPage() {
     return unregister;
   }, [registerStepValidationOverride, isFormValid, emailExists, isLoggedIn]);
 
-  const inputClass = (err: boolean) =>
-    `w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border-2 rounded-xl focus:ring-2 focus:ring-black focus:border-black transition-all text-sm sm:text-base placeholder:text-gray-400 placeholder:italic ${
-      err ? "border-red-500" : "border-gray-200"
+  const inputClass = (err: boolean, disabled?: boolean) =>
+    `w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 rounded-xl transition-all text-sm sm:text-base ${
+      disabled
+        ? "bg-gray-100 border-gray-200 text-gray-600 cursor-not-allowed"
+        : err
+          ? "bg-white border-red-500 focus:ring-2 focus:ring-red-500 focus:border-red-500 placeholder:text-gray-400 placeholder:italic"
+          : "bg-white border-gray-200 focus:ring-2 focus:ring-black focus:border-black placeholder:text-gray-400 placeholder:italic"
     }`;
 
   return (
@@ -303,6 +258,23 @@ export default function PersonalInfoPage() {
             <p className="text-xs sm:text-sm text-gray-600">{t("form.steps.personalInfo.subtitle")}</p>
           </div>
 
+          {isLoggedIn && (
+            <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <p className="text-xs sm:text-sm text-gray-600">
+                {t("form.steps.personalInfo.editFromAccount")}
+              </p>
+              <a
+                href="/dashboard/profile"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline shrink-0"
+              >
+                {t("form.steps.personalInfo.openAccount")}
+                <Icon icon="heroicons:arrow-top-right-on-square" className="w-4 h-4" />
+              </a>
+            </div>
+          )}
+
           <div className="space-y-3 sm:space-y-4 md:space-y-5">
             {/* First Name & Last Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
@@ -317,8 +289,9 @@ export default function PersonalInfoPage() {
                   type="text"
                   id="firstName"
                   value={formData.firstName || ""}
-                  onChange={(e) => handleChange("firstName", e.target.value)}
-                  className={inputClass(!!errors.firstName)}
+                  onChange={(e) => !isLoggedIn && handleChange("firstName", e.target.value)}
+                  readOnly={isLoggedIn}
+                  className={inputClass(!!errors.firstName, isLoggedIn)}
                   placeholder="John"
                 />
                 {errors.firstName && (
@@ -340,8 +313,9 @@ export default function PersonalInfoPage() {
                   type="text"
                   id="lastName"
                   value={formData.lastName || ""}
-                  onChange={(e) => handleChange("lastName", e.target.value)}
-                  className={inputClass(!!errors.lastName)}
+                  onChange={(e) => !isLoggedIn && handleChange("lastName", e.target.value)}
+                  readOnly={isLoggedIn}
+                  className={inputClass(!!errors.lastName, isLoggedIn)}
                   placeholder="Doe"
                 />
                 {errors.lastName && (
@@ -439,28 +413,38 @@ export default function PersonalInfoPage() {
                   {t("form.steps.personalInfo.phone")} <span className="text-red-500 ml-1">*</span>
                 </span>
               </label>
-              <div
-                className={`flex items-center bg-white border-2 rounded-xl overflow-hidden transition-all focus-within:ring-2 pl-2 sm:pl-3 pr-2 sm:pr-3 ${
-                  errors.phone
-                    ? "border-red-500 focus-within:ring-red-500 focus-within:border-red-500"
-                    : "border-gray-200 focus-within:ring-black focus-within:border-black"
-                }`}
-              >
-                <PhoneInput
-                  international
-                  defaultCountry={phoneDefaultCountry as "FR" | "US" | undefined}
+              {isLoggedIn ? (
+                <input
+                  type="text"
+                  id="phone"
                   value={formData.phone || ""}
-                  onChange={(value) => handleChange("phone", value || "")}
-                  className="phone-input-integrated w-full flex text-sm sm:text-base"
-                  countrySelectProps={{
-                    className:
-                      "pr-1 sm:pr-2 py-2.5 sm:py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none text-xs sm:text-sm focus:outline-none focus:ring-0",
-                  }}
-                  numberInputProps={{
-                    className: "flex-1 pl-1 sm:pl-2 py-2.5 sm:py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-sm sm:text-base",
-                  }}
+                  readOnly
+                  className={inputClass(!!errors.phone, true)}
                 />
-              </div>
+              ) : (
+                <div
+                  className={`flex items-center bg-white border-2 rounded-xl overflow-hidden transition-all focus-within:ring-2 pl-2 sm:pl-3 pr-2 sm:pr-3 ${
+                    errors.phone
+                      ? "border-red-500 focus-within:ring-red-500 focus-within:border-red-500"
+                      : "border-gray-200 focus-within:ring-black focus-within:border-black"
+                  }`}
+                >
+                  <PhoneInput
+                    international
+                    defaultCountry={phoneDefaultCountry as "FR" | "US" | undefined}
+                    value={formData.phone || ""}
+                    onChange={(value) => handleChange("phone", value || "")}
+                    className="phone-input-integrated w-full flex text-sm sm:text-base"
+                    countrySelectProps={{
+                      className:
+                        "pr-1 sm:pr-2 py-2.5 sm:py-3 border-0 outline-none bg-transparent cursor-pointer hover:bg-gray-100 transition-colors rounded-none text-xs sm:text-sm focus:outline-none focus:ring-0",
+                    }}
+                    numberInputProps={{
+                      className: "flex-1 pl-1 sm:pl-2 py-2.5 sm:py-3 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-sm sm:text-base",
+                    }}
+                  />
+                </div>
+              )}
               {errors.phone && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
                   <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
@@ -477,13 +461,19 @@ export default function PersonalInfoPage() {
                   {t("form.steps.personalInfo.address")} <span className="text-red-500 ml-1">*</span>
                 </span>
               </label>
-              <AddressAutocomplete
-                value={formData.address || ""}
-                onChange={(value) => handleChange("address", value)}
-                onAddressSelect={handleAddressSelect}
-                placeholder={t("form.steps.personalInfo.placeholderAddress")}
-                className={errors.address ? "border-red-500" : ""}
-              />
+              {isLoggedIn ? (
+                <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-100 border-2 border-gray-200 rounded-xl text-sm sm:text-base text-gray-600 cursor-not-allowed">
+                  {[formData.address, formData.city, formData.postalCode, formData.country].filter(Boolean).join(", ") || "—"}
+                </div>
+              ) : (
+                <AddressAutocomplete
+                  value={formData.address || ""}
+                  onChange={(value) => handleChange("address", value)}
+                  onAddressSelect={handleAddressSelect}
+                  placeholder={t("form.steps.personalInfo.placeholderAddress")}
+                  className={errors.address ? "border-red-500" : ""}
+                />
+              )}
               {errors.address && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600 flex items-center">
                   <Icon icon="heroicons:exclamation-circle" className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
@@ -495,163 +485,6 @@ export default function PersonalInfoPage() {
         </div>
       </div>
 
-      {/* Modal : soumission en cours détectée — rendu dans body pour flouter toute la page */}
-      {activeSubmission &&
-        activeFormData &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div className="fixed inset-0 z-[99999] flex items-stretch sm:items-center sm:justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-md">
-            <div className="bg-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-sm sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="px-6 pt-6 pb-4">
-                <h2 className="text-base font-semibold text-gray-900">{t("form.resumePopup.title")}</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {(resumeCreatedAt || activeSubmission.created_at)
-                    ? t("form.resumePopup.startedOn").replace("{date}", new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", year: "numeric" }).format(new Date((resumeCreatedAt || activeSubmission.created_at) as string)))
-                    : t("form.resumePopup.inProgress")}
-                </p>
-              </div>
-
-              <div className="px-6 pb-4">
-                {(() => {
-                  const fd = activeFormData;
-                  const stepIdx = getResumeStepIndex({ ...initialFormData, ...(fd as typeof initialFormData) });
-                  const stepLabel = t(STEP_KEYS[stepIdx] ?? "form.resumePopup.stepSummary");
-                  const serviceIds = (fd.selectedServices as string[] | undefined) ?? [];
-                  const serviceDocs = (fd.serviceDocuments as Record<string, { name?: string; selectedOptions?: string[] }[] | undefined>) ?? {};
-                  const hasDocuments = serviceIds.some((sid) => (serviceDocs[sid]?.length ?? 0) > 0);
-                  const signatories = (fd.signatories as { firstName?: string; first_name?: string; lastName?: string; last_name?: string }[] | undefined) ?? [];
-                  const delivery = (fd.deliveryMethod ?? fd.delivery_method) as string | undefined;
-                  const hasPersonalInfo = !!(fd.firstName || fd.first_name) && !!(fd.lastName || fd.last_name) && !!fd.email;
-
-                  const StepBlock = ({ completed, title, icon, children }: { completed: boolean; title: string; icon: string; children: React.ReactNode }) => (
-                    <div className={`rounded-lg p-3 border-2 ${completed ? "bg-emerald-50 border-emerald-200" : "bg-gray-200 border-gray-300"}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        {completed ? <Icon icon="heroicons:check-circle" className="w-4 h-4 text-emerald-600 shrink-0" /> : <Icon icon={icon} className="w-3.5 h-3.5 text-gray-500 shrink-0" />}
-                        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-gray-700">{title}</h3>
-                      </div>
-                      {children}
-                    </div>
-                  );
-
-                  return (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm text-gray-600 pb-2">
-                        <Icon icon="heroicons:map-pin" className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span>{t("form.resumePopup.stoppedAt")} <span className="font-semibold text-gray-900">{stepLabel}</span></span>
-                      </div>
-
-                      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{t("form.resumePopup.completedElements")}</p>
-
-                      <StepBlock completed={!!hasPersonalInfo} title={t("form.resumePopup.stepPersonalInfo")} icon="heroicons:user">
-                        {hasPersonalInfo ? (
-                          <p className="text-xs text-gray-800">{(fd.firstName || fd.first_name) as string} {(fd.lastName || fd.last_name) as string}</p>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
-                        )}
-                      </StepBlock>
-
-                      <StepBlock completed={serviceIds.length > 0} title={t("form.resumePopup.stepChooseServices")} icon="heroicons:squares-2x2">
-                        {serviceIds.length > 0 ? (
-                          <div className="space-y-2">
-                            {serviceIds.map((sid) => {
-                              const service = servicesMap[sid];
-                              const name = service ? getServiceName(service) : sid;
-                              return <p key={sid} className="text-xs text-gray-800 font-medium">{name}</p>;
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
-                        )}
-                      </StepBlock>
-
-                      <StepBlock completed={hasDocuments} title={t("form.resumePopup.stepDocuments")} icon="heroicons:document-text">
-                        {hasDocuments ? (
-                          <div className="space-y-1">
-                            {serviceIds.flatMap((sid) => (serviceDocs[sid] ?? []).map((doc, i) => (
-                              <p key={`${sid}-${i}`} className="text-xs text-gray-800 break-words" title={(doc as { name?: string }).name}>{(doc as { name?: string }).name || `Document ${i + 1}`}</p>
-                            )))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
-                        )}
-                      </StepBlock>
-
-                      <StepBlock completed={signatories.length > 0} title={t("form.resumePopup.stepSignatories")} icon="heroicons:user-group">
-                        {signatories.length > 0 ? (
-                          <div className="space-y-1">
-                            {signatories.map((sig, i) => (
-                              <p key={i} className="text-xs text-gray-800">{(sig as { firstName?: string; first_name?: string }).firstName || (sig as { first_name?: string }).first_name} {(sig as { lastName?: string; last_name?: string }).lastName || (sig as { last_name?: string }).last_name}</p>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
-                        )}
-                      </StepBlock>
-
-                      <StepBlock completed={!!delivery} title={t("form.resumePopup.stepDelivery")} icon="heroicons:truck">
-                        {delivery ? (
-                          <p className="text-xs text-gray-800">{delivery === "postal" ? t("form.steps.delivery.postTitle") : t("form.steps.delivery.emailTitle")}</p>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic">{t("form.resumePopup.notCompleted")}</p>
-                        )}
-                      </StepBlock>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-
-            <div className="flex-shrink-0 mx-6 border-t border-gray-100" />
-
-            <div className="flex-shrink-0 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-2">
-              {/* Reprendre */}
-              <button
-                onClick={() => {
-                  const fd = activeFormData;
-                  const sessionId = (activeSubmission.data?.session_id as string) ?? "";
-                  const submissionId = activeSubmission.id;
-                  const { sessionId: _s, submissionId: _si, ...rest } = fd as { sessionId?: string; submissionId?: string; [key: string]: unknown };
-                  const serialized = JSON.stringify({ ...rest, submissionId });
-                  window.localStorage.setItem(STORAGE_KEY, serialized);
-                  window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: serialized }));
-                  if (sessionId) window.localStorage.setItem(SESSION_KEY, sessionId);
-                  const path = getResumePath({ ...initialFormData, ...(rest as typeof initialFormData) });
-                  const search = searchParams.toString();
-                  router.replace(search ? `${path}?${search}` : path);
-                }}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-semibold rounded-xl text-sm transition-all shadow-md"
-              >
-                <Icon icon="heroicons:arrow-path" className="w-4 h-4" />
-                {t("form.resumePopup.resume")}
-              </button>
-              {/* Continuer quand même → abandonne l'ancienne */}
-              <button
-                onClick={async () => {
-                  try {
-                    if (activeSubmission.id) {
-                      await fetch("/api/abandon-submissions", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ submissionIds: [activeSubmission.id] }),
-                      });
-                    }
-                  } catch { /* ignore */ }
-                  setActiveSubmission(null);
-                  setActiveFormData(null);
-                  setResumeCreatedAt(undefined);
-                  if (pendingNavigation === "next") navigateNext();
-                  // Si "skip" (venu de /form), rester sur personal-info avec localStorage vide
-                }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 text-gray-500 hover:text-gray-800 font-medium text-sm transition-colors rounded-xl hover:bg-gray-50"
-              >
-                {t("form.resumePopup.startNew")}
-              </button>
-            </div>
-          </div>
-        </div>,
-          document.body
-        )}
     </>
   );
 }

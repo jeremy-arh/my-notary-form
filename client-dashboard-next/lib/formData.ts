@@ -18,6 +18,7 @@ export interface FormData {
   deliveryCountry?: string;
   deliveryOption?: "standard" | "express" | null;
   deliveryPriceEUR?: number;
+  deliveryCarrier?: string;
   usePersonalAddressForDelivery?: boolean;
   signatories: unknown[];
   isSignatory: boolean;

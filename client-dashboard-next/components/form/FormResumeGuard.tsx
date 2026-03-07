@@ -23,7 +23,7 @@ const FORM_STEP_PATHS = [
  * - Redirige vers la bonne étape selon la progression (localStorage)
  * - Si l'utilisateur arrive directement sur une étape sans passer par /form,
  *   vérifie une fois par session si une soumission en cours existe en DB
- *   et redirige vers /form pour afficher le popup de reprise.
+ *   et redirige vers /form pour reprise automatique.
  */
 export default function FormResumeGuard() {
   const pathname = usePathname();
@@ -63,7 +63,7 @@ export default function FormResumeGuard() {
         // Si le localStorage pointe déjà sur la même soumission, pas besoin de popup
         if (localSubmissionId && localSubmissionId === submission.id) return;
 
-        // localStorage vide ou différent → rediriger vers /form pour le popup
+        // localStorage vide ou différent → rediriger vers /form pour reprise automatique
         const search = searchParams.toString();
         router.replace(search ? `/form?${search}` : "/form");
       } catch { /* ignore */ }
@@ -103,7 +103,7 @@ export default function FormResumeGuard() {
     }
   }, [pathname, router, searchParams]);
 
-  // Réinitialiser le flag quand l'utilisateur passe par /form (popup géré)
+  // Réinitialiser le flag quand l'utilisateur passe par /form
   useEffect(() => {
     if (pathname === "/form") {
       sessionStorage.removeItem(CHECKED_KEY);

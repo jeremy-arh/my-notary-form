@@ -73,6 +73,7 @@ function submissionToFormData(s: SubmissionRow) {
     deliveryMethod: d.deliveryMethod ?? d.delivery_method ?? null,
     deliveryOption: d.deliveryOption ?? d.delivery_option ?? null,
     deliveryPriceEUR: d.deliveryPriceEUR ?? d.delivery_price_eur ?? undefined,
+    deliveryCarrier: d.deliveryCarrier ?? d.delivery_carrier ?? undefined,
     deliveryAddress: d.deliveryAddress ?? d.delivery_address ?? undefined,
     deliveryCity: d.deliveryCity ?? d.delivery_city ?? undefined,
     deliveryPostalCode: d.deliveryPostalCode ?? d.delivery_postal_code ?? undefined,
@@ -91,7 +92,7 @@ function submissionToFormData(s: SubmissionRow) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const submissionId = searchParams.get("submissionId");
+    const submissionId = searchParams.get("submissionId") ?? searchParams.get("submission-id");
     const email = searchParams.get("email");
 
     if (!submissionId && !email) {
