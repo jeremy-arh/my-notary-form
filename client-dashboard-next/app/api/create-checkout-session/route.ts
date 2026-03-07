@@ -150,6 +150,7 @@ export async function POST(request: NextRequest) {
 
     // Update existing submission with latest data (when found by session_id or retry)
     if (submission && submissionId) {
+      const existingData = (submission.data as Record<string, unknown>) || {};
       const submissionData = {
         client_id: clientId,
         status: "pending_payment",
@@ -167,6 +168,7 @@ export async function POST(request: NextRequest) {
         appointment_time: formData.appointmentTime,
         timezone: formData.timezone,
         data: {
+          ...existingData,
           session_id: formData.sessionId ?? null,
           selectedServices: formData.selectedServices,
           serviceDocuments: formData.serviceDocuments,
@@ -175,6 +177,15 @@ export async function POST(request: NextRequest) {
           additionalSignatoriesCount: formData.additionalSignatoriesCount || 0,
           signatoryCount: formData.signatoryCount ?? formData.signatoriesCount ?? null,
           currency,
+          delivery_method: (formData.deliveryMethod ?? formData.delivery_method ?? existingData.delivery_method) ?? null,
+          delivery_option: (formData.deliveryOption ?? formData.delivery_option ?? existingData.delivery_option) ?? null,
+          delivery_price_eur: (formData.deliveryPriceEUR ?? formData.deliveryPostalCostEUR ?? formData.delivery_price_eur ?? existingData.delivery_price_eur) ?? null,
+          delivery_address: (formData.deliveryAddress ?? formData.delivery_address ?? existingData.delivery_address) ?? null,
+          delivery_city: (formData.deliveryCity ?? formData.delivery_city ?? existingData.delivery_city) ?? null,
+          delivery_postal_code: (formData.deliveryPostalCode ?? formData.delivery_postal_code ?? existingData.delivery_postal_code) ?? null,
+          delivery_country: (formData.deliveryCountry ?? formData.delivery_country ?? existingData.delivery_country) ?? null,
+          use_personal_address_for_delivery: (formData.usePersonalAddressForDelivery ?? formData.use_personal_address_for_delivery ?? existingData.use_personal_address_for_delivery) ?? null,
+          gclid: (formData.gclid ?? existingData.gclid) ?? null,
         },
       };
       const { data: updated, error: updateErr } = await supabase
@@ -327,6 +338,15 @@ export async function POST(request: NextRequest) {
           additionalSignatoriesCount: formData.additionalSignatoriesCount || 0,
           signatoryCount: formData.signatoryCount ?? formData.signatoriesCount ?? null,
           currency,
+          delivery_method: (formData.deliveryMethod ?? formData.delivery_method) ?? null,
+          delivery_option: (formData.deliveryOption ?? formData.delivery_option) ?? null,
+          delivery_price_eur: (formData.deliveryPriceEUR ?? formData.deliveryPostalCostEUR ?? formData.delivery_price_eur) ?? null,
+          delivery_address: (formData.deliveryAddress ?? formData.delivery_address) ?? null,
+          delivery_city: (formData.deliveryCity ?? formData.delivery_city) ?? null,
+          delivery_postal_code: (formData.deliveryPostalCode ?? formData.delivery_postal_code) ?? null,
+          delivery_country: (formData.deliveryCountry ?? formData.delivery_country) ?? null,
+          use_personal_address_for_delivery: (formData.usePersonalAddressForDelivery ?? formData.use_personal_address_for_delivery) ?? null,
+          gclid: formData.gclid ?? null,
         },
       };
 

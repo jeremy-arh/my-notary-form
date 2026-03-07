@@ -291,6 +291,13 @@ export default function SummaryPage() {
         deliveryPostalCostEUR: formData.deliveryMethod === "postal"
           ? ((formData.deliveryPriceEUR as number) ?? DELIVERY_POSTAL_PRICE_EUR)
           : 0,
+        deliveryAddress: formData.deliveryAddress,
+        deliveryCity: formData.deliveryCity,
+        deliveryPostalCode: formData.deliveryPostalCode,
+        deliveryCountry: formData.deliveryCountry,
+        usePersonalAddressForDelivery: formData.usePersonalAddressForDelivery,
+        deliveryPriceEUR: formData.deliveryPriceEUR,
+        gclid: formData.gclid,
         language,
         localizedLineItems,
         localizedNames,
@@ -298,6 +305,14 @@ export default function SummaryPage() {
       };
 
       const retrySubmissionId = (formData.submissionId as string) || undefined;
+
+      // Sauvegarder les données (dont livraison) avant le checkout pour garantir la persistance
+      try {
+        const { saveSubmission } = await import("@/lib/saveSubmission");
+        await saveSubmission(formData, 6, [0, 1, 2, 3, 4], getTotalAmount(), { createAccount: false });
+      } catch {
+        // Ne pas bloquer le checkout si la sauvegarde échoue
+      }
 
       const res = await fetch("/api/create-checkout-session", {
         method: "POST",

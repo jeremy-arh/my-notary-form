@@ -80,7 +80,8 @@ export default function FormLayoutClient({ children }: { children: React.ReactNo
       Object.keys(formData.serviceDocuments ?? {}).length > 0 ||
       !!formData.firstName?.trim() ||
       !!formData.lastName?.trim() ||
-      !!formData.email?.trim();
+      !!formData.email?.trim() ||
+      !!formData.gclid?.trim();
     if (!hasProgress) return null;
     const totalAmount = calculateTotalAmount(formData, servicesMap, optionsMap, currency);
     return saveSubmission(formData, currentStep, completedSteps, totalAmount, opts);

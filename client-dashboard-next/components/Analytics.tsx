@@ -14,10 +14,10 @@ export default function Analytics() {
 
   return (
     <>
-      {/* Plausible Analytics */}
+      {/* Plausible Analytics - identique à l'ancienne version (client-dashboard) */}
       <Script
         id="plausible-init"
-        strategy="afterInteractive"
+        strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             window.plausible = window.plausible || function() {
@@ -27,9 +27,9 @@ export default function Analytics() {
         }}
       />
       <Script
-        src="https://plausible.io/js/script.tagged-events.js"
+        src="https://plausible.io/js/script.js"
         data-domain={PLAUSIBLE_DOMAIN}
-        strategy="afterInteractive"
+        strategy="beforeInteractive"
       />
 
       {/* Google Tag Manager */}

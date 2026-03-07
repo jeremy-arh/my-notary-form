@@ -11,8 +11,12 @@ declare global {
 
 const trackEvent = (eventName: string, props: Record<string, unknown> = {}) => {
   if (typeof window === "undefined") return;
-  if (typeof window.plausible !== "function") return;
-  window.plausible(eventName, Object.keys(props).length > 0 ? { props } : undefined);
+  const plausible = (window as Window & { plausible?: (name: string, opts?: { props?: Record<string, unknown> }) => void }).plausible;
+  if (typeof plausible !== "function") return;
+  const filteredProps = Object.fromEntries(
+    Object.entries(props).filter(([, v]) => v !== undefined && v !== null)
+  );
+  plausible(eventName, Object.keys(filteredProps).length > 0 ? { props: filteredProps } : undefined);
 };
 
 export const trackPageView = (pageName: string) => {

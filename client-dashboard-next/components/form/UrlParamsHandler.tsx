@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useFormData } from "@/contexts/FormContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useServices } from "@/contexts/ServicesContext";
+import { saveSubmission } from "@/lib/saveSubmission";
 
 const VALID_CURRENCIES = ["EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY", "CNY"] as const;
 
@@ -32,6 +33,25 @@ export default function UrlParamsHandler() {
 
   const currencyParam = searchParams.get("currency");
   const serviceParam = searchParams.get("service");
+  const gclidParam = searchParams.get("gclid");
+  const lastAppliedGclidRef = useRef<string | null>(null);
+
+  // Capturer le GCLID dès l'arrivée sur le formulaire et le sauvegarder immédiatement
+  useEffect(() => {
+    if (!gclidParam?.trim() || lastAppliedGclidRef.current === gclidParam) return;
+    if (formData.gclid === gclidParam) return;
+
+    lastAppliedGclidRef.current = gclidParam;
+    updateFormData({ gclid: gclidParam });
+
+    saveSubmission(
+      { ...formData, gclid: gclidParam },
+      1,
+      [],
+      null,
+      { createAccount: false }
+    ).catch(() => {});
+  }, [gclidParam, formData, updateFormData]);
 
   // Appliquer la devise depuis l'URL (une seule fois par valeur pour éviter la boucle infinie)
   useEffect(() => {

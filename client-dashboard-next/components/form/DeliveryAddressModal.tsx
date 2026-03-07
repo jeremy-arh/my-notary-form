@@ -105,7 +105,15 @@ export default function DeliveryAddressModal({
     express: { priceEUR: null, deliveryDays: DELIVERY_OPTIONS.express.deliveryDays, loading: false, error: null },
   });
 
-  const effectiveCountry = usePersonalAddress ? (formData.country ?? "") : country;
+  // Si adresse personnelle : utiliser formData.country, ou dériver du dernier segment de l'adresse (ex. "31 Rue X, Arbanats, France" → "France")
+  const countryFromAddress = (formData.address ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .pop() ?? "";
+  const effectiveCountry = usePersonalAddress
+    ? ((formData.country ?? "") || countryFromAddress)
+    : country;
 
   useEffect(() => {
     if (open) {
