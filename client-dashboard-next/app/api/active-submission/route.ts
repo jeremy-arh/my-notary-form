@@ -34,6 +34,8 @@ type SubmissionRow = {
     deliveryMethod?: string;
     delivery_option?: string;
     deliveryOption?: string;
+    delivery_carrier?: string;
+    deliveryCarrier?: string;
     delivery_price_eur?: number;
     deliveryPriceEUR?: number;
     delivery_address?: string;
