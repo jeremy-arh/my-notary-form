@@ -77,7 +77,8 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existingNotary) {
-      const { email: _omitEmail, ...patch } = notaryRow;
+      const patch = { ...notaryRow };
+      delete patch.email;
       const { error: upErr } = await admin
         .from("notary")
         .update({

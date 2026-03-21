@@ -90,8 +90,7 @@ async function getPingenOrgId(token: string): Promise<string | null> {
 
 async function uploadFileToPingen(
   token: string,
-  fileBuffer: ArrayBuffer,
-  fileName: string
+  fileBuffer: ArrayBuffer
 ): Promise<{ fileUrl: string; fileUrlSignature: string } | null> {
   const res = await fetch("https://api.pingen.com/file-upload", {
     method: "GET",
@@ -292,7 +291,7 @@ export async function POST(
         continue;
       }
 
-      const upload = await uploadFileToPingen(token, fileBuffer, f.file_name);
+      const upload = await uploadFileToPingen(token, fileBuffer);
       if (!upload) {
         errors.push(`${f.file_name}: Échec upload Pingen`);
         continue;
