@@ -19,6 +19,7 @@ const navItems = [
   { href: "/dashboard/tasks", label: "Tâches", icon: "lucide:check-square", countKey: "tasks" },
   { href: "/dashboard/support", label: "Support", icon: "lucide:headphones", countKey: "support" },
   { href: "/dashboard/communications", label: "Communications", icon: "lucide:mail", countKey: null },
+  { href: "/dashboard/notaries", label: "Notaires", icon: "lucide:scale", countKey: null },
   { href: "/dashboard/cms", label: "CMS", icon: "lucide:file-text", countKey: null },
   { href: "/dashboard/settings", label: "Paramètres", icon: "lucide:settings", countKey: null },
 ];
